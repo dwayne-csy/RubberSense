@@ -20,20 +20,20 @@ export default function ProfileScreen({ navigation, route }) {
         if (route.params?.updatedUser) {
           setUser(route.params.updatedUser);
         } else {
-          const res = await axios.get(`${BACKEND_URL}/me`, {
+          const res = await axios.get(`${BACKEND_URL}/api/v1/users/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           setUser(res.data.user || storedUser);
         }
       } catch (error) {
-        console.error(error);
+        console.error('Fetch profile error:', error.response?.data || error.message);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProfile();
-  }, [route.params?.updatedUser]); // re-run when updatedUser is passed
+  }, [route.params?.updatedUser]);
 
   if (loading)
     return (
@@ -59,9 +59,20 @@ export default function ProfileScreen({ navigation, route }) {
       <Text style={{ marginBottom: 10 }}>Street: {user?.address?.street || '-'}</Text>
       <Text style={{ marginBottom: 10 }}>Zip Code: {user?.address?.zipcode || '-'}</Text>
 
+      {/* Change Password Button */}
+      <View style={{ marginBottom: 10 }}>
+        <Button
+          title="Change Password"
+          onPress={() => navigation.navigate('ChangePassword')}
+          color="#ff6b6b"
+        />
+      </View>
+
+      {/* Update Profile Button */}
       <Button
         title="Update Profile"
         onPress={() => navigation.navigate('UpdateProfile', { user })}
+        color="#007bff"
       />
     </ScrollView>
   );
