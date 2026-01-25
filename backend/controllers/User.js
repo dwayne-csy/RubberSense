@@ -4,7 +4,7 @@ const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinar
 const Mailer = require('../utils/Mailer');
 const admin = require('../utils/firebaseAdmin');
 
-// ========== REGISTER USER (LOCAL ONLY) ==========
+// ========== REGISTER USER ========== 
 exports.registerUser = async (req, res) => {
   try {
     console.log('📝 Register user request received');
@@ -41,7 +41,8 @@ exports.registerUser = async (req, res) => {
     const verificationToken = user.getEmailVerificationToken();
     await user.save({ validateBeforeSave: false });
 
-    const verificationUrl = `${req.protocol}://${req.get('host')}/api/v1/verify-email/${verificationToken}`;
+    // ✅ FIXED: include '/users' in the URL
+    const verificationUrl = `${req.protocol}://${req.get('host')}/api/v1/users/verify-email/${verificationToken}`;
 
     const message = `
       <h2>Welcome to ${process.env.APP_NAME}</h2>
@@ -204,7 +205,7 @@ exports.updateProfile = async (req, res) => {
       }
 
       // Upload new avatar
-      const avatarResult = await uploadToCloudinary(req.file.path, 'harmoniahub/avatars');
+      const avatarResult = await uploadToCloudinary(req.file.path, 'rubbersense/avatars');
       updateData.avatar = {
         public_id: avatarResult.public_id,
         url: avatarResult.url
@@ -470,5 +471,35 @@ exports.changePassword = async (req, res) => {
   } catch (error) {
     console.error('❌ CHANGE PASSWORD ERROR:', error);
     res.status(500).json({ success: false, message: 'Server error. Please try again.' });
+  }
+};
+
+
+// ========== VERIFY EMAIL ==========
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+    if (!token) return res.status(400).send('Verification token missing');
+
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await require('../models/User').findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: { $gt: Date.now() },
+    });
+
+    if (!user) return res.status(400).send('Invalid or expired verification token');
+
+    user.isVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    // Redirect to frontend page
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+    return res.redirect(`${FRONTEND_URL}/email-verified`);
+  } catch (error) {
+    console.error('❌ EMAIL VERIFICATION ERROR:', error);
+    return res.status(500).send('Server error');
   }
 };

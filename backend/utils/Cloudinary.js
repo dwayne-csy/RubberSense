@@ -1,4 +1,4 @@
-// HarmoniaHub/backend/utils/Cloudinary.js
+
 const cloudinary = require('cloudinary').v2;
 
 // Configure Cloudinary
@@ -11,7 +11,7 @@ cloudinary.config({
 // Upload to Cloudinary - accepts either:
 // - base64 data URL (starting with 'data:')
 // - local file path (string) or buffer
-const uploadToCloudinary = async (input, folder = 'harmoniahub') => {
+const uploadToCloudinary = async (input, folder = 'rubbersense') => {
   try {
     const uploadOptions = {
       folder: folder,

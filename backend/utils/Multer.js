@@ -4,7 +4,7 @@ const os = require('os');
 const fs = require('fs');
 
 // Temporary upload folder
-const tmpDir = path.join(os.tmpdir(), 'harmoniahub_uploads');
+const tmpDir = path.join(os.tmpdir(), 'rubbersense_uploads');
 if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
 const storage = multer.diskStorage({
