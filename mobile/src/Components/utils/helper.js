@@ -1,18 +1,39 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Auth change listeners array
+let authChangeListeners = [];
+
+// Notify all listeners when auth state changes
+export const notifyAuthChange = (user) => {
+  authChangeListeners.forEach(listener => listener(user));
+};
+
+// Subscribe to auth changes
+export const onAuthChange = (callback) => {
+  authChangeListeners.push(callback);
+  
+  // Return unsubscribe function
+  return () => {
+    authChangeListeners = authChangeListeners.filter(cb => cb !== callback);
+  };
+};
+
 // Save token and user info
 export const authenticate = async (data, next) => {
   try {
+    const userData = {
+      name: data.user.name,
+      email: data.user.email,
+      role: data.user.role,
+      id: data.user._id,
+    };
+    
     await AsyncStorage.setItem('token', data.token);
-    await AsyncStorage.setItem(
-      'user',
-      JSON.stringify({
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role,
-        id: data.user._id,
-      })
-    );
+    await AsyncStorage.setItem('user', JSON.stringify(userData));
+    
+    // Notify listeners about auth change
+    notifyAuthChange(userData);
+    
     if (next) next();
   } catch (error) {
     console.error('Error storing auth data', error);
@@ -54,11 +75,21 @@ export const isAuthenticated = async () => {
 };
 
 // Logout
-export const logout = async (next) => {
+export const logout = async (navigation) => {
   try {
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');
-    if (next) next();
+    
+    // Notify listeners about auth change (user is now null)
+    notifyAuthChange(null);
+    
+    // Navigate to Login screen if navigation object is provided
+    if (navigation) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    }
   } catch (error) {
     console.error('Error logging out', error);
   }

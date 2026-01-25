@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, Alert } from 'react-native';
-import { getUser, getToken, logout } from '../../utils/helper';
+import { View, Text, Button } from 'react-native';
+import { getUser, logout } from '../../utils/helper';
 
 export default function DashboardScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -8,13 +8,18 @@ export default function DashboardScreen({ navigation }) {
   useEffect(() => {
     const fetchUser = async () => {
       const storedUser = await getUser();
+      if (!storedUser) {
+        // If no user, AppNavigator will handle redirect
+        return;
+      }
       setUser(storedUser);
     };
     fetchUser();
   }, []);
 
   const handleLogout = async () => {
-    await logout(() => navigation.replace('Dashboard'));
+    // Just logout, AppNavigator will handle navigation
+    await logout();
   };
 
   return (

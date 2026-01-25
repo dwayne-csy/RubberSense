@@ -10,7 +10,14 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     const fetchUser = async () => {
       const token = await getToken();
-      if (!token) return navigation.replace('Login');
+      if (!token) {
+        // If no token, navigate to Login
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        });
+        return;
+      }
 
       const storedUser = await getUser();
       setUser(storedUser);
@@ -19,7 +26,15 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   const handleLogout = async () => {
-    await logout(() => navigation.replace('Login'));
+    // Clear the token and user data
+    await logout();
+    
+    // IMPORTANT: Reset navigation to Login screen
+    // Since we're in UserStack, we need to reset to Login
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Login' }],
+    });
   };
 
   return (
