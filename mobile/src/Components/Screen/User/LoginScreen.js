@@ -23,14 +23,9 @@ export default function LoginScreen({ navigation }) {
       await authenticate(res.data, () => {
         Alert.alert('Success', 'Login successful');
         
-        // Check user role
         if (res.data.user.role === 'admin') {
-          // For admin, AppNavigator will switch to AdminStack
-          // The AdminStack has initialRouteName="AdminDashboard"
-          // So it will automatically show AdminDashboard
+          // Admin navigation handled by AppNavigator/AdminStack
         } else {
-          // For regular user, navigate to UserHome within UserStack
-          // We're already in UserStack, so we can navigate directly
           navigation.reset({
             index: 0,
             routes: [{ name: 'UserHome' }],
@@ -64,6 +59,14 @@ export default function LoginScreen({ navigation }) {
 
       <Button title={loading ? 'Logging in...' : 'Login'} onPress={handleLogin} disabled={loading} />
 
+      {/* Forgot Password Link */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('ForgotPassword')}
+        style={styles.forgotLink}
+      >
+        <Text style={{ color: 'blue' }}>Forgot Password?</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.signUpLink}>
         <Text style={{ color: 'blue' }}>Don't have an account? Sign Up</Text>
       </TouchableOpacity>
@@ -82,6 +85,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 10,
     borderRadius: 5,
+  },
+  forgotLink: {
+    marginTop: 10,
+    alignItems: 'center',
   },
   signUpLink: {
     marginTop: 20,
