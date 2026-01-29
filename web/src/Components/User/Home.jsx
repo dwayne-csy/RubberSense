@@ -208,15 +208,19 @@ const Home = () => {
   };
 
   // Function to go to user location on map
-  const goToMyLocation = () => {
-    if (userLocation) {
-      const zoom = 15; // Fixed zoom level
-      const iframe = document.querySelector('iframe[title="OpenStreetMap"]');
-      if (iframe) {
-        iframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${userLocation.lng - 0.01},${userLocation.lat - 0.01},${userLocation.lng + 0.01},${userLocation.lat + 0.01}&layer=mapnik&marker=${userLocation.lat},${userLocation.lng}&zoom=${zoom}`;
-      }
+const goToMyLocation = () => {
+  if (userLocation) {
+    const zoom = 16; // Higher zoom level for street level
+    const lat = userLocation.lat;
+    const lng = userLocation.lng;
+    
+    // Use center parameter for accurate positioning
+    const iframe = document.querySelector('iframe[title="OpenStreetMap"]');
+    if (iframe) {
+      iframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.005},${lat - 0.005},${lng + 0.005},${lat + 0.005}&layer=mapnik&marker=${lat},${lng}&center=${lat},${lng}`;
     }
-  };
+  }
+};
 
   const extractTextFromResponse = (response) => {
     console.log('Response received:', response);
@@ -915,7 +919,7 @@ const Home = () => {
                 <iframe
                   ref={mapIframeRef}
                   title="OpenStreetMap"
-                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${userLocation.lng - 0.01},${userLocation.lat - 0.01},${userLocation.lng + 0.01},${userLocation.lat + 0.01}&layer=mapnik&marker=${userLocation.lat},${userLocation.lng}`}
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${userLocation.lng - 0.005},${userLocation.lat - 0.005},${userLocation.lng + 0.005},${userLocation.lat + 0.005}&layer=mapnik&marker=${userLocation.lat},${userLocation.lng}&center=${userLocation.lat},${userLocation.lng}`}
                   style={{
                     width: '100%',
                     height: '100%',
