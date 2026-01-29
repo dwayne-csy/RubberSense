@@ -1,0 +1,5 @@
+- [x] Add useState for messages (array of objects with text and sender), input (string), and puterLoaded (boolean)
+- [x] In useEffect, load Puter.js script dynamically and set puterLoaded to true when loaded
+- [x] Add sendMessage function to handle chat with puter.ai.chat, update messages state
+- [x] Add chatbot UI JSX: message display area, input field, send button, below the welcome section
+- [x] Ensure chat is only enabled when puterLoaded is true

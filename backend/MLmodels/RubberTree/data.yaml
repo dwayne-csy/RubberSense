@@ -1,0 +1,12 @@
+train: ../../datasets/RubberTree/images/train
+val: ../../datasets/RubberTree/images/val
+test: ../../datasets/RubberTree/images/test
+
+nc: 13
+names: ['Rubber leaves', 'Rubber root', 'Rubber tree', 'bark rot', 'black line disease', 'brown root disease', 'dry crust disease', 'fishbone disease', 'leaf pustule disease', 'nayang-normal', 'pink mold disease', 'powdery mildew', 'white root disease']
+roboflow:
+  workspace: ratchanon
+  project: rubber-tree-4hjnc
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/ratchanon/rubber-tree-4hjnc/dataset/1

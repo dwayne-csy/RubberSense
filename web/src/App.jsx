@@ -10,6 +10,8 @@ import AdminEditProfile from './Components/Admin/AdminEditProfile.jsx';
 import ForgotPassword from './Components/User/ForgotPassword.jsx';
 import ResetPassword from './Components/User/ResetPassword.jsx'; 
 import ChangePassword from './Components/User/ChangePassword.jsx';
+import TrunksDetection from './Components/User/TrunksDetection.jsx';
+import AboutUs from './Components/User/AboutUs.jsx';
 
 
 function App() {
@@ -31,6 +33,9 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/change-password" element={<ChangePassword />} />
+        <Route path="/trunks-detection" element={<TrunksDetection />} />
+        <Route path="/about" element={<AboutUs />} />
+
         
 
       </Routes>
