@@ -22,19 +22,12 @@ const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [locationError, setLocationError] = useState(null);
-  const [usingDemoLocation, setUsingDemoLocation] = useState(false);
   const messagesEndRef = useRef(null);
   const slideIntervalRef = useRef(null);
   const mapIframeRef = useRef(null);
   const navigate = useNavigate();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
-
-  // Default demo location (Merville, Parañaque)
-  const DEMO_LOCATION = {
-    lat: 14.505100,
-    lng: 121.027200
-  };
 
   const slides = [
     {
@@ -146,7 +139,6 @@ const Home = () => {
         `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&namedetails=1`,
         {
           headers: {
-            'User-Agent': 'RubberSense/1.0',
             'Accept-Language': 'en'
           },
           timeout: 5000
@@ -229,7 +221,7 @@ const Home = () => {
   };
 
   // Get weather data
-  const fetchWeatherData = async (lat, lng, accuracy = null, isDemo = false) => {
+  const fetchWeatherData = async (lat, lng, accuracy = null) => {
     try {
       // Using Open-Meteo API for weather data
       const weatherResponse = await axios.get(
@@ -276,22 +268,6 @@ const Home = () => {
       // Get address from OpenStreetMap
       const locationInfo = await getOpenStreetMapAddress(lat, lng);
       
-      if (isDemo) {
-        locationInfo.fullAddress = 'Saint Hannibal, Merville Park, Merville, Parañaque District 2, Parañaque, Southern Manila District, Metro Manila, 1713, Philippines';
-        locationInfo.source = 'Demo Location';
-        locationInfo.components = {
-          road: 'Saint Hannibal',
-          suburb: 'Merville Park',
-          village: 'Merville',
-          city_district: 'Parañaque District 2',
-          city: 'Parañaque',
-          state_district: 'Southern Manila District',
-          state: 'Metro Manila',
-          postcode: '1713',
-          country: 'Philippines'
-        };
-      }
-      
       setLocationAddress(locationInfo.fullAddress);
       setDetailedLocation(locationInfo);
 
@@ -322,8 +298,7 @@ const Home = () => {
         feels_like: Math.round(weatherData.current.temperature_2m + 2),
         accuracy: accuracy,
         coordinates: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-        source: locationInfo.source,
-        isDemo: isDemo
+        source: locationInfo.source
       });
 
       // Set forecast for next 5 days
@@ -350,19 +325,18 @@ const Home = () => {
 
     } catch (error) {
       console.error('Weather fetch error:', error);
-      // Fallback with coordinates
+      // Fallback with coordinates only
       setWeather({
         temp: 28,
         condition: 'Partly Cloudy',
         humidity: 75,
         wind: 12,
-        location: isDemo ? 'Demo Location' : `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+        location: `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
         icon: '🌤️',
         feels_like: 30,
         accuracy: accuracy,
         coordinates: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-        source: isDemo ? 'Demo Location' : 'GPS coordinates only',
-        isDemo: isDemo
+        source: 'GPS coordinates only'
       });
       
       const fallbackForecast = [
@@ -436,7 +410,6 @@ const Home = () => {
             setGpsAccuracy(accuracy);
             setUserLocation({ lat: latitude, lng: longitude });
             setLocationError(null);
-            setUsingDemoLocation(false);
 
             // Fetch weather and location data
             await fetchWeatherData(latitude, longitude, accuracy);
@@ -444,9 +417,9 @@ const Home = () => {
           },
           async (error) => {
             console.error('Precise geolocation error:', error);
-            // Even if permission is granted, other errors might occur
-            setLocationError('Could not get precise location. Using demo location instead.');
-            await useDemoLocation();
+            setLocationError('Could not get your location. Please check your browser settings.');
+            setMapLoading(false);
+            setWeatherLoading(false);
           },
           {
             enableHighAccuracy: true,
@@ -457,23 +430,14 @@ const Home = () => {
       } else {
         // Geolocation not available or permission denied
         console.log('Geolocation status:', geolocationStatus);
-        setLocationError(geolocationStatus.error || 'Location services unavailable. Using demo location.');
-        await useDemoLocation();
+        setLocationError(geolocationStatus.error || 'Location services unavailable.');
+        setMapLoading(false);
+        setWeatherLoading(false);
       }
     };
 
     initializeLocation();
   }, [loading]);
-
-  // Use demo location
-  const useDemoLocation = async () => {
-    setUserLocation(DEMO_LOCATION);
-    setGpsAccuracy(50);
-    setUsingDemoLocation(true);
-    
-    await fetchWeatherData(DEMO_LOCATION.lat, DEMO_LOCATION.lng, 50, true);
-    setMapLoading(false);
-  };
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -531,39 +495,77 @@ const Home = () => {
     navigate('/about');
   };
 
-  const extractTextFromResponse = (response) => {
-    if (typeof response === 'string') return response;
+  // NEW: Navigate to Maps page
+  const navigateToMaps = () => {
+    navigate('/maps');
+  };
 
-    if (response && typeof response === 'object') {
-      if (response.choices && Array.isArray(response.choices) && response.choices.length > 0) {
-        const choice = response.choices[0];
-        if (choice.message && choice.message.content) {
-          return choice.message.content;
+  // FIXED: Parse Puter AI response properly
+  const parsePuterAIResponse = (response) => {
+    console.log('parsePuterAIResponse input:', response);
+    console.log('Type of response:', typeof response);
+    
+    // If response is a string, try to parse it as JSON
+    if (typeof response === 'string') {
+      try {
+        const parsed = JSON.parse(response);
+        console.log('Parsed string to JSON:', parsed);
+        
+        // Check for Puter AI structure
+        if (parsed.message && parsed.message.content) {
+          return parsed.message.content;
         }
-        if (choice.text) {
-          return choice.text;
+        
+        // Check for direct content
+        if (parsed.content) {
+          return parsed.content;
         }
+        
+        // If we can't find content, return the string
+        return response;
+      } catch (e) {
+        console.log('Failed to parse as JSON, treating as plain string');
+        return response;
       }
-
-      if (response.content) return response.content;
-      if (response.message) return response.message;
-      if (response.text) return response.text;
-      if (response.response) return response.response;
-      if (response.answer) return response.answer;
-      if (response.result) return response.result;
-
-      for (const key in response) {
-        if (typeof response[key] === 'string' && response[key].trim()) {
-          return response[key];
-        }
-      }
-
-      return 'Unable to extract text from response.';
     }
-
+    
+    // If response is an object
+    if (typeof response === 'object' && response !== null) {
+      // Check for Puter AI structure
+      if (response.message && response.message.content && typeof response.message.content === 'string') {
+        return response.message.content;
+      }
+      
+      // Check for direct content
+      if (response.content && typeof response.content === 'string') {
+        return response.content;
+      }
+      
+      // If we can't extract content, stringify the object
+      try {
+        const jsonString = JSON.stringify(response);
+        // Try to extract content from stringified JSON
+        const contentMatch = jsonString.match(/"content"\s*:\s*"([^"]+)"/);
+        if (contentMatch && contentMatch[1]) {
+          let content = contentMatch[1];
+          // Unescape special characters
+          content = content.replace(/\\n/g, '\n')
+                           .replace(/\\"/g, '"')
+                           .replace(/\\\\/g, '\\')
+                           .replace(/\\t/g, '\t')
+                           .replace(/\\r/g, '\r');
+          return content;
+        }
+      } catch (e) {
+        console.error('Error stringifying response:', e);
+      }
+    }
+    
+    // Fallback: return as string
     return String(response || 'No response received');
   };
 
+  // FIXED: Handle chat submit with proper error handling
   const handleChatSubmit = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
@@ -575,13 +577,38 @@ const Home = () => {
 
     try {
       if (window.puter && window.puter.ai && window.puter.ai.chat) {
+        console.log('Sending message to Puter AI:', userMessage);
         const response = await window.puter.ai.chat(userMessage, {
           model: 'gpt-5-nano',
         });
         
-        const botResponse = extractTextFromResponse(response);
-        setChatMessages(prev => [...prev, { text: botResponse, sender: 'bot' }]);
+        console.log('Raw response from Puter AI:', response);
+        console.log('Response type:', typeof response);
+        
+        // Parse the response to extract the text content
+        const botResponse = parsePuterAIResponse(response);
+        
+        console.log('Parsed bot response:', botResponse);
+        
+        // Ensure we're only adding strings to chatMessages
+        if (typeof botResponse === 'string') {
+          // Clean up the response
+          const cleanedResponse = botResponse
+            .replace(/\\n/g, '\n')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\')
+            .trim();
+          
+          setChatMessages(prev => [...prev, { text: cleanedResponse, sender: 'bot' }]);
+        } else {
+          console.error('Unexpected response type:', typeof botResponse, botResponse);
+          setChatMessages(prev => [...prev, { 
+            text: "I received an unexpected response format. Please try again.", 
+            sender: 'bot' 
+          }]);
+        }
       } else {
+        console.log('Puter AI not available, using simulated chat');
         await simulateAIChat(userMessage);
       }
     } catch (error) {
@@ -615,8 +642,8 @@ const Home = () => {
     setChatMessages([]);
   };
 
-  // Try to get real location again
-  const tryRealLocation = async () => {
+  // Refresh location manually
+  const refreshLocation = async () => {
     setMapLoading(true);
     setWeatherLoading(true);
     setLocationError(null);
@@ -629,14 +656,14 @@ const Home = () => {
           const { latitude, longitude, accuracy } = position.coords;
           setGpsAccuracy(accuracy);
           setUserLocation({ lat: latitude, lng: longitude });
-          setUsingDemoLocation(false);
           
           await fetchWeatherData(latitude, longitude, accuracy);
           setMapLoading(false);
         },
         async (error) => {
-          setLocationError('Still unable to get precise location. Keeping demo location.');
+          setLocationError('Failed to refresh location. Please check your browser settings.');
           setMapLoading(false);
+          setWeatherLoading(false);
         },
         {
           enableHighAccuracy: true,
@@ -647,38 +674,7 @@ const Home = () => {
     } else {
       setLocationError(geolocationStatus.error || 'Location permission still denied.');
       setMapLoading(false);
-    }
-  };
-
-  // Refresh location manually
-  const refreshLocation = async () => {
-    if (usingDemoLocation) {
-      await tryRealLocation();
-    } else {
-      setMapLoading(true);
-      setWeatherLoading(true);
-      
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          setGpsAccuracy(accuracy);
-          setUserLocation({ lat: latitude, lng: longitude });
-          setLocationError(null);
-          
-          await fetchWeatherData(latitude, longitude, accuracy);
-          setMapLoading(false);
-        },
-        async (error) => {
-          setLocationError('Failed to refresh location. Using current data.');
-          setMapLoading(false);
-          setWeatherLoading(false);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0
-        }
-      );
+      setWeatherLoading(false);
     }
   };
 
@@ -697,7 +693,7 @@ const Home = () => {
     if (components.block) locationBreakdown.push({ label: 'Block', value: components.block });
     if (components.road) locationBreakdown.push({ label: 'Road', value: components.road });
     if (components.neighbourhood) locationBreakdown.push({ label: 'Neighbourhood', value: components.neighbourhood });
-    if (components.quarter) locationBreakdown.push({ label: 'Quarter', value: components.quarter });
+    if (components.quarter) locationBreakdown.push({ label: 'Barangay', value: components.quarter });
     if (components.suburb) locationBreakdown.push({ label: 'Suburb', value: components.suburb });
     if (components.city_district) locationBreakdown.push({ label: 'City District', value: components.city_district });
     if (components.village) locationBreakdown.push({ label: 'Village', value: components.village });
@@ -811,23 +807,12 @@ const Home = () => {
           alignItems: 'center',
           gap: '10px',
           marginBottom: '10px',
-          color: usingDemoLocation ? '#ff9800' : '#4CAF50'
+          color: '#4CAF50'
         }}>
           <span style={{ fontSize: '1.2rem' }}>📡</span>
           <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>
-            {usingDemoLocation ? 'Demo Location' : 'GPS Coordinates'}
+            GPS Coordinates
           </span>
-          {usingDemoLocation && (
-            <span style={{
-              fontSize: '0.7rem',
-              background: 'rgba(255,152,0,0.2)',
-              padding: '2px 8px',
-              borderRadius: '10px',
-              color: '#ff9800'
-            }}>
-              Demo
-            </span>
-          )}
         </div>
         <div style={{
           display: 'flex',
@@ -1340,17 +1325,6 @@ const Home = () => {
                       gap: '5px'
                     }}>
                       📍 {weather.location}
-                      {weather.isDemo && (
-                        <span style={{
-                          fontSize: '0.7rem',
-                          background: 'rgba(255,152,0,0.2)',
-                          color: '#ff9800',
-                          padding: '2px 6px',
-                          borderRadius: '8px'
-                        }}>
-                          Demo
-                        </span>
-                      )}
                     </div>
                   </div>
                   <div style={{
@@ -1467,17 +1441,54 @@ const Home = () => {
             )}
           </div>
 
-          {/* Map Card - Updated for OpenStreetMap style */}
-          <div style={{
-            background: 'rgba(255,255,255,0.1)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '20px',
-            padding: '30px',
-            border: '1px solid rgba(255,255,255,0.2)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
+          {/* Map Card - Clickable to navigate to Maps page */}
+          <div 
+            onClick={navigateToMaps}
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '20px',
+              padding: '30px',
+              border: '1px solid rgba(255,255,255,0.2)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+              position: 'relative',
+              overflow: 'hidden',
+              cursor: 'pointer',
+              transition: 'transform 0.3s, box-shadow 0.3s, border-color 0.3s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-5px)';
+              e.currentTarget.style.boxShadow = '0 15px 40px rgba(0,0,0,0.2)';
+              e.currentTarget.style.borderColor = 'rgba(76, 175, 80, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 8px 32px rgba(0,0,0,0.1)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+            }}
+          >
+            {/* Click to View Full Map Label */}
+            <div style={{
+              position: 'absolute',
+              top: '15px',
+              right: '15px',
+              background: 'rgba(76, 175, 80, 0.8)',
+              color: 'white',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              fontSize: '0.8rem',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              zIndex: 5,
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}>
+              <span>↗</span>
+              <span>Click to View Full Map</span>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
               <h2 style={{
                 color: 'white',
@@ -1498,30 +1509,6 @@ const Home = () => {
                   </span>
                 )}
               </h2>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {usingDemoLocation && (
-                  <button
-                    onClick={tryRealLocation}
-                    style={{
-                      background: 'rgba(76, 175, 80, 0.15)',
-                      color: '#4CAF50',
-                      border: '1px solid rgba(76, 175, 80, 0.3)',
-                      padding: '8px 16px',
-                      borderRadius: '20px',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(76, 175, 80, 0.25)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(76, 175, 80, 0.15)'}
-                  >
-                    📍 Try Real Location
-                  </button>
-                )}
-              </div>
             </div>
 
             {/* Location Error Alert */}
@@ -1541,9 +1528,15 @@ const Home = () => {
                 <span style={{ fontSize: '1.2rem' }}>⚠️</span>
                 <div style={{ flex: 1 }}>
                   <strong>Location Issue:</strong> {locationError}
+                  <div style={{ fontSize: '0.85rem', marginTop: '4px', opacity: 0.8 }}>
+                    Please enable location access in your browser settings
+                  </div>
                 </div>
                 <button
-                  onClick={() => setLocationError(null)}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering the parent click
+                    setLocationError(null);
+                  }}
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -1594,7 +1587,7 @@ const Home = () => {
                 }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📍</div>
-                    <div style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Detecting your location...</div>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Location Access Required</div>
                     <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>
                       Please allow location access for accurate weather and mapping
                     </div>
@@ -1605,7 +1598,10 @@ const Home = () => {
               {/* Go to My Location Button */}
               {userLocation && (
                 <button
-                  onClick={goToMyLocation}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering the parent click
+                    goToMyLocation();
+                  }}
                   style={{
                     position: 'absolute',
                     bottom: '20px',
@@ -1697,38 +1693,23 @@ const Home = () => {
               {/* OpenStreetMap Location Details */}
               {renderOpenStreetMapLocation()}
 
-              {/* OpenStreetMap Link */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-                <a
-                  href={`https://www.openstreetmap.org/#map=17/${userLocation?.lat}/${userLocation?.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    background: 'rgba(255,255,255,0.15)',
-                    color: 'white',
-                    padding: '12px 25px',
-                    borderRadius: '25px',
-                    textDecoration: 'none',
-                    fontSize: '1rem',
-                    transition: 'background 0.2s, transform 0.2s',
-                    border: '1px solid rgba(255,255,255,0.2)'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}
-                >
-                  <span style={{ fontSize: '1.2rem' }}>🌐</span>
-                  <span>View Full Details on OpenStreetMap</span>
-                </a>
+              {/* Navigation Hint */}
+              <div style={{
+                textAlign: 'center',
+                marginTop: '20px',
+                padding: '10px',
+                background: 'rgba(76, 175, 80, 0.1)',
+                borderRadius: '10px',
+                border: '1px solid rgba(76, 175, 80, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
+                <span style={{ fontSize: '1.2rem', color: '#4CAF50' }}>📍</span>
+                <span style={{ color: '#4CAF50', fontSize: '0.9rem' }}>
+                  Click anywhere on this card to view the full interactive map
+                </span>
               </div>
             </div>
           </div>
