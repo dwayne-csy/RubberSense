@@ -12,6 +12,7 @@ import ResetPassword from './Components/User/ResetPassword.jsx';
 import ChangePassword from './Components/User/ChangePassword.jsx';
 import TrunksDetection from './Components/User/TrunksDetection.jsx';
 import AboutUs from './Components/User/AboutUs.jsx';
+import AboutRubber from './Components/User/AboutRubber.jsx';
 
 
 function App() {
@@ -35,6 +36,8 @@ function App() {
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/trunks-detection" element={<TrunksDetection />} />
         <Route path="/about" element={<AboutUs />} />
+        <Route path="/about-rubber" element={<AboutRubber />} />
+
 
         
 

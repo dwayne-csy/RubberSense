@@ -13,11 +13,16 @@ const Home = () => {
   const [weather, setWeather] = useState(null);
   const [forecast, setForecast] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
+  const [locationAddress, setLocationAddress] = useState('');
+  const [detailedLocation, setDetailedLocation] = useState(null);
   const [mapLoading, setMapLoading] = useState(true);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+  const [usingDemoLocation, setUsingDemoLocation] = useState(false);
   const messagesEndRef = useRef(null);
   const slideIntervalRef = useRef(null);
   const mapIframeRef = useRef(null);
@@ -25,7 +30,12 @@ const Home = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
-  // Import your slide images - adjust the paths as needed
+  // Default demo location (Merville, Parañaque)
+  const DEMO_LOCATION = {
+    lat: 14.505100,
+    lng: 121.027200
+  };
+
   const slides = [
     {
       id: 1,
@@ -89,7 +99,7 @@ const Home = () => {
   useEffect(() => {
     slideIntervalRef.current = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000); // Change slide every 5 seconds
+    }, 5000);
 
     return () => {
       if (slideIntervalRef.current) {
@@ -128,65 +138,342 @@ const Home = () => {
     return () => clearInterval(timeInterval);
   }, []);
 
-  // Get user's location and weather
+  // Enhanced OpenStreetMap address parsing
+  const getOpenStreetMapAddress = async (lat, lng) => {
+    try {
+      // Use higher zoom level for more detailed results
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&namedetails=1`,
+        {
+          headers: {
+            'User-Agent': 'RubberSense/1.0',
+            'Accept-Language': 'en'
+          },
+          timeout: 5000
+        }
+      );
+
+      const data = response.data;
+      const address = data.address || {};
+      const displayName = data.display_name || '';
+
+      // Extract location components
+      const locationComponents = {
+        house: address.house_number || address.house_name || null,
+        building: address.building || null,
+        block: address.block || null,
+        road: address.road || address.street || address.footway || address.path || null,
+        neighbourhood: address.neighbourhood || null,
+        quarter: address.quarter || null,
+        suburb: address.suburb || null,
+        city_district: address.city_district || null,
+        village: address.village || address.hamlet || null,
+        town: address.town || null,
+        city: address.city || address.municipality || null,
+        state: address.state || address.region || null,
+        state_district: address.state_district || null,
+        country: address.country || null,
+        country_code: address.country_code ? address.country_code.toUpperCase() : null,
+        postcode: address.postcode || null,
+        county: address.county || null
+      };
+
+      // Create a formatted address string
+      let formattedAddress = '';
+      const parts = [];
+
+      // Add address components in hierarchical order
+      if (locationComponents.house) parts.push(locationComponents.house);
+      if (locationComponents.road) parts.push(locationComponents.road);
+      if (locationComponents.neighbourhood) parts.push(locationComponents.neighbourhood);
+      if (locationComponents.suburb) parts.push(locationComponents.suburb);
+      if (locationComponents.city_district) parts.push(locationComponents.city_district);
+      if (locationComponents.village) parts.push(locationComponents.village);
+      if (locationComponents.city) parts.push(locationComponents.city);
+      if (locationComponents.county) parts.push(locationComponents.county);
+      if (locationComponents.state) parts.push(locationComponents.state);
+      if (locationComponents.country) parts.push(locationComponents.country);
+      if (locationComponents.postcode) parts.push(locationComponents.postcode);
+
+      formattedAddress = parts.filter(Boolean).join(', ');
+
+      return {
+        fullAddress: formattedAddress || displayName || `Coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        displayName: displayName,
+        components: locationComponents,
+        rawData: data,
+        source: 'OpenStreetMap',
+        coordinates: {
+          lat: lat.toFixed(6),
+          lng: lng.toFixed(6),
+          full: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        }
+      };
+
+    } catch (error) {
+      console.error('OpenStreetMap error:', error);
+      return {
+        fullAddress: `Coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        displayName: null,
+        components: null,
+        rawData: null,
+        source: 'GPS coordinates only',
+        coordinates: {
+          lat: lat.toFixed(6),
+          lng: lng.toFixed(6),
+          full: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        },
+        error: 'Failed to fetch from OpenStreetMap'
+      };
+    }
+  };
+
+  // Get weather data
+  const fetchWeatherData = async (lat, lng, accuracy = null, isDemo = false) => {
+    try {
+      // Using Open-Meteo API for weather data
+      const weatherResponse = await axios.get(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`
+      );
+
+      const weatherData = weatherResponse.data;
+      
+      // Map weather codes to icons and conditions
+      const weatherCodes = {
+        0: { icon: '☀️', condition: 'Clear sky' },
+        1: { icon: '🌤️', condition: 'Mainly clear' },
+        2: { icon: '⛅', condition: 'Partly cloudy' },
+        3: { icon: '☁️', condition: 'Overcast' },
+        45: { icon: '🌫️', condition: 'Fog' },
+        48: { icon: '🌫️', condition: 'Depositing rime fog' },
+        51: { icon: '🌧️', condition: 'Light drizzle' },
+        53: { icon: '🌧️', condition: 'Moderate drizzle' },
+        55: { icon: '🌧️', condition: 'Dense drizzle' },
+        56: { icon: '🌧️', condition: 'Light freezing drizzle' },
+        57: { icon: '🌧️', condition: 'Dense freezing drizzle' },
+        61: { icon: '🌧️', condition: 'Slight rain' },
+        63: { icon: '🌧️', condition: 'Moderate rain' },
+        65: { icon: '🌧️', condition: 'Heavy rain' },
+        66: { icon: '🌧️', condition: 'Light freezing rain' },
+        67: { icon: '🌧️', condition: 'Heavy freezing rain' },
+        71: { icon: '🌨️', condition: 'Slight snow fall' },
+        73: { icon: '🌨️', condition: 'Moderate snow fall' },
+        75: { icon: '🌨️', condition: 'Heavy snow fall' },
+        77: { icon: '🌨️', condition: 'Snow grains' },
+        80: { icon: '🌧️', condition: 'Slight rain showers' },
+        81: { icon: '🌧️', condition: 'Moderate rain showers' },
+        82: { icon: '🌧️', condition: 'Violent rain showers' },
+        85: { icon: '🌨️', condition: 'Slight snow showers' },
+        86: { icon: '🌨️', condition: 'Heavy snow showers' },
+        95: { icon: '⛈️', condition: 'Thunderstorm' },
+        96: { icon: '⛈️', condition: 'Thunderstorm with slight hail' },
+        99: { icon: '⛈️', condition: 'Thunderstorm with heavy hail' }
+      };
+
+      const currentCode = weatherData.current.weather_code;
+      const currentWeather = weatherCodes[currentCode] || { icon: '🌤️', condition: 'Fair' };
+
+      // Get address from OpenStreetMap
+      const locationInfo = await getOpenStreetMapAddress(lat, lng);
+      
+      if (isDemo) {
+        locationInfo.fullAddress = 'Saint Hannibal, Merville Park, Merville, Parañaque District 2, Parañaque, Southern Manila District, Metro Manila, 1713, Philippines';
+        locationInfo.source = 'Demo Location';
+        locationInfo.components = {
+          road: 'Saint Hannibal',
+          suburb: 'Merville Park',
+          village: 'Merville',
+          city_district: 'Parañaque District 2',
+          city: 'Parañaque',
+          state_district: 'Southern Manila District',
+          state: 'Metro Manila',
+          postcode: '1713',
+          country: 'Philippines'
+        };
+      }
+      
+      setLocationAddress(locationInfo.fullAddress);
+      setDetailedLocation(locationInfo);
+
+      // Create display location
+      let displayLocation = 'Your Location';
+      const components = locationInfo.components;
+      
+      if (components) {
+        if (components.suburb) {
+          displayLocation = components.suburb;
+        } else if (components.village) {
+          displayLocation = components.village;
+        } else if (components.city) {
+          displayLocation = components.city;
+        } else if (components.state) {
+          displayLocation = components.state;
+        }
+      }
+
+      // Set current weather
+      setWeather({
+        temp: Math.round(weatherData.current.temperature_2m),
+        condition: currentWeather.condition,
+        humidity: Math.round(weatherData.current.relative_humidity_2m),
+        wind: Math.round(weatherData.current.wind_speed_10m),
+        location: displayLocation,
+        icon: currentWeather.icon,
+        feels_like: Math.round(weatherData.current.temperature_2m + 2),
+        accuracy: accuracy,
+        coordinates: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        source: locationInfo.source,
+        isDemo: isDemo
+      });
+
+      // Set forecast for next 5 days
+      const forecastData = [];
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      
+      for (let i = 0; i < 5; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() + i);
+        const dayCode = weatherData.daily.weather_code[i];
+        const dayWeather = weatherCodes[dayCode] || { icon: '🌤️', condition: 'Fair' };
+        
+        forecastData.push({
+          day: days[date.getDay()],
+          temp: Math.round(weatherData.daily.temperature_2m_max[i]),
+          icon: dayWeather.icon,
+          condition: dayWeather.condition,
+          low: Math.round(weatherData.daily.temperature_2m_min[i])
+        });
+      }
+      
+      setForecast(forecastData);
+      setWeatherLoading(false);
+
+    } catch (error) {
+      console.error('Weather fetch error:', error);
+      // Fallback with coordinates
+      setWeather({
+        temp: 28,
+        condition: 'Partly Cloudy',
+        humidity: 75,
+        wind: 12,
+        location: isDemo ? 'Demo Location' : `Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+        icon: '🌤️',
+        feels_like: 30,
+        accuracy: accuracy,
+        coordinates: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        source: isDemo ? 'Demo Location' : 'GPS coordinates only',
+        isDemo: isDemo
+      });
+      
+      const fallbackForecast = [
+        { day: 'Mon', temp: 29, icon: '☀️', condition: 'Sunny', low: 24 },
+        { day: 'Tue', temp: 27, icon: '⛅', condition: 'Partly Cloudy', low: 23 },
+        { day: 'Wed', temp: 25, icon: '🌧️', condition: 'Rain', low: 22 },
+        { day: 'Thu', temp: 26, icon: '⛅', condition: 'Partly Cloudy', low: 23 },
+        { day: 'Fri', temp: 30, icon: '☀️', condition: 'Sunny', low: 25 }
+      ];
+      setForecast(fallbackForecast);
+      setWeatherLoading(false);
+    }
+  };
+
+  // Check if geolocation is available and permission is granted
+  const checkGeolocationPermission = async () => {
+    if (!navigator.geolocation) {
+      return { available: false, error: 'Geolocation not supported by your browser' };
+    }
+
+    // Try to get position to check permission
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          resolve({ available: true, error: null });
+        },
+        (error) => {
+          let errorMessage = 'Location permission denied';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location permission denied by user';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information is unavailable';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out';
+              break;
+            default:
+              errorMessage = 'Unknown location error';
+          }
+          resolve({ available: false, error: errorMessage });
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 3000,
+          maximumAge: Infinity
+        }
+      );
+    });
+  };
+
+  // Get user's location
   useEffect(() => {
     if (loading) return;
 
-    const fetchUserLocationAndWeather = async () => {
-      try {
-        // First get weather data from backend
-        const weatherResponse = await axios.get(`${API_BASE_URL}/api/v1/weather`);
-        if (weatherResponse.data.success) {
-          setWeather(weatherResponse.data.weather);
-          setForecast(weatherResponse.data.forecast);
-        }
-      } catch (error) {
-        console.error('Weather fetch error:', error);
-        // Set fallback weather data
-        setWeather({
-          temp: 28,
-          condition: 'Partly Cloudy',
-          humidity: 75,
-          wind: 12,
-          location: 'Rubber Plantation',
-          icon: '//cdn.weatherapi.com/weather/64x64/day/116.png'
-        });
-        setForecast([
-          { day: 'Mon', temp: 29, icon: '☀️', condition: 'Sunny' },
-          { day: 'Tue', temp: 27, icon: '⛅', condition: 'Partly Cloudy' },
-          { day: 'Wed', temp: 25, icon: '🌧️', condition: 'Rain' },
-          { day: 'Thu', temp: 26, icon: '⛅', condition: 'Partly Cloudy' },
-          { day: 'Fri', temp: 30, icon: '☀️', condition: 'Sunny' }
-        ]);
-      } finally {
-        setWeatherLoading(false);
-      }
-
-      // Get user's current location
-      if (navigator.geolocation) {
+    const initializeLocation = async () => {
+      setMapLoading(true);
+      
+      // Check geolocation permission first
+      const geolocationStatus = await checkGeolocationPermission();
+      
+      if (geolocationStatus.available) {
+        // Try to get precise location
         navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
+          async (position) => {
+            const { latitude, longitude, accuracy } = position.coords;
+            console.log(`GPS Coordinates: ${latitude}, ${longitude}`);
+            console.log(`GPS Accuracy: ${accuracy} meters`);
+
+            setGpsAccuracy(accuracy);
             setUserLocation({ lat: latitude, lng: longitude });
+            setLocationError(null);
+            setUsingDemoLocation(false);
+
+            // Fetch weather and location data
+            await fetchWeatherData(latitude, longitude, accuracy);
             setMapLoading(false);
           },
-          (error) => {
-            console.error('Geolocation error:', error);
-            // Default to coordinates for Taguig, Philippines
-            setUserLocation({ lat: 14.5176, lng: 121.0509 });
-            setMapLoading(false);
+          async (error) => {
+            console.error('Precise geolocation error:', error);
+            // Even if permission is granted, other errors might occur
+            setLocationError('Could not get precise location. Using demo location instead.');
+            await useDemoLocation();
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
           }
         );
       } else {
-        console.error('Geolocation is not supported by this browser.');
-        // Default to coordinates for Taguig, Philippines
-        setUserLocation({ lat: 14.5176, lng: 121.0509 });
-        setMapLoading(false);
+        // Geolocation not available or permission denied
+        console.log('Geolocation status:', geolocationStatus);
+        setLocationError(geolocationStatus.error || 'Location services unavailable. Using demo location.');
+        await useDemoLocation();
       }
     };
 
-    fetchUserLocationAndWeather();
-  }, [loading, API_BASE_URL]);
+    initializeLocation();
+  }, [loading]);
+
+  // Use demo location
+  const useDemoLocation = async () => {
+    setUserLocation(DEMO_LOCATION);
+    setGpsAccuracy(50);
+    setUsingDemoLocation(true);
+    
+    await fetchWeatherData(DEMO_LOCATION.lat, DEMO_LOCATION.lng, 50, true);
+    setMapLoading(false);
+  };
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -198,7 +485,6 @@ const Home = () => {
   // Handle slide navigation
   const goToSlide = (index) => {
     setCurrentSlide(index);
-    // Reset auto-slide timer
     if (slideIntervalRef.current) {
       clearInterval(slideIntervalRef.current);
     }
@@ -208,31 +494,47 @@ const Home = () => {
   };
 
   // Function to go to user location on map
-const goToMyLocation = () => {
-  if (userLocation) {
-    const zoom = 16; // Higher zoom level for street level
-    const lat = userLocation.lat;
-    const lng = userLocation.lng;
-    
-    // Use center parameter for accurate positioning
-    const iframe = document.querySelector('iframe[title="OpenStreetMap"]');
-    if (iframe) {
-      iframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.005},${lat - 0.005},${lng + 0.005},${lat + 0.005}&layer=mapnik&marker=${lat},${lng}&center=${lat},${lng}`;
+  const goToMyLocation = () => {
+    if (userLocation) {
+      const zoom = 17;
+      const lat = userLocation.lat;
+      const lng = userLocation.lng;
+      const bboxSize = 0.002;
+      
+      const iframe = document.querySelector('iframe[title="OpenStreetMap"]');
+      if (iframe) {
+        iframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - bboxSize},${lat - bboxSize},${lng + bboxSize},${lat + bboxSize}&layer=mapnik&marker=${lat},${lng}&center=${lat},${lng}`;
+      }
+      
+      // Show notification
+      const toast = document.createElement('div');
+      toast.textContent = '📍 Map centered on your location';
+      toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        right: 20px;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 10px 15px;
+        border-radius: 8px;
+        z-index: 10000;
+        font-size: 14px;
+        animation: fadeInOut 2s ease-in-out;
+      `;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2000);
     }
-  }
-};
+  };
+
+  // Handle Learn More button click
+  const handleLearnMore = () => {
+    navigate('/about');
+  };
 
   const extractTextFromResponse = (response) => {
-    console.log('Response received:', response);
+    if (typeof response === 'string') return response;
 
-    // Handle string response
-    if (typeof response === 'string') {
-      return response;
-    }
-
-    // Handle object response
     if (response && typeof response === 'object') {
-      // Handle OpenAI-style response
       if (response.choices && Array.isArray(response.choices) && response.choices.length > 0) {
         const choice = response.choices[0];
         if (choice.message && choice.message.content) {
@@ -243,51 +545,22 @@ const goToMyLocation = () => {
         }
       }
 
-      // Handle direct message object
-      if (response.role && response.content) {
-        return response.content;
-      }
+      if (response.content) return response.content;
+      if (response.message) return response.message;
+      if (response.text) return response.text;
+      if (response.response) return response.response;
+      if (response.answer) return response.answer;
+      if (response.result) return response.result;
 
-      // Handle nested message
-      if (response.message && typeof response.message === 'object' && response.message.content) {
-        return response.message.content;
-      }
-
-      // Try different possible response formats
-      if (response.content) {
-        return response.content;
-      }
-      if (response.message) {
-        return response.message;
-      }
-      if (response.text) {
-        return response.text;
-      }
-      if (response.response) {
-        return response.response;
-      }
-      if (response.answer) {
-        return response.answer;
-      }
-      if (response.result) {
-        return response.result;
-      }
-      if (response.toString) {
-        return response.toString();
-      }
-
-      // Try to find any string property
       for (const key in response) {
         if (typeof response[key] === 'string' && response[key].trim()) {
           return response[key];
         }
       }
 
-      // If no string found, return a default message
       return 'Unable to extract text from response.';
     }
 
-    // Handle other types
     return String(response || 'No response received');
   };
 
@@ -301,41 +574,20 @@ const goToMyLocation = () => {
     setChatLoading(true);
 
     try {
-      // Check if Puter.js is available
       if (window.puter && window.puter.ai && window.puter.ai.chat) {
-        console.log('Calling Puter AI with message:', userMessage);
-        
-        // Direct Puter.js call
         const response = await window.puter.ai.chat(userMessage, {
           model: 'gpt-5-nano',
         });
         
-        console.log('Puter AI response:', response);
-        
-        // Extract text from response
         const botResponse = extractTextFromResponse(response);
-        
         setChatMessages(prev => [...prev, { text: botResponse, sender: 'bot' }]);
       } else {
-        console.log('Puter.js not available, using fallback');
-        // Fallback: Use a local AI simulation
         await simulateAIChat(userMessage);
       }
     } catch (error) {
       console.error('Chat error:', error);
-      let errorMessage = "Sorry, I encountered an error. Please try again.";
-      
-      // Provide more specific error messages
-      if (error.message?.includes('network')) {
-        errorMessage = "Network error. Please check your internet connection.";
-      } else if (error.message?.includes('rate limit')) {
-        errorMessage = "Rate limit exceeded. Please try again in a moment.";
-      } else if (error.message?.includes('authentication')) {
-        errorMessage = "Authentication error. Puter.js may need configuration.";
-      }
-      
       setChatMessages(prev => [...prev, { 
-        text: errorMessage, 
+        text: "Sorry, I encountered an error. Please try again.", 
         sender: 'bot' 
       }]);
     } finally {
@@ -344,10 +596,8 @@ const goToMyLocation = () => {
   };
 
   const simulateAIChat = async (message) => {
-    // Add a delay to simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Enhanced fallback responses
     const responses = [
       "I'm RubberSense AI! I can help with questions about rubber trees, general knowledge, coding, and much more. What would you like to know?",
       "That's an interesting question! As an AI assistant, I'm here to help you with various topics. Feel free to ask me anything!",
@@ -363,6 +613,293 @@ const goToMyLocation = () => {
   // Clear chat history
   const clearChat = () => {
     setChatMessages([]);
+  };
+
+  // Try to get real location again
+  const tryRealLocation = async () => {
+    setMapLoading(true);
+    setWeatherLoading(true);
+    setLocationError(null);
+    
+    const geolocationStatus = await checkGeolocationPermission();
+    
+    if (geolocationStatus.available) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          setGpsAccuracy(accuracy);
+          setUserLocation({ lat: latitude, lng: longitude });
+          setUsingDemoLocation(false);
+          
+          await fetchWeatherData(latitude, longitude, accuracy);
+          setMapLoading(false);
+        },
+        async (error) => {
+          setLocationError('Still unable to get precise location. Keeping demo location.');
+          setMapLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      setLocationError(geolocationStatus.error || 'Location permission still denied.');
+      setMapLoading(false);
+    }
+  };
+
+  // Refresh location manually
+  const refreshLocation = async () => {
+    if (usingDemoLocation) {
+      await tryRealLocation();
+    } else {
+      setMapLoading(true);
+      setWeatherLoading(true);
+      
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          setGpsAccuracy(accuracy);
+          setUserLocation({ lat: latitude, lng: longitude });
+          setLocationError(null);
+          
+          await fetchWeatherData(latitude, longitude, accuracy);
+          setMapLoading(false);
+        },
+        async (error) => {
+          setLocationError('Failed to refresh location. Using current data.');
+          setMapLoading(false);
+          setWeatherLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    }
+  };
+
+  // Render location details in OpenStreetMap format
+  const renderOpenStreetMapLocation = () => {
+    if (!detailedLocation || !detailedLocation.components) return null;
+
+    const components = detailedLocation.components;
+    
+    // Create location breakdown similar to OpenStreetMap
+    const locationBreakdown = [];
+
+    // Add components in hierarchical order
+    if (components.house) locationBreakdown.push({ label: 'House', value: components.house });
+    if (components.building) locationBreakdown.push({ label: 'Building', value: components.building });
+    if (components.block) locationBreakdown.push({ label: 'Block', value: components.block });
+    if (components.road) locationBreakdown.push({ label: 'Road', value: components.road });
+    if (components.neighbourhood) locationBreakdown.push({ label: 'Neighbourhood', value: components.neighbourhood });
+    if (components.quarter) locationBreakdown.push({ label: 'Quarter', value: components.quarter });
+    if (components.suburb) locationBreakdown.push({ label: 'Suburb', value: components.suburb });
+    if (components.city_district) locationBreakdown.push({ label: 'City District', value: components.city_district });
+    if (components.village) locationBreakdown.push({ label: 'Village', value: components.village });
+    if (components.town) locationBreakdown.push({ label: 'Town', value: components.town });
+    if (components.city) locationBreakdown.push({ label: 'City', value: components.city });
+    if (components.county) locationBreakdown.push({ label: 'County', value: components.county });
+    if (components.state_district) locationBreakdown.push({ label: 'State District', value: components.state_district });
+    if (components.state) locationBreakdown.push({ label: 'State', value: components.state });
+    if (components.country) locationBreakdown.push({ label: 'Country', value: components.country });
+    if (components.country_code) locationBreakdown.push({ label: 'Country Code', value: components.country_code });
+    if (components.postcode) locationBreakdown.push({ label: 'Postcode', value: components.postcode });
+
+    if (locationBreakdown.length === 0) return null;
+
+    return (
+      <div style={{
+        marginTop: '20px',
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255,255,255,0.1)',
+        overflow: 'hidden'
+      }}>
+        {/* Location Header */}
+        <div style={{
+          background: 'rgba(59, 130, 246, 0.15)',
+          padding: '12px 15px',
+          borderBottom: '1px solid rgba(59, 130, 246, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          color: '#3B82F6',
+          fontWeight: 'bold'
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>🗺️</span>
+          <span>OpenStreetMap Location Details</span>
+        </div>
+
+        {/* Location Details Grid */}
+        <div style={{
+          padding: '15px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gap: '12px'
+        }}>
+          {locationBreakdown.map((item, idx) => (
+            <div key={idx} style={{
+              padding: '10px',
+              background: 'rgba(255,255,255,0.03)',
+              borderRadius: '6px',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <div style={{
+                fontSize: '0.8rem',
+                color: 'rgba(255,255,255,0.6)',
+                marginBottom: '4px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                {item.label}
+              </div>
+              <div style={{
+                fontWeight: 'bold',
+                color: 'white',
+                fontSize: '0.95rem',
+                wordBreak: 'break-word'
+              }}>
+                {item.value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Map Data Footer */}
+        <div style={{
+          background: 'rgba(0,0,0,0.1)',
+          padding: '10px 15px',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          fontSize: '0.8rem',
+          color: 'rgba(255,255,255,0.6)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span>📍</span>
+            <span>Source: {detailedLocation.source}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span>🌐</span>
+            <span>OpenStreetMap</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render GPS Coordinates section
+  const renderGPSCoordinates = () => {
+    if (!userLocation) return null;
+
+    return (
+      <div style={{
+        marginTop: '15px',
+        padding: '15px',
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: '10px',
+        border: '1px solid rgba(255,255,255,0.1)'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          marginBottom: '10px',
+          color: usingDemoLocation ? '#ff9800' : '#4CAF50'
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>📡</span>
+          <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>
+            {usingDemoLocation ? 'Demo Location' : 'GPS Coordinates'}
+          </span>
+          {usingDemoLocation && (
+            <span style={{
+              fontSize: '0.7rem',
+              background: 'rgba(255,152,0,0.2)',
+              padding: '2px 8px',
+              borderRadius: '10px',
+              color: '#ff9800'
+            }}>
+              Demo
+            </span>
+          )}
+        </div>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '10px',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            flex: 1,
+            minWidth: '200px'
+          }}>
+            <div style={{
+              fontSize: '1.2rem',
+              fontWeight: 'bold',
+              color: 'white',
+              fontFamily: 'monospace',
+              marginBottom: '5px'
+            }}>
+              {userLocation.lat.toFixed(6)}, {userLocation.lng.toFixed(6)}
+            </div>
+            <div style={{
+              fontSize: '0.8rem',
+              color: 'rgba(255,255,255,0.6)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}>
+              <span>🎯</span>
+              <span>Accuracy: {gpsAccuracy ? `${Math.round(gpsAccuracy)} meters` : 'Calculating...'}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`);
+              const toast = document.createElement('div');
+              toast.textContent = 'Coordinates copied to clipboard!';
+              toast.style.cssText = `
+                position: fixed;
+                bottom: 100px;
+                right: 20px;
+                background: rgba(76, 175, 80, 0.9);
+                color: white;
+                padding: 10px 15px;
+                border-radius: 8px;
+                z-index: 10000;
+                font-size: 14px;
+                animation: fadeInOut 2s ease-in-out;
+              `;
+              document.body.appendChild(toast);
+              setTimeout(() => toast.remove(), 2000);
+            }}
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              color: 'white',
+              border: '1px solid rgba(255,255,255,0.2)',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '0.9rem',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+          >
+            📋 Copy Coordinates
+          </button>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -391,7 +928,7 @@ const goToMyLocation = () => {
       minHeight: '100vh', 
       background: '#667eea',
       position: 'relative',
-      paddingTop: '64px' // Add padding for fixed header
+      paddingTop: '64px'
     }}>
       {/* User Header Component - Fixed at top */}
       <div style={{
@@ -404,14 +941,13 @@ const goToMyLocation = () => {
         <UserHeader />
       </div>
       
-      {/* Full Screen Image Carousel - Sticky to header */}
+      {/* Full Screen Image Carousel */}
       <div style={{
         position: 'relative',
-        height: 'calc(100vh - 64px)', // Full screen minus header
+        height: 'calc(100vh - 64px)',
         width: '100%',
         marginTop: 0
       }}>
-        {/* Slides */}
         {slides.map((slide, index) => (
           <div
             key={slide.id}
@@ -428,7 +964,6 @@ const goToMyLocation = () => {
               justifyContent: 'center'
             }}
           >
-            {/* Slide Image */}
             <div style={{
               position: 'absolute',
               top: 0,
@@ -441,7 +976,6 @@ const goToMyLocation = () => {
               filter: 'brightness(0.7)'
             }} />
             
-            {/* Slide Content */}
             <div style={{
               position: 'relative',
               zIndex: 2,
@@ -470,30 +1004,32 @@ const goToMyLocation = () => {
               }}>
                 {slide.description}
               </p>
-              <div style={{
-                display: 'inline-block',
-                background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
-                color: 'white',
-                padding: '15px 40px',
-                borderRadius: '30px',
-                textDecoration: 'none',
-                fontWeight: 'bold',
-                fontSize: '1.1rem',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
-                cursor: 'pointer',
-                transition: 'transform 0.2s, box-shadow 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
-              }}
+              <button
+                onClick={handleLearnMore}
+                style={{
+                  background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+                  color: 'white',
+                  padding: '15px 40px',
+                  borderRadius: '30px',
+                  textDecoration: 'none',
+                  fontWeight: 'bold',
+                  fontSize: '1.1rem',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                  border: 'none'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+                }}
               >
                 Learn More
-              </div>
+              </button>
             </div>
           </div>
         ))}
@@ -542,7 +1078,7 @@ const goToMyLocation = () => {
         background: '#667eea',
         padding: '40px 20px'
       }}>
-        {/* Welcome Section - Below sliding pictures */}
+        {/* Welcome Section */}
         <div style={{
           background: 'rgba(255,255,255,0.1)',
           backdropFilter: 'blur(10px)',
@@ -696,26 +1232,49 @@ const goToMyLocation = () => {
             border: '1px solid rgba(255,255,255,0.2)',
             boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
           }}>
-            <h2 style={{ 
-              color: 'white', 
-              marginBottom: '25px',
-              fontSize: '1.8rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              🌤️ Current Weather
-              {weatherLoading && (
-                <span style={{
-                  fontSize: '0.9rem',
-                  background: 'rgba(255,255,255,0.2)',
-                  padding: '4px 12px',
-                  borderRadius: '12px'
-                }}>
-                  Loading...
-                </span>
-              )}
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+              <h2 style={{ 
+                color: 'white', 
+                fontSize: '1.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                🌤️ Current Weather
+                {weatherLoading && (
+                  <span style={{
+                    fontSize: '0.9rem',
+                    background: 'rgba(255,255,255,0.2)',
+                    padding: '4px 12px',
+                    borderRadius: '12px'
+                  }}>
+                    Loading...
+                  </span>
+                )}
+              </h2>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={refreshLocation}
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '20px',
+                    fontSize: '0.9rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.25)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+            </div>
             
             {/* Date and Time */}
             <div style={{
@@ -753,26 +1312,53 @@ const goToMyLocation = () => {
                     <div style={{ fontSize: '3.5rem', color: 'white', fontWeight: 'bold' }}>
                       {weather.temp}°C
                     </div>
-                    <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.3rem', marginTop: '5px' }}>
+                    <div style={{ 
+                      color: 'rgba(255,255,255,0.9)', 
+                      fontSize: '1.3rem', 
+                      marginTop: '5px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
                       {weather.condition}
+                      <span style={{ 
+                        fontSize: '0.9rem', 
+                        color: 'rgba(255,255,255,0.7)',
+                        background: 'rgba(255,255,255,0.1)',
+                        padding: '2px 8px',
+                        borderRadius: '10px'
+                      }}>
+                        Feels like {weather.feels_like}°C
+                      </span>
                     </div>
-                    <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1rem', marginTop: '10px' }}>
+                    <div style={{
+                      color: 'rgba(255,255,255,0.7)',
+                      fontSize: '1rem',
+                      marginTop: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
                       📍 {weather.location}
+                      {weather.isDemo && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          background: 'rgba(255,152,0,0.2)',
+                          color: '#ff9800',
+                          padding: '2px 6px',
+                          borderRadius: '8px'
+                        }}>
+                          Demo
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div style={{
                     fontSize: '4rem',
-                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+                    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))',
+                    animation: 'pulse 2s infinite'
                   }}>
-                    {weather.icon?.startsWith('//') ? (
-                      <img 
-                        src={`https:${weather.icon}`} 
-                        alt="Weather icon" 
-                        style={{ width: '100px', height: '100px' }}
-                      />
-                    ) : (
-                      <span>{weather.icon}</span>
-                    )}
+                    {weather.icon}
                   </div>
                 </div>
 
@@ -862,9 +1448,16 @@ const goToMyLocation = () => {
                         </div>
                         <div style={{ 
                           color: 'rgba(255,255,255,0.7)', 
-                          fontSize: '0.8rem'
+                          fontSize: '0.9rem',
+                          marginBottom: '5px'
                         }}>
                           {day.condition}
+                        </div>
+                        <div style={{ 
+                          color: 'rgba(255,255,255,0.5)', 
+                          fontSize: '0.8rem'
+                        }}>
+                          Low: {day.low}°
                         </div>
                       </div>
                     ))}
@@ -874,7 +1467,7 @@ const goToMyLocation = () => {
             )}
           </div>
 
-          {/* Map Card */}
+          {/* Map Card - Updated for OpenStreetMap style */}
           <div style={{
             background: 'rgba(255,255,255,0.1)',
             backdropFilter: 'blur(10px)',
@@ -885,26 +1478,90 @@ const goToMyLocation = () => {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            <h2 style={{ 
-              color: 'white', 
-              marginBottom: '25px',
-              fontSize: '1.8rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              🗺️ Your Location
-              {mapLoading && (
-                <span style={{
-                  fontSize: '0.9rem',
-                  background: 'rgba(255,255,255,0.2)',
-                  padding: '4px 12px',
-                  borderRadius: '12px'
-                }}>
-                  Detecting...
-                </span>
-              )}
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+              <h2 style={{
+                color: 'white',
+                fontSize: '1.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                🗺️ Your Location
+                {mapLoading && (
+                  <span style={{
+                    fontSize: '0.9rem',
+                    background: 'rgba(255,255,255,0.2)',
+                    padding: '4px 12px',
+                    borderRadius: '12px'
+                  }}>
+                    Detecting...
+                  </span>
+                )}
+              </h2>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {usingDemoLocation && (
+                  <button
+                    onClick={tryRealLocation}
+                    style={{
+                      background: 'rgba(76, 175, 80, 0.15)',
+                      color: '#4CAF50',
+                      border: '1px solid rgba(76, 175, 80, 0.3)',
+                      padding: '8px 16px',
+                      borderRadius: '20px',
+                      fontSize: '0.9rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(76, 175, 80, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(76, 175, 80, 0.15)'}
+                  >
+                    📍 Try Real Location
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Location Error Alert */}
+            {locationError && (
+              <div style={{
+                background: 'rgba(255,152,0,0.15)',
+                border: '1px solid rgba(255,152,0,0.3)',
+                color: '#ff9800',
+                padding: '12px 15px',
+                borderRadius: '10px',
+                marginBottom: '20px',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                <div style={{ flex: 1 }}>
+                  <strong>Location Issue:</strong> {locationError}
+                </div>
+                <button
+                  onClick={() => setLocationError(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ff9800',
+                    fontSize: '1.5rem',
+                    cursor: 'pointer',
+                    padding: '0',
+                    width: '24px',
+                    height: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             <div style={{
               height: '350px',
@@ -937,15 +1594,15 @@ const goToMyLocation = () => {
                 }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '4rem', marginBottom: '20px' }}>📍</div>
-                    <div style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Loading map...</div>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Detecting your location...</div>
                     <div style={{ fontSize: '0.9rem', opacity: 0.7 }}>
-                      Please allow location access
+                      Please allow location access for accurate weather and mapping
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Go to My Location Button - Inside the map */}
+              {/* Go to My Location Button */}
               {userLocation && (
                 <button
                   onClick={goToMyLocation}
@@ -983,86 +1640,96 @@ const goToMyLocation = () => {
               )}
             </div>
 
+            {/* Location Information - OpenStreetMap Style */}
             <div style={{
-              marginTop: '20px',
               color: 'white'
             }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '15px',
-                marginBottom: '15px'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}>
-                  <div style={{
-                    width: '15px',
-                    height: '15px',
-                    background: '#ff4757',
-                    borderRadius: '50%',
-                    boxShadow: '0 0 10px rgba(255, 71, 87, 0.5)'
-                  }} />
-                  <span style={{ fontSize: '1rem' }}>Your current location marker (static)</span>
-                </div>
-              </div>
-              
-              {userLocation && (
+              {/* Main Address Display */}
+              {locationAddress && (
                 <div style={{
                   background: 'rgba(255,255,255,0.05)',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  marginTop: '15px',
-                  fontSize: '0.9rem',
-                  border: '1px solid rgba(255,255,255,0.1)'
+                  padding: '15px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  marginBottom: '15px'
                 }}>
-                  <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontWeight: 'bold', color: '#4CAF50' }}>📍 Coordinates:</span>
-                    <span>{userLocation.lat.toFixed(6)}, {userLocation.lng.toFixed(6)}</span>
-                  </div>
-                  <div style={{ opacity: 0.9, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontWeight: 'bold' }}>🌍 Location:</span>
-                    <span>Taguig City, Metro Manila, Philippines</span>
-                  </div>
-                  <div style={{ marginTop: '10px', opacity: 0.8, fontSize: '0.85rem' }}>
-                    <em>Note: The red marker is fixed and won't move when you interact with the map. Use the ↗ button to recenter.</em>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      background: 'rgba(59, 130, 246, 0.2)',
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.5rem',
+                      flexShrink: 0
+                    }}>
+                      📍
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontSize: '0.9rem',
+                        color: 'rgba(255,255,255,0.7)',
+                        marginBottom: '4px'
+                      }}>
+                        Full Address:
+                      </div>
+                      <div style={{
+                        fontWeight: 'bold',
+                        fontSize: '1.1rem',
+                        lineHeight: '1.4'
+                      }}>
+                        {locationAddress}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
-              <a
-                href={`https://www.openstreetmap.org/#map=15/${userLocation?.lat}/${userLocation?.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  background: 'rgba(255,255,255,0.15)',
-                  color: 'white',
-                  padding: '12px 25px',
-                  borderRadius: '25px',
-                  textDecoration: 'none',
-                  marginTop: '20px',
-                  fontSize: '1rem',
-                  transition: 'background 0.2s, transform 0.2s',
-                  border: '1px solid rgba(255,255,255,0.2)'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <span>View Full Map</span>
-                <span style={{ fontSize: '1.2rem' }}>→</span>
-              </a>
+              {/* GPS Coordinates Section */}
+              {renderGPSCoordinates()}
+
+              {/* OpenStreetMap Location Details */}
+              {renderOpenStreetMapLocation()}
+
+              {/* OpenStreetMap Link */}
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+                <a
+                  href={`https://www.openstreetmap.org/#map=17/${userLocation?.lat}/${userLocation?.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    background: 'rgba(255,255,255,0.15)',
+                    color: 'white',
+                    padding: '12px 25px',
+                    borderRadius: '25px',
+                    textDecoration: 'none',
+                    fontSize: '1rem',
+                    transition: 'background 0.2s, transform 0.2s',
+                    border: '1px solid rgba(255,255,255,0.2)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.15)';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                  }}
+                >
+                  <span style={{ fontSize: '1.2rem' }}>🌐</span>
+                  <span>View Full Details on OpenStreetMap</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -1224,7 +1891,6 @@ const goToMyLocation = () => {
             flexDirection: 'column',
             gap: '10px'
           }}>
-            {/* Welcome message - only show if no messages yet */}
             {chatMessages.length === 0 && (
               <div style={{
                 alignSelf: 'flex-start',
@@ -1252,7 +1918,6 @@ const goToMyLocation = () => {
               </div>
             )}
 
-            {/* Chat messages */}
             {chatMessages.map((msg, index) => (
               <div
                 key={index}
@@ -1279,7 +1944,6 @@ const goToMyLocation = () => {
               </div>
             ))}
 
-            {/* Loading indicator */}
             {chatLoading && (
               <div style={{
                 alignSelf: 'flex-start',
@@ -1354,7 +2018,6 @@ const goToMyLocation = () => {
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && e.shiftKey) {
-                  // Allow Shift+Enter for new line
                   return;
                 } else if (e.key === 'Enter') {
                   e.preventDefault();
@@ -1370,7 +2033,7 @@ const goToMyLocation = () => {
                 border: 'none',
                 borderRadius: '50%',
                 width: '40px',
-              height: '40px',
+                height: '40px',
                 cursor: chatLoading || !chatInput.trim() ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -1436,13 +2099,13 @@ const goToMyLocation = () => {
         
         @keyframes pulse {
           0% {
-            box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
+            transform: scale(1);
           }
-          70% {
-            box-shadow: 0 0 0 10px rgba(255, 71, 87, 0);
+          50% {
+            transform: scale(1.05);
           }
           100% {
-            box-shadow: 0 0 0 0 rgba(255, 71,87, 0);
+            transform: scale(1);
           }
         }
         
@@ -1455,6 +2118,13 @@ const goToMyLocation = () => {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+        
+        @keyframes fadeInOut {
+          0% { opacity: 0; transform: translateY(10px); }
+          20% { opacity: 1; transform: translateY(0); }
+          80% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-10px); }
         }
       `}</style>
     </div>

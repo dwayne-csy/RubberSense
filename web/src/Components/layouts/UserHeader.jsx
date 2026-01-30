@@ -26,12 +26,14 @@ const UserHeader = () => {
           setUser(response.data.user);
         } else {
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           navigate('/login');
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
         if (error.response?.status === 401) {
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           navigate('/login');
         }
       } finally {
@@ -49,14 +51,8 @@ const UserHeader = () => {
     { label: 'About Us', path: '/about' },
     { label: 'Latex Detection', path: '/latex-detection' },
     { label: 'Trunk Detection', path: '/trunks-detection' },
-    { label: 'Contact Us', path: '/contact' }
-  ];
-
-  const profileMenuItems = [
-    { label: 'Profile', icon: '👤', action: () => navigate('/profile') },
-    { label: 'Recent Analysis', icon: '📊', action: () => navigate('/analysis') },
-    { label: 'Settings', icon: '⚙️', action: () => navigate('/settings') },
-    { label: 'Log out', icon: '🚪', isLogout: true, action: () => handleLogout() }
+    { label: 'About Rubber', path: '/about-rubber' },
+    { label: 'Contacts', path: '/contact' }
   ];
 
   const handleLogout = () => {
@@ -66,6 +62,13 @@ const UserHeader = () => {
     setProfileMenuOpen(false);
     navigate('/login');
   };
+
+  const profileMenuItems = [
+    { label: 'Profile', icon: '👤', action: () => navigate('/profile') },
+    { label: 'Recent Analysis', icon: '📊', action: () => navigate('/analysis') },
+    { label: 'Settings', icon: '⚙️', action: () => navigate('/settings') },
+    { label: 'Log out', icon: '🚪', isLogout: true, action: () => handleLogout() }
+  ];
 
   const getUserInitials = (name) =>
     name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U';
@@ -257,7 +260,7 @@ const UserHeader = () => {
 
       <header className="user-header">
         <div className="header-container">
-          <div className="logo-section" onClick={() => navigate('/')}>
+          <div className="logo-section" onClick={() => navigate('/home')}>
             <div className="logo-icon">RS</div>
             <span className="logo-text">RubberSense</span>
           </div>
