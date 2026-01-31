@@ -1,5 +1,6 @@
 import React from 'react';
 import UserHeader from '../layouts/UserHeader.jsx';
+import UserFooter from '../layouts/UserFooter.jsx';
 
 const AboutRubber = () => {
   return (
@@ -156,6 +157,7 @@ const AboutRubber = () => {
           </p>
         </div>
       </div>
+      <UserFooter />
     </>
   );
 };
@@ -169,6 +171,7 @@ const styles = {
     padding: '20px',
     backgroundColor: '#f8f9fa',
     color: '#333',
+    minHeight: 'calc(100vh - 128px)', // Adjusted for header and footer
   },
   header: {
     textAlign: 'center',

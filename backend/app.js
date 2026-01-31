@@ -42,9 +42,12 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // ========== USER ROUTES ==========
 const userRoutes = require('./routes/User');
 const mlRoutes = require('./routes/mlRoutes');
+const saveLocationRoutes = require('./routes/SaveLocationRoutes');
+
 
 app.use('/api/v1/users', userRoutes);
 app.use('/api/ml', mlRoutes);
+app.use('/api/v1/locations', saveLocationRoutes); 
 
 
 

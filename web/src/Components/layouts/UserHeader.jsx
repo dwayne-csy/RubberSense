@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import LogoImage from '../logo/LOGO.png';
 
 const UserHeader = () => {
   const [user, setUser] = useState(null);
@@ -121,9 +122,11 @@ const UserHeader = () => {
         }
 
         .user-header {
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          background: linear-gradient(135deg, #1a472a 0%, #2d6a4f 100%);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+          position: sticky;
+          top: 0;
+          z-index: 1000;
         }
 
         .header-container {
@@ -133,7 +136,7 @@ const UserHeader = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          height: 64px;
+          height: 70px;
         }
 
         .logo-section {
@@ -141,23 +144,42 @@ const UserHeader = () => {
           align-items: center;
           gap: .75rem;
           cursor: pointer;
+          transition: transform 0.3s ease;
+        }
+
+        .logo-section:hover {
+          transform: translateY(-2px);
         }
 
         .logo-icon {
-          width: 36px;
-          height: 36px;
-          background: #2d6a4f;
-          border-radius: 6px;
+          width: 42px;
+          height: 42px;
+          background: rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(10px);
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
+          font-weight: bold;
+          font-size: 1.1rem;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+          overflow: hidden;
+        }
+
+        .logo-image {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 4px;
         }
 
         .logo-text {
-          font-size: 1.25rem;
+          font-size: 1.4rem;
           font-weight: 700;
-          color: #1f2937;
+          color: white;
+          letter-spacing: 0.5px;
         }
 
         .nav-links {
@@ -168,38 +190,60 @@ const UserHeader = () => {
         }
 
         .nav-link {
-          color: #6b7280;
+          color: rgba(255, 255, 255, 0.9);
           font-weight: 500;
           cursor: pointer;
+          padding: 8px 12px;
+          border-radius: 6px;
+          transition: all 0.3s ease;
+          font-size: 0.95rem;
         }
 
-        .nav-link:hover,
+        .nav-link:hover {
+          color: white;
+          background: rgba(255, 255, 255, 0.1);
+          transform: translateY(-2px);
+        }
+
         .nav-link.active {
-          color: #2d6a4f;
+          color: white;
+          background: rgba(255, 255, 255, 0.15);
+          font-weight: 600;
         }
 
-        .profile-dropdown { position: relative; }
+        .profile-dropdown { 
+          position: relative; 
+        }
 
         .profile-trigger {
           display: flex;
           align-items: center;
           gap: .75rem;
-          padding: .375rem .5rem;
+          padding: 8px 12px;
           border-radius: 8px;
+          transition: all 0.3s ease;
+          background: rgba(255, 255, 255, 0.1);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          backdrop-filter: blur(10px);
         }
 
-        .profile-trigger:hover { background: #f9fafb; }
+        .profile-trigger:hover { 
+          background: rgba(255, 255, 255, 0.15);
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
 
         .user-avatar {
-          width: 36px;
-          height: 36px;
+          width: 38px;
+          height: 38px;
           border-radius: 50%;
-          background: #2d6a4f;
+          background: rgba(255, 255, 255, 0.2);
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
           font-weight: 600;
+          border: 2px solid rgba(255, 255, 255, 0.3);
         }
 
         .avatar-image {
@@ -215,30 +259,44 @@ const UserHeader = () => {
           text-align: left;
         }
 
-        .user-name { font-size: .875rem; font-weight: 600; }
-        .user-email { font-size: .75rem; color: #6b7280; }
+        .user-name { 
+          font-size: .875rem; 
+          font-weight: 600; 
+          color: white;
+        }
+        
+        .user-email { 
+          font-size: .75rem; 
+          color: rgba(255, 255, 255, 0.8); 
+        }
 
         .dropdown-arrow {
           width: 16px;
           height: 16px;
-          color: #9ca3af;
-          transition: transform .2s ease;
+          color: rgba(255, 255, 255, 0.8);
+          transition: transform .3s ease;
         }
 
-        .dropdown-arrow.open { transform: rotate(180deg); }
+        .dropdown-arrow.open { 
+          transform: rotate(180deg);
+          color: white;
+        }
 
         .dropdown-menu {
           position: absolute;
-          top: calc(100% + .5rem);
+          top: calc(100% + 8px);
           right: 0;
           background: white;
-          border-radius: 8px;
-          box-shadow: 0 10px 15px rgba(0,0,0,.1);
-          min-width: 220px;
+          border-radius: 12px;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+          min-width: 240px;
           opacity: 0;
           visibility: hidden;
-          transform: translateY(-10px);
-          transition: .2s ease;
+          transform: translateY(-15px);
+          transition: all 0.3s ease;
+          border: 1px solid #e5e7eb;
+          overflow: hidden;
+          z-index: 1000;
         }
 
         .dropdown-menu.show {
@@ -250,18 +308,76 @@ const UserHeader = () => {
         .dropdown-item {
           width: 100%;
           display: flex;
+          align-items: center;
           gap: .75rem;
-          padding: .75rem 1rem;
-          font-size: .875rem;
+          padding: 14px 16px;
+          font-size: .9rem;
+          color: #374151;
+          text-align: left;
+          transition: all 0.2s ease;
+          border-bottom: 1px solid #f3f4f6;
         }
 
-        .dropdown-item.logout { color: #dc2626; }
+        .dropdown-item:hover {
+          background: #f9fafb;
+          padding-left: 20px;
+          color: #1f2937;
+        }
+
+        .dropdown-item:last-child {
+          border-bottom: none;
+        }
+
+        .dropdown-item.logout { 
+          color: #dc2626; 
+        }
+        
+        .dropdown-item.logout:hover { 
+          background: #fee2e2;
+          color: #b91c1c;
+        }
+
+        .dropdown-item span:first-child {
+          font-size: 1.1rem;
+        }
+
+        @media (max-width: 768px) {
+          .nav-links {
+            display: none;
+          }
+          
+          .header-container {
+            padding: 0 1rem;
+          }
+          
+          .logo-text {
+            font-size: 1.2rem;
+          }
+        }
+
+        /* Animation for logo */
+        @keyframes logoGlow {
+          0%, 100% { 
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.1);
+          }
+          50% { 
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.15);
+          }
+        }
+
+        .logo-icon {
+          animation: logoGlow 3s ease-in-out infinite;
+        }
       `}</style>
 
       <header className="user-header">
         <div className="header-container">
           <div className="logo-section" onClick={() => navigate('/home')}>
-            <div className="logo-icon">RS</div>
+            <div className="logo-icon">
+              <img src={LogoImage} alt="RubberSense Logo" className="logo-image" />
+            </div>
             <span className="logo-text">RubberSense</span>
           </div>
 
@@ -289,7 +405,6 @@ const UserHeader = () => {
                   <div className="user-email">{getUserEmail()}</div>
                 </div>
 
-                {/* Your custom arrow only */}
                 <svg className={`dropdown-arrow ${profileMenuOpen ? 'open' : ''}`} viewBox="0 0 24 24">
                   <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                 </svg>

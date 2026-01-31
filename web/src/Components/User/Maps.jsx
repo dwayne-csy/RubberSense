@@ -26,7 +26,7 @@ const Maps = () => {
   const [routeDistance, setRouteDistance] = useState(null);
   const [routeDuration, setRouteDuration] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [transportMode, setTransportMode] = useState('motor'); // 'walk', 'motor', 'bike', 'car'
+  const [transportMode, setTransportMode] = useState('motor');
   const [routeLoading, setRouteLoading] = useState(false);
   const mapIframeRef = useRef(null);
   const navigate = useNavigate();
@@ -69,14 +69,33 @@ const Maps = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
+  // Helper function to create authenticated API client
+  const getAuthApiClient = () => {
+    const token = localStorage.getItem('token');
+    return axios.create({
+      baseURL: API_BASE_URL,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  };
+
+  // Helper function for external APIs (no auth headers)
+  const getExternalApiClient = () => {
+    return axios.create({
+      timeout: 10000
+    });
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
       if (!token) return navigate('/login');
 
       try {
-        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        const response = await axios.get(`${API_BASE_URL}/api/v1/users/me`);
+        const apiClient = getAuthApiClient();
+        const response = await apiClient.get('/api/v1/users/me');
         if (response.data.success) {
           setUser(response.data.user);
         } else {
@@ -95,19 +114,13 @@ const Maps = () => {
     };
 
     checkAuth();
-  }, [navigate, API_BASE_URL]);
+  }, [navigate]);
 
   const getOpenStreetMapAddress = async (lat, lng) => {
     try {
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&namedetails=1`,
-        {
-          headers: {
-            'Accept-Language': 'en',
-            'User-Agent': 'RubberSense/1.0'
-          },
-          timeout: 5000
-        }
+      const externalApi = getExternalApiClient();
+      const response = await externalApi.get(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&namedetails=1`
       );
 
       const data = response.data;
@@ -228,7 +241,6 @@ const Maps = () => {
     try {
       setRouteLoading(true);
       
-      // Convert mode to OSRM profile
       let profile = 'driving';
       switch(mode) {
         case 'walk':
@@ -243,32 +255,27 @@ const Maps = () => {
           profile = 'driving';
       }
       
-      // Get route from OSRM API
-      const response = await axios.get(
+      // Use external API client (no auth headers)
+      const externalApi = getExternalApiClient();
+      const response = await externalApi.get(
         `https://router.project-osrm.org/route/v1/${profile}/${startLng},${startLat};${endLng},${endLat}?overview=simplified&geometries=geojson`
       );
 
       if (response.data.routes && response.data.routes.length > 0) {
         const route = response.data.routes[0];
-        const distance = (route.distance / 1000).toFixed(1); // Convert meters to km
-        const duration = formatDuration(route.duration, mode); // Convert seconds to readable format
+        const distance = (route.distance / 1000).toFixed(1);
+        const duration = formatDuration(route.duration, mode);
         
-        // Extract coordinates for the route line
         const coordinates = route.geometry.coordinates;
         setRouteCoordinates(coordinates);
         setRouteDistance(distance);
         setRouteDuration(duration);
         
-        // Create encoded polyline for OpenStreetMap
         const encodedPolyline = encodePolyline(coordinates.map(coord => [coord[1], coord[0]]));
         
-        // Calculate bounds for the map
         const bounds = calculateBounds(coordinates);
         const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
         
-        // Create map URL with route overlay
-        // Note: OpenStreetMap embed doesn't support custom polylines directly
-        // We'll use markers and let OSM show the route
         const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${startLat},${startLng}&marker=${endLat},${endLng}&center=${bounds.centerLat},${bounds.centerLng}&zoom=12`;
         
         if (mapIframeRef.current) {
@@ -284,7 +291,6 @@ const Maps = () => {
       }
     } catch (error) {
       console.error('Error fetching route:', error);
-      // Fallback to simple straight line route
       return showSimpleRoute(startLat, startLng, endLat, endLng, mode);
     } finally {
       setRouteLoading(false);
@@ -292,17 +298,14 @@ const Maps = () => {
   };
 
   const showSimpleRoute = (startLat, startLng, endLat, endLng, mode) => {
-    // Calculate distance (haversine formula)
     const distance = calculateDistance(startLat, startLng, endLat, endLng);
     const duration = calculateDuration(distance, mode);
     
-    // Create a simple straight line for visualization
     const simpleCoords = [[startLng, startLat], [endLng, endLat]];
     setRouteCoordinates(simpleCoords);
     setRouteDistance(distance);
     setRouteDuration(duration);
     
-    // Calculate bounds
     const minLat = Math.min(startLat, endLat);
     const maxLat = Math.max(startLat, endLat);
     const minLng = Math.min(startLng, endLng);
@@ -337,7 +340,6 @@ const Maps = () => {
       maxLng = Math.max(maxLng, lng);
     });
     
-    // Add padding
     const padding = 0.02;
     return {
       minLat: minLat - padding,
@@ -350,7 +352,6 @@ const Maps = () => {
   };
 
   const encodePolyline = (points) => {
-    // Simple polyline encoding
     return points.map(point => `${point[0].toFixed(6)},${point[1].toFixed(6)}`).join(';');
   };
 
@@ -382,16 +383,16 @@ const Maps = () => {
     let speed;
     switch(mode) {
       case 'walk':
-        speed = 5; // km/h for walking
+        speed = 5;
         break;
       case 'bike':
-        speed = 15; // km/h for biking
+        speed = 15;
         break;
       case 'motor':
-        speed = 40; // km/h for motorcycle
+        speed = 40;
         break;
       case 'car':
-        speed = 60; // km/h for car
+        speed = 60;
         break;
       default:
         speed = 40;
@@ -467,7 +468,6 @@ const Maps = () => {
           setUserLocation({ lat: latitude, lng: longitude });
           setGpsAccuracy(accuracy);
           
-          // Show route on map
           await updateMapWithRoute(latitude, longitude, destinationLat, destinationLng, transportMode);
           setLocationAddress(destinationName);
           setSelectedLocation({ lat: destinationLat, lng: destinationLng });
@@ -483,7 +483,6 @@ const Maps = () => {
         }
       );
     } else {
-      // User location already available, show route
       await updateMapWithRoute(userLocation.lat, userLocation.lng, destinationLat, destinationLng, transportMode);
       setLocationAddress(destinationName);
       setSelectedLocation({ lat: destinationLat, lng: destinationLng });
@@ -529,7 +528,6 @@ const Maps = () => {
     setRouteDuration(null);
     setRouteCoordinates([]);
     
-    // Return to normal map view
     if (selectedLocation) {
       updateMap(selectedLocation.lat, selectedLocation.lng, 14, true);
     } else if (userLocation) {
@@ -540,7 +538,10 @@ const Maps = () => {
   };
 
   const saveLocation = async () => {
-    if (!selectedLocation || !locationName.trim()) return;
+    if (!selectedLocation || !locationName.trim()) {
+      showToast('Please enter a location name', 'error');
+      return;
+    }
 
     const locationData = {
       name: locationName,
@@ -549,30 +550,58 @@ const Maps = () => {
       longitude: selectedLocation.lng,
       address: locationAddress,
       details: detailedLocation,
-      accuracy: gpsAccuracy,
-      createdAt: new Date().toISOString()
+      accuracy: gpsAccuracy
     };
 
+    console.log('Saving location data:', locationData);
+
     try {
-      const token = localStorage.getItem('token');
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      const response = await axios.post(`${API_BASE_URL}/api/v1/locations`, locationData);
+      const apiClient = getAuthApiClient();
+      const response = await apiClient.post('/api/v1/locations', locationData);
       
       if (response.data.success) {
-        setSavedLocations(prev => [...prev, response.data.location]);
+        // Add the location with user info to saved locations
+        const savedLocation = {
+          ...response.data.location,
+          id: response.data.location.id,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            contact: user.contact
+          }
+        };
+        
+        setSavedLocations(prev => [...prev, savedLocation]);
         setShowSaveModal(false);
         setLocationName('');
         setSelectedLocation(null);
         
         showToast('✅ Location saved successfully!', 'success');
+      } else {
+        showToast(response.data.message || 'Failed to save location', 'error');
       }
     } catch (error) {
-      console.error('Error saving location:', error);
+      console.error('Error saving location:', error.response?.data || error.message);
+      
+      // Show specific error message
+      const errorMessage = error.response?.data?.message || 'Failed to save location to server';
+      showToast(`❌ ${errorMessage}`, 'error');
+      
+      // Fallback to local storage with user info
       const saved = JSON.parse(localStorage.getItem('savedLocations') || '[]');
       saved.push({
         ...locationData,
-        id: Date.now().toString()
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          contact: user.contact
+        }
       });
       localStorage.setItem('savedLocations', JSON.stringify(saved));
       setSavedLocations(saved);
@@ -580,43 +609,59 @@ const Maps = () => {
       setLocationName('');
       setSelectedLocation(null);
       
-      showToast('✅ Location saved locally!', 'success');
+      showToast('⚠️ Location saved locally!', 'info');
     }
   };
 
   const loadSavedLocations = async () => {
     try {
-      const token = localStorage.getItem('token');
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      const response = await axios.get(`${API_BASE_URL}/api/v1/locations`);
+      const apiClient = getAuthApiClient();
+      const response = await apiClient.get('/api/v1/locations');
       
       if (response.data.success) {
+        console.log('Loaded locations from server:', response.data.locations);
         setSavedLocations(response.data.locations);
+      } else {
+        showToast(response.data.message || 'Failed to load locations', 'error');
       }
     } catch (error) {
-      console.error('Error loading saved locations:', error);
+      console.error('Error loading saved locations:', error.response?.data || error.message);
+      
+      // Check if it's a 404 error (route not found)
+      if (error.response?.status === 404) {
+        showToast('Location API not found. Please check backend routes.', 'error');
+      }
+      
+      // Fallback to local storage
       const saved = JSON.parse(localStorage.getItem('savedLocations') || '[]');
-      setSavedLocations(saved);
+      // Filter to only current user's locations
+      const userSaved = saved.filter(location => 
+        location.user && location.user.id === user?.id
+      );
+      setSavedLocations(userSaved);
     }
   };
 
   const deleteLocation = async (locationId) => {
     try {
-      const token = localStorage.getItem('token');
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      await axios.delete(`${API_BASE_URL}/api/v1/locations/${locationId}`);
+      const apiClient = getAuthApiClient();
+      await apiClient.delete(`/api/v1/locations/${locationId}`);
       setSavedLocations(prev => prev.filter(loc => loc.id !== locationId));
       
       showToast('🗑️ Location deleted', 'info');
     } catch (error) {
-      console.error('Error deleting location:', error);
-      const saved = JSON.parse(localStorage.getItem('savedLocations') || '[]').filter(loc => loc.id !== locationId);
-      localStorage.setItem('savedLocations', JSON.stringify(saved));
-      setSavedLocations(saved);
+      console.error('Error deleting location:', error.response?.data || error.message);
       
-      showToast('🗑️ Location deleted locally', 'info');
+      if (error.response?.status === 404) {
+        showToast('Location not found or access denied', 'error');
+      } else {
+        // Fallback to local storage
+        const saved = JSON.parse(localStorage.getItem('savedLocations') || '[]').filter(loc => loc.id !== locationId);
+        localStorage.setItem('savedLocations', JSON.stringify(saved));
+        setSavedLocations(saved);
+        
+        showToast('🗑️ Location deleted locally', 'info');
+      }
     }
   };
 
@@ -1867,6 +1912,30 @@ const Maps = () => {
                           }}>
                             {location.address}
                           </p>
+                          
+                          {/* User info section */}
+                          {location.user && (
+                            <div style={{
+                              marginTop: '6px',
+                              padding: '4px 8px',
+                              background: 'rgba(255,255,255,0.05)',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              color: 'rgba(255,255,255,0.5)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}>
+                              <span>👤</span>
+                              <span>Saved by: {location.user.name}</span>
+                              {location.user.contact && (
+                                <>
+                                  <span style={{ margin: '0 4px' }}>•</span>
+                                  <span>📞 {location.user.contact}</span>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                       
@@ -2144,14 +2213,8 @@ const Maps = () => {
 
       <style>{`
         @keyframes modalSlideIn {
-          from {
-            transform: translateY(30px);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
+          from { transform: translateY(30px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
         }
         
         @keyframes fadeInOut {
@@ -2161,9 +2224,7 @@ const Maps = () => {
           100% { opacity: 0; transform: translateY(-10px); }
         }
         
-        ::-webkit-scrollbar {
-          width: 8px;
-        }
+        ::-webkit-scrollbar { width: 8px; }
         
         ::-webkit-scrollbar-track {
           background: rgba(255,255,255,0.05);
