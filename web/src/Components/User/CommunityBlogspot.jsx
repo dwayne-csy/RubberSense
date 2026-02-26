@@ -13,6 +13,9 @@ import slide1 from '../otherpictures/communityblogspot.jpg';
 import slide2 from '../otherpictures/communityblogspot1.jpg';
 import slide3 from '../otherpictures/communityblogspot2.jpg';
 
+// Import bad words filter
+import badWordsFilter from '../../utils/badWordsFilter';
+
 /* ─── Design tokens ─────────────────────────────────────────── */
 const T = {
   bark:    '#2C1A0E',
@@ -28,6 +31,7 @@ const T = {
   shadowMd:'rgba(44,26,14,0.18)',
   danger:  '#C0392B',
   dangerLight:'#FDF0EF',
+  warning: '#E67E22',
 };
 
 const SLIDES = [
@@ -815,6 +819,8 @@ const CommunityBlogspot = () => {
   const [reportDescription, setReportDescription] = useState('');
   const [reporting, setReporting] = useState(false);
   const [reportSuccess, setReportSuccess] = useState(false);
+  // Add state for tracking filtered content
+  const [filteredContent, setFilteredContent] = useState({});
 
   /* ── Carousel state ── */
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -941,13 +947,37 @@ const CommunityBlogspot = () => {
     } catch (error) { console.error('Upload error:', error); throw error; }
   };
 
+  // NEW: Filter bad words from any text content
+  const filterBadWords = (text, type, id) => {
+    if (!text) return text;
+    
+    // Filter the text using the badWordsFilter
+    const filtered = badWordsFilter.filterText(text);
+    
+    // Store the filtered version (optional)
+    setFilteredContent(prev => ({
+      ...prev,
+      [`${type}_${id}`]: filtered
+    }));
+    
+    return filtered;
+  };
+
+  // MODIFIED: handleCreatePost with bad words filtering
   const handleCreatePost = async () => {
     if (!newPost.title.trim() && !newPost.content.trim() && newPost.mediaFiles.length === 0) {
-      alert('Please add content or upload media'); return;
+      alert('Please add content or upload media'); 
+      return;
     }
+    
     setPosting(true);
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      // Filter bad words from title and content
+      const filteredTitle = filterBadWords(newPost.title, 'post_title', 'new');
+      const filteredContent_text = filterBadWords(newPost.content, 'post_content', 'new');
+      
       let mediaUrls = [];
       if (newPost.mediaFiles.length > 0) {
         setUploadingMedia(true);
@@ -955,31 +985,59 @@ const CommunityBlogspot = () => {
         mediaUrls = uploadResponse.files || [uploadResponse.file];
         setUploadingMedia(false);
       }
-      const postData = { title: newPost.title.trim(), content: newPost.content.trim(), media: mediaUrls };
+      
+      const postData = { 
+        title: filteredTitle, 
+        content: filteredContent_text, 
+        media: mediaUrls 
+      };
+      
       const response = await axios.post('/api/v1/community/posts', postData, {
         withCredentials: true,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
+      
       if (response.data.success) {
         setPosts([response.data.data, ...posts]);
         setNewPost({ title: '', content: '', mediaFiles: [] });
         setShowCreateModal(false);
-        showToast('Post published successfully!', 'success');
+        
+        // Show appropriate message
+        if (filteredTitle !== newPost.title || filteredContent_text !== newPost.content) {
+          showToast('Your post was published with some content filtered.', 'warning');
+        } else {
+          showToast('Post published successfully!', 'success');
+        }
       }
     } catch (error) {
       console.error('Create post error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to create post. Please try again.', 'error');
-    } finally { setPosting(false); setUploadingMedia(false); }
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to create post. Please try again.', 'error');
+      }
+    } finally { 
+      setPosting(false); 
+      setUploadingMedia(false); 
+    }
   };
 
+  // MODIFIED: handleUpdatePost with bad words filtering
   const handleUpdatePost = async (postId) => {
     if (!editingPost.title.trim() && !editingPost.content.trim() &&
         (!editingPost.media || editingPost.media.length === 0) && editMediaFiles.length === 0) {
-      alert('Please fill in at least one field or upload media'); return;
+      alert('Please fill in at least one field or upload media'); 
+      return;
     }
+    
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      // Filter bad words from edited content
+      const filteredTitle = filterBadWords(editingPost.title, 'post_title', postId);
+      const filteredContent_text = filterBadWords(editingPost.content, 'post_content', postId);
+      
       let updatedMedia = [...(editingPost.media || [])];
       if (editMediaFiles.length > 0) {
         setEditingMedia(true);
@@ -988,20 +1046,40 @@ const CommunityBlogspot = () => {
         updatedMedia = [...updatedMedia, ...newMediaUrls];
         setEditingMedia(false);
       }
-      const postData = { title: editingPost.title.trim(), content: editingPost.content.trim(), media: updatedMedia };
+      
+      const postData = { 
+        title: filteredTitle, 
+        content: filteredContent_text, 
+        media: updatedMedia 
+      };
+      
       const response = await axios.put(`/api/v1/community/posts/${postId}`, postData, {
-        withCredentials: true, headers: { 'Authorization': `Bearer ${token}` }
+        withCredentials: true, 
+        headers: { 'Authorization': `Bearer ${token}` }
       });
+      
       if (response.data.success) {
         setPosts(posts.map(p => p._id === postId ? response.data.data : p));
-        setEditingPost(null); setEditMediaFiles([]);
-        showToast('Post updated successfully!', 'success');
+        setEditingPost(null); 
+        setEditMediaFiles([]);
+        
+        if (filteredTitle !== editingPost.title || filteredContent_text !== editingPost.content) {
+          showToast('Post updated with filtered content.', 'warning');
+        } else {
+          showToast('Post updated successfully!', 'success');
+        }
       }
     } catch (error) {
       console.error('Update post error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to update post.', 'error');
-    } finally { setEditingMedia(false); }
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to update post.', 'error');
+      }
+    } finally { 
+      setEditingMedia(false); 
+    }
   };
 
   const handleDeletePost = async (postId) => {
@@ -1017,50 +1095,83 @@ const CommunityBlogspot = () => {
       }
     } catch (error) {
       console.error('Delete post error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to delete post.', 'error');
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to delete post.', 'error');
+      }
     }
   };
 
+  // MODIFIED: handleAddComment with bad words filtering
   const handleAddComment = async (postId) => {
     const commentText = newComments[postId];
     const commentMedia = newCommentMedia[postId];
+    
     if ((!commentText?.trim() && !commentMedia) || !user) return;
+    
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      // Filter bad words from comment
+      const filteredComment = commentText ? filterBadWords(commentText, 'comment', postId) : '';
+      
       let mediaUrl = null;
       if (commentMedia) {
         const uploadResponse = await handleMediaUpload(commentMedia, true);
         mediaUrl = uploadResponse.file || uploadResponse.files?.[0];
       }
-      const commentData = { content: commentText?.trim() || '', media: mediaUrl };
+      
+      const commentData = { 
+        content: filteredComment || '', 
+        media: mediaUrl 
+      };
+      
       const response = await axios.post(`/api/v1/community/posts/${postId}/comments`, commentData, {
         withCredentials: true,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
+      
       if (response.data.success) {
         setComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), response.data.data] }));
         setNewComments(prev => ({ ...prev, [postId]: '' }));
         setNewCommentMedia(prev => ({ ...prev, [postId]: null }));
         setPosts(prev => prev.map(p => p._id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p));
-        showToast('Comment added!', 'success');
+        
+        if (filteredComment !== commentText) {
+          showToast('Your comment was published with filtered content.', 'warning');
+        } else {
+          showToast('Comment added!', 'success');
+        }
       }
     } catch (error) {
       console.error('Add comment error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to add comment', 'error');
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to add comment', 'error');
+      }
     }
   };
 
+  // MODIFIED: handleAddReply with bad words filtering
   const handleAddReply = async (postId, commentId) => {
     if (!replyText.trim()) return;
+    
     try {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      // Filter bad words from reply
+      const filteredReply = filterBadWords(replyText, 'reply', `${postId}_${commentId}`);
+      
       const response = await axios.post(
         `/api/v1/community/posts/${postId}/comments`,
-        { content: replyText, parentComment: commentId },
+        { content: filteredReply, parentComment: commentId },
         { withCredentials: true, headers: { 'Authorization': `Bearer ${token}` } }
       );
+      
       if (response.data.success) {
         setComments(prev => {
           const postComments = prev[postId] || [];
@@ -1068,13 +1179,23 @@ const CommunityBlogspot = () => {
             ? { ...c, replies: [...(c.replies || []), response.data.data] } : c);
           return { ...prev, [postId]: updated };
         });
-        setReplyText(''); setReplyingTo(null);
-        showToast('Reply added!', 'success');
+        setReplyText(''); 
+        setReplyingTo(null);
+        
+        if (filteredReply !== replyText) {
+          showToast('Your reply was published with filtered content.', 'warning');
+        } else {
+          showToast('Reply added!', 'success');
+        }
       }
     } catch (error) {
       console.error('Add reply error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to add reply', 'error');
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to add reply', 'error');
+      }
     }
   };
 
@@ -1091,7 +1212,10 @@ const CommunityBlogspot = () => {
       }
     } catch (error) {
       console.error('Like post error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      }
     }
   };
 
@@ -1126,7 +1250,10 @@ const CommunityBlogspot = () => {
       }
     } catch (error) {
       console.error('Like comment error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      }
     }
   };
 
@@ -1157,8 +1284,12 @@ const CommunityBlogspot = () => {
       }
     } catch (error) {
       console.error('Delete comment error:', error);
-      if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to delete comment', 'error');
+      if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to delete comment', 'error');
+      }
     }
   };
 
@@ -1181,8 +1312,12 @@ const CommunityBlogspot = () => {
     } catch (error) {
       console.error('Report content error:', error);
       if (error.response?.status === 400) showToast(error.response.data.message, 'error');
-      else if (error.response?.status === 401) { showToast('Session expired. Please login again.', 'error'); navigate('/login'); }
-      else showToast('Failed to report content. Please try again.', 'error');
+      else if (error.response?.status === 401) { 
+        showToast('Session expired. Please login again.', 'error'); 
+        navigate('/login'); 
+      } else {
+        showToast('Failed to report content. Please try again.', 'error');
+      }
     } finally { setReporting(false); }
   };
 
@@ -1274,14 +1409,36 @@ const CommunityBlogspot = () => {
     ) : null;
   };
 
+  // MODIFIED: showToast with warning type support
   const showToast = (message, type = 'info') => {
     const toast = document.createElement('div');
     toast.className = 'cb-toast';
-    toast.style.background = type === 'success' ? T.canopy : type === 'error' ? T.danger : '#555';
-    const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'i';
-    toast.innerHTML = `<span style="font-size:16px;font-weight:700;">${icon}</span> ${message}`;
+    
+    // Set background color based on type
+    let bgColor;
+    if (type === 'success') bgColor = T.canopy;
+    else if (type === 'error') bgColor = T.danger;
+    else if (type === 'warning') bgColor = T.warning;
+    else bgColor = '#555';
+    
+    toast.style.background = bgColor;
+    
+    // Set icon based on type
+    let icon;
+    if (type === 'success') icon = '✓';
+    else if (type === 'error') icon = '✕';
+    else if (type === 'warning') icon = '⚠';
+    else icon = 'i';
+    
+    toast.innerHTML = `<span style="font-size:16px;font-weight:700;margin-right:8px;">${icon}</span> ${message}`;
     document.body.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(30px)'; toast.style.transition = 'all .3s'; }, 2700);
+    
+    setTimeout(() => { 
+      toast.style.opacity = '0'; 
+      toast.style.transform = 'translateX(30px)'; 
+      toast.style.transition = 'all .3s'; 
+    }, 2700);
+    
     setTimeout(() => toast.remove(), 3100);
   };
 
@@ -1727,7 +1884,6 @@ const CommunityBlogspot = () => {
               </div>
               <div className="cb-field">
                 <label className="cb-label">Photos & Videos</label>
-                {/* KEY FIX: DropZone is defined outside, stable across re-renders */}
                 <DropZone id="create-media-upload" onChange={handleMediaFileChange} />
                 {newPost.mediaFiles.length > 0 && (
                   <div className="cb-preview-grid">
@@ -1794,7 +1950,6 @@ const CommunityBlogspot = () => {
               )}
               <div className="cb-field">
                 <label className="cb-label">Add More Photos & Videos</label>
-                {/* KEY FIX: use a different id so it doesn't conflict with create modal */}
                 <DropZone id="edit-media-upload" onChange={handleEditMediaFileChange} />
                 {editMediaFiles.length > 0 && (
                   <div className="cb-preview-grid">
