@@ -441,7 +441,7 @@ const Home = () => {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f0f7f0' }}>
         <div style={{ position: 'relative', width: '80px', height: '80px' }}>
           <div style={{ width: '80px', height: '80px', border: '4px solid #d1e8d1', borderTop: '4px solid #2d6a4f', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-          <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px' }}>🌿</span>
+          <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px' }}></span>
         </div>
         <p style={{ textAlign: 'center', color: '#2d6a4f', fontSize: '18px', marginTop: '20px', fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: '1px' }}>Growing your experience...</p>
       </div>

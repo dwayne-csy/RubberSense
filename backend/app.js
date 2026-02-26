@@ -139,6 +139,7 @@ const latexDetectionRoutes = require('./routes/latexDetectionRoutes');
 const leafRoutes = require('./routes/LeafDetectionRoutes');
 const trunksDetectionRoutes = require('./routes/TrunksDetectionRoutes');
 const groqChatbotRoutes = require('./routes/groqchatbotroute');
+const adminAnalysisRoutes = require('./routes/AdminAnalysisHistoryRoute');
 
 // ========== API ROUTES ==========
 app.use('/api/v1/users', userRoutes);
@@ -156,6 +157,7 @@ app.use('/api/v1/latex', latexDetectionRoutes);
 app.use('/api/v1/leaf', leafRoutes);
 app.use('/api/v1/trunks', trunksDetectionRoutes);
 app.use('/api/v1/groqchatbot', groqChatbotRoutes);
+app.use('/api/v1/admin', adminAnalysisRoutes);
 
 // ========== GROQ CHATBOT HEALTH CHECK ==========
 // Add a specific health check for the chatbot

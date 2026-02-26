@@ -5,7 +5,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const trunksService = require('../services/TrunksService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinary');
-const TrunkAnalysis = require('../models/TrunksAnalysis'); // You'll need to create this model
+const TrunkAnalysis = require('../models/TrunksAnalysis');
 
 // Use memory storage
 const trunksUpload = multer({
@@ -131,23 +131,30 @@ exports.analyzeTrunk = async (req, res) => {
         processingTime: Date.now() - (req.timestamp || Date.now())
       };
       
+     const dbAnalysisData = {
+  userId: req.user?.id,
+  imageUrl: cloudinaryResult.url,
+  imagePublicId: cloudinaryResult.public_id,
+  primaryDetection: analysis.primary_detection || analysis.primaryDetection || {},
+  allDetections: analysis.all_detections || analysis.detections || [],
+  maturity: analysis.maturity || {},
+  colorAnalysis: analysis.color_analysis || analysis.visual_analysis?.color || {},
+  textureAnalysis: analysis.texture_analysis || analysis.visual_analysis?.texture || {}, // This is now an object
+  healthScore: analysis.health_score || analysis.healthScore || 0,
+  ageEstimate: analysis.age_estimate || analysis.age_estimation?.estimated_years || null,
+  careRecommendations: analysis.care_recommendations || analysis.recommendations || [],
+  fullAnalysis: analysis,
+  processingTime: analysis.processingTime || 'N/A',
+  mlModelUsed: analysis.model_used !== false,
+  disease: analysis.disease || null,
+  age_estimation: analysis.age_estimation || null,
+  visual_analysis: analysis.visual_analysis || null,
+  model_info: analysis.model_info || null,
+  image_metadata: analysis.image_metadata || null
+};
+      
       // Save analysis to database
-      const trunkAnalysis = new TrunkAnalysis({
-        userId: req.user?.id,
-        imageUrl: cloudinaryResult.url,
-        imagePublicId: cloudinaryResult.public_id,
-        primaryDetection: analysis.primary_detection,
-        allDetections: analysis.all_detections,
-        maturity: analysis.maturity,
-        colorAnalysis: analysis.color_analysis,
-        textureAnalysis: analysis.texture_analysis,
-        healthScore: analysis.health_score,
-        ageEstimate: analysis.age_estimate,
-        careRecommendations: analysis.care_recommendations,
-        fullAnalysis: analysis,
-        processingTime: analysis.processingTime,
-        mlModelUsed: analysis.ml_model_used
-      });
+      const trunkAnalysis = new TrunkAnalysis(dbAnalysisData);
       
       await trunkAnalysis.save();
       console.log(`✅ Analysis saved to database with ID: ${trunkAnalysis._id}`);
@@ -215,7 +222,7 @@ exports.analyzeTrunk = async (req, res) => {
  */
 exports.getAnalysisHistory = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.id || req.user?._id;
     const { limit = 10, page = 1, sortBy = 'createdAt', order = 'desc' } = req.query;
     
     if (!userId) {
@@ -234,11 +241,15 @@ exports.getAnalysisHistory = async (req, res) => {
     
     // Optional filters
     if (req.query.disease) {
-      query['primaryDetection.class'] = req.query.disease;
+      query.$or = [
+        { 'primaryDetection.class': req.query.disease },
+        { 'primaryDetection.display_name': { $regex: req.query.disease, $options: 'i' } },
+        { 'disease.name': { $regex: req.query.disease, $options: 'i' } }
+      ];
     }
     
     if (req.query.maturity) {
-      query['maturity.class'] = req.query.maturity;
+      query['maturity.class'] = { $regex: req.query.maturity, $options: 'i' };
     }
     
     if (req.query.minHealthScore) {
@@ -259,13 +270,53 @@ exports.getAnalysisHistory = async (req, res) => {
     const analyses = await TrunkAnalysis.find(query)
       .sort({ [sortBy]: order === 'desc' ? -1 : 1 })
       .skip(skip)
-      .limit(limitNum)
-      .select('-fullAnalysis');
+      .limit(limitNum);
+    
+    // Format the response to match frontend expectations
+    const formattedAnalyses = analyses.map(analysis => {
+      // Extract primary detection info from various possible locations
+      let primaryClass = 'Unknown';
+      let primaryDisplayName = 'Unknown';
+      let primaryConfidence = 0;
+      
+      if (analysis.primaryDetection) {
+        primaryClass = analysis.primaryDetection.class || analysis.primaryDetection.class_name || 'Unknown';
+        primaryDisplayName = analysis.primaryDetection.display_name || analysis.primaryDetection.name || primaryClass;
+        primaryConfidence = analysis.primaryDetection.confidence || 0;
+      } else if (analysis.disease) {
+        primaryClass = analysis.disease.class || analysis.disease.name || 'Unknown';
+        primaryDisplayName = analysis.disease.name || primaryClass;
+        primaryConfidence = analysis.disease.confidence || 0;
+      }
+      
+      // Extract maturity info
+      let maturityClass = analysis.maturity?.class || 'Unknown';
+      let maturityConfidence = analysis.maturity?.confidence || 0;
+      
+      return {
+        _id: analysis._id,
+        imageUrl: analysis.imageUrl,
+        createdAt: analysis.createdAt,
+        primaryDetection: {
+          class: primaryClass,
+          display_name: primaryDisplayName,
+          confidence: primaryConfidence
+        },
+        maturity: {
+          class: maturityClass,
+          confidence: maturityConfidence
+        },
+        healthScore: analysis.healthScore || 0,
+        ageEstimate: analysis.ageEstimate || analysis.age_estimation?.estimated_years || null,
+        disease: primaryDisplayName,
+        confidence: primaryConfidence
+      };
+    });
     
     res.status(200).json({
       success: true,
       data: {
-        history: analyses,
+        history: formattedAnalyses,
         pagination: {
           page: pageNum,
           limit: limitNum,
@@ -293,7 +344,7 @@ exports.getAnalysisHistory = async (req, res) => {
  */
 exports.getAnalysisStats = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.id || req.user?._id;
     
     if (!userId) {
       return res.status(401).json({
@@ -321,7 +372,7 @@ exports.getAnalysisStats = async (req, res) => {
       { $match: { userId: userId } },
       {
         $group: {
-          _id: '$primaryDetection.class',
+          _id: { $ifNull: ['$primaryDetection.class', '$disease.name', 'Unknown'] },
           count: { $sum: 1 },
           avgConfidence: { $avg: '$primaryDetection.confidence' },
           avgHealthScore: { $avg: '$healthScore' }
@@ -335,7 +386,7 @@ exports.getAnalysisStats = async (req, res) => {
       { $match: { userId: userId } },
       {
         $group: {
-          _id: '$maturity.class',
+          _id: { $ifNull: ['$maturity.class', 'Unknown'] },
           count: { $sum: 1 }
         }
       }
@@ -420,7 +471,7 @@ exports.getAnalysisStats = async (req, res) => {
  */
 exports.getAnalysisById = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.id || req.user?._id;
     const { id } = req.params;
     
     const analysis = await TrunkAnalysis.findOne({
@@ -435,9 +486,22 @@ exports.getAnalysisById = async (req, res) => {
       });
     }
     
+    // Format the analysis for frontend
+    const formattedAnalysis = analysis.toObject();
+    
+    // Ensure primary detection is available
+    if (!formattedAnalysis.primaryDetection && formattedAnalysis.disease) {
+      formattedAnalysis.primaryDetection = {
+        class: formattedAnalysis.disease.class || formattedAnalysis.disease.name,
+        display_name: formattedAnalysis.disease.name,
+        confidence: formattedAnalysis.disease.confidence,
+        health_status: formattedAnalysis.disease.detected ? 'diseased' : 'healthy'
+      };
+    }
+    
     res.status(200).json({
       success: true,
-      data: analysis
+      data: formattedAnalysis
     });
   } catch (error) {
     console.error('❌ Get analysis error:', error);
@@ -456,7 +520,7 @@ exports.getAnalysisById = async (req, res) => {
  */
 exports.deleteAnalysis = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.id || req.user?._id;
     const { id } = req.params;
     
     // Find the analysis and ensure it belongs to the user
@@ -479,6 +543,7 @@ exports.deleteAnalysis = async (req, res) => {
         console.log(`✅ Deleted image from Cloudinary: ${analysis.imagePublicId}`);
       } catch (cloudinaryError) {
         console.error('Error deleting from Cloudinary:', cloudinaryError);
+        // Continue with deletion even if Cloudinary delete fails
       }
     }
     
@@ -506,7 +571,7 @@ exports.deleteAnalysis = async (req, res) => {
  */
 exports.batchDeleteAnalyses = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.id || req.user?._id;
     const { analysisIds } = req.body;
     
     if (!analysisIds || !Array.isArray(analysisIds) || analysisIds.length === 0) {
@@ -534,7 +599,7 @@ exports.batchDeleteAnalyses = async (req, res) => {
       if (analysis.imagePublicId) {
         return deleteFromCloudinary(analysis.imagePublicId).catch(err => {
           console.error(`Error deleting ${analysis.imagePublicId} from Cloudinary:`, err);
-          return null;
+          return null; // Continue with other deletions
         });
       }
       return Promise.resolve();
@@ -543,16 +608,16 @@ exports.batchDeleteAnalyses = async (req, res) => {
     await Promise.all(deletePromises);
     
     // Delete from database
-    await TrunkAnalysis.deleteMany({
+    const result = await TrunkAnalysis.deleteMany({
       _id: { $in: analysisIds },
       userId: userId
     });
     
     res.status(200).json({
       success: true,
-      message: `Successfully deleted ${analyses.length} analyses`,
+      message: `Successfully deleted ${result.deletedCount} analyses`,
       data: {
-        deletedCount: analyses.length,
+        deletedCount: result.deletedCount,
         deletedIds: analyses.map(a => a._id)
       }
     });
@@ -647,60 +712,6 @@ exports.getTrunksInfo = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error retrieving system information',
-      error: error.message
-    });
-  }
-};
-
-/**
- * @desc    Clear analysis cache
- * @route   POST /api/v1/trunks/cache/clear
- * @access  Private (Admin only)
- */
-exports.clearCache = async (req, res) => {
-  try {
-    trunksService.clearCache();
-    
-    res.status(200).json({
-      success: true,
-      message: 'Analysis cache cleared successfully'
-    });
-  } catch (error) {
-    console.error('❌ Clear cache error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error clearing cache'
-    });
-  }
-};
-
-/**
- * @desc    Health check endpoint
- * @route   GET /api/v1/trunks/health
- * @access  Public
- */
-exports.healthCheck = async (req, res) => {
-  try {
-    const modelAvailable = trunksService.checkModelAvailability();
-    const pythonAvailable = await trunksService.checkPythonAvailability();
-    
-    res.status(200).json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      status: 'operational',
-      components: {
-        api: 'healthy',
-        python: pythonAvailable ? 'healthy' : 'degraded',
-        model: modelAvailable ? 'healthy' : 'degraded',
-        cloudinary: 'healthy',
-        fallback: 'available'
-      }
-    });
-  } catch (error) {
-    res.status(503).json({
-      success: false,
-      timestamp: new Date().toISOString(),
-      status: 'degraded',
       error: error.message
     });
   }

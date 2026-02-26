@@ -1,4 +1,4 @@
-// RubberSense/web/src/Components/User/AnaysisHistory.jsx
+// RubberSense/web/src/Components/User/AnalysisHistory.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -58,7 +58,8 @@ import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
@@ -154,7 +155,7 @@ const AnalysisHistory = () => {
   const navigate = useNavigate();
   
   // State
-  const [tabValue, setTabValue] = useState(0);
+  const [tabValue, setTabValue] = useState(2); // Default to Trunk tab (index 2)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -200,6 +201,12 @@ const AnalysisHistory = () => {
     
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        setError('No authentication token found');
+        setLoading(false);
+        return;
+      }
+
       const queryParams = new URLSearchParams({
         page: page + 1,
         limit: rowsPerPage,
@@ -218,6 +225,7 @@ const AnalysisHistory = () => {
           break;
         case 2:
           endpoint = `${API_BASE_URL}/api/v1/trunks/history?${queryParams}`;
+          console.log('Fetching trunks history from:', endpoint);
           break;
         default:
           return;
@@ -230,25 +238,31 @@ const AnalysisHistory = () => {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to fetch data');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to fetch data: ${response.status}`);
+      }
 
       const result = await response.json();
+      console.log('API Response for tab', tabValue, ':', result);
       
       switch (tabValue) {
         case 0:
-          setLatexData(result.data || []);
-          setTotalCount(result.pagination?.total || 0);
+          setLatexData(result.data?.history || result.data || []);
+          setTotalCount(result.data?.pagination?.total || result.pagination?.total || 0);
           break;
         case 1:
-          setLeafData(result.data || []);
-          setTotalCount(result.pagination?.total || 0);
+          setLeafData(result.data?.history || result.data || []);
+          setTotalCount(result.data?.pagination?.total || result.pagination?.total || 0);
           break;
         case 2:
-          setTrunkData(result.data || []);
-          setTotalCount(result.pagination?.total || 0);
+          setTrunkData(result.data?.history || result.data || []);
+          setTotalCount(result.data?.pagination?.total || result.pagination?.total || 0);
+          console.log('Trunk data received:', result.data?.history || result.data || []);
           break;
       }
     } catch (err) {
+      console.error('Fetch error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -263,13 +277,13 @@ const AnalysisHistory = () => {
       const [latexStats, leafStats, trunkStats] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/latex/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()),
+        }).then(res => res.json()).catch(() => ({ data: null })),
         fetch(`${API_BASE_URL}/api/v1/leaf/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()),
+        }).then(res => res.json()).catch(() => ({ data: null })),
         fetch(`${API_BASE_URL}/api/v1/trunks/stats`, {
           headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json())
+        }).then(res => res.json()).catch(() => ({ data: null }))
       ]);
 
       setStats({
@@ -474,6 +488,11 @@ const AnalysisHistory = () => {
       case 2: return trunkData;
       default: return [];
     }
+  };
+
+  // Handle view details
+  const handleViewDetails = (id) => {
+    navigate(`/analysis/trunk/${id}`);
   };
 
   // Render latex table
@@ -761,10 +780,10 @@ const AnalysisHistory = () => {
               <TableCell>{format(new Date(row.createdAt), 'MMM dd, yyyy')}</TableCell>
               <TableCell>
                 <Chip 
-                  label={row.primaryDetection?.display_name || row.primaryDetection?.class || 'Unknown'} 
+                  label={row.primaryDetection?.display_name || row.primaryDetection?.class || row.disease || 'Unknown'} 
                   size="small"
                   color={
-                    row.primaryDetection?.class === 'healthy' ? 'success' :
+                    row.primaryDetection?.class === 'healthy' || row.disease === 'Healthy' ? 'success' :
                     row.primaryDetection?.class?.includes('pest') ? 'error' : 'warning'
                   }
                 />
@@ -773,10 +792,10 @@ const AnalysisHistory = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <LinearProgress 
                     variant="determinate" 
-                    value={row.primaryDetection?.confidence || 0} 
+                    value={row.primaryDetection?.confidence || row.confidence || 0} 
                     sx={{ width: 60, mr: 1, height: 8, borderRadius: 4 }}
                   />
-                  <Typography variant="body2">{row.primaryDetection?.confidence?.toFixed(1) || 0}%</Typography>
+                  <Typography variant="body2">{(row.primaryDetection?.confidence || row.confidence || 0).toFixed(1)}%</Typography>
                 </Box>
               </TableCell>
               <TableCell>
@@ -806,13 +825,13 @@ const AnalysisHistory = () => {
                 <Chip 
                   label={row.maturity?.class || 'Unknown'} 
                   size="small"
-                  color={row.maturity?.class === 'Mature' ? 'primary' : 'default'}
+                  color={row.maturity?.class?.toLowerCase() === 'mature' ? 'primary' : 'default'}
                 />
               </TableCell>
-              <TableCell>{row.ageEstimate || 'N/A'}</TableCell>
+              <TableCell>{row.ageEstimate || row.age_estimate || 'N/A'}</TableCell>
               <TableCell>
                 <Tooltip title="View Details">
-                  <IconButton size="small" onClick={() => navigate(`/analysis/trunk/${row._id}`)}>
+                  <IconButton size="small" onClick={() => handleViewDetails(row._id)}>
                     <ViewIcon />
                   </IconButton>
                 </Tooltip>
@@ -1189,11 +1208,19 @@ const AnalysisHistory = () => {
         fullWidth
       >
         <DialogContent>
-          <img 
-            src={imagePreview.url} 
-            alt="Preview" 
-            style={{ width: '100%', height: 'auto', borderRadius: '8px' }} 
-          />
+          <Box sx={{ position: 'relative' }}>
+            <IconButton
+              onClick={() => setImagePreview({ open: false, url: '' })}
+              sx={{ position: 'absolute', top: 0, right: 0, bgcolor: 'rgba(0,0,0,0.5)', color: 'white' }}
+            >
+              <CloseIcon />
+            </IconButton>
+            <img 
+              src={imagePreview.url} 
+              alt="Preview" 
+              style={{ width: '100%', height: 'auto', borderRadius: '8px' }} 
+            />
+          </Box>
         </DialogContent>
       </Dialog>
     </Container>

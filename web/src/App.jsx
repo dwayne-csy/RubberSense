@@ -37,6 +37,8 @@ import LandingAboutUs from './Components/landingpage/LandingAboutUs.jsx';
 import LandingAboutRubber from './Components/landingpage/LandingAboutRubber.jsx';
 import LandingContactUs from './Components/landingpage/LandingContactUs.jsx';
 import LandingChatbotWidget from './Components/landingpage/LandingChatbotWidget.jsx';
+import AnalysisLogs from './Components/Admin/AnalysisLogs.jsx';
+import AnalysisStatistics from './Components/Admin/AnalysisStatistics.jsx';
 
 
 function App() {
@@ -85,6 +87,9 @@ function App() {
         <Route path="/landingrubber" element={<LandingAboutRubber />} />
         <Route path="/landingcontact" element={<LandingContactUs />} />
         <Route path="/landingchatbot" element={<LandingChatbotWidget />} />
+        <Route path="/admin/analysis-logs" element={<AnalysisLogs />} />
+        <Route path="/admin/analysis-stats" element={<AnalysisStatistics />} />
+        
        
       </Routes>
     </Router>

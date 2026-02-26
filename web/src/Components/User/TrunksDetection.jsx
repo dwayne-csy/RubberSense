@@ -568,48 +568,48 @@ const TrunksDetection = () => {
                 background: 'rgba(255,255,255,0.04)' 
               }} />
 
-              {/* History/Stats Buttons */}
-              <Box sx={{ 
-                position: 'absolute', 
-                top: 20, 
-                right: 20, 
-                zIndex: 2, 
-                display: 'flex', 
-                gap: 1.5 
-              }}>
-                <Button 
-                  component={Link} 
-                  to="/trunk-history" 
-                  variant="contained" 
-                  size="small" 
-                  startIcon={<HistoryIcon />}
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.18)', 
-                    color: 'white', 
-                    borderRadius: 2, 
-                    textTransform: 'none',
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } 
-                  }}
-                >
-                  History
-                </Button>
-                <Button 
-                  component={Link} 
-                  to="/trunk-stats" 
-                  variant="contained" 
-                  size="small" 
-                  startIcon={<AssessmentIcon />}
-                  sx={{ 
-                    bgcolor: 'rgba(255,255,255,0.18)', 
-                    color: 'white', 
-                    borderRadius: 2, 
-                    textTransform: 'none',
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } 
-                  }}
-                >
-                  Statistics
-                </Button>
-              </Box>
+{/* History/Stats Buttons */}
+<Box sx={{ 
+  position: 'absolute', 
+  top: 20, 
+  right: 20, 
+  zIndex: 2, 
+  display: 'flex', 
+  gap: 1.5 
+}}>
+  <Button 
+    component={Link} 
+    to="/analysis-history"  // Changed from "/trunk-history" to "/analysis-history"
+    variant="contained" 
+    size="small" 
+    startIcon={<HistoryIcon />}
+    sx={{ 
+      bgcolor: 'rgba(255,255,255,0.18)', 
+      color: 'white', 
+      borderRadius: 2, 
+      textTransform: 'none',
+      '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } 
+    }}
+  >
+    History
+  </Button>
+  <Button 
+    component={Link} 
+    to="/trunk-stats" 
+    variant="contained" 
+    size="small" 
+    startIcon={<AssessmentIcon />}
+    sx={{ 
+      bgcolor: 'rgba(255,255,255,0.18)', 
+      color: 'white', 
+      borderRadius: 2, 
+      textTransform: 'none',
+      '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } 
+    }}
+  >
+    Statistics
+  </Button>
+</Box>
 
               <Box sx={{ position: 'relative', zIndex: 2 }}>
                 <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>

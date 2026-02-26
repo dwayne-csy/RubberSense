@@ -7,9 +7,7 @@ const {
   getAnalysisById,
   deleteAnalysis,
   batchDeleteAnalyses,
-  getTrunksInfo,
-  clearCache,
-  healthCheck
+  getTrunksInfo
 } = require('../controllers/TrunksDetectionController');
 
 // Import your existing middleware
@@ -17,7 +15,6 @@ const { isAuthenticatedUser, authorizeRoles } = require('../middlewares/auth');
 
 // ================= PUBLIC ROUTES =================
 router.get('/info', getTrunksInfo);
-router.get('/health', healthCheck);
 
 // ================= PROTECTED ROUTES (Require Authentication) =================
 // ANALYSIS
@@ -29,7 +26,5 @@ router.get('/analysis/:id', isAuthenticatedUser, getAnalysisById);
 // DELETE OPERATIONS
 router.delete('/analysis/:id', isAuthenticatedUser, deleteAnalysis);
 router.delete('/history/batch', isAuthenticatedUser, batchDeleteAnalyses);
-
-
 
 module.exports = router;

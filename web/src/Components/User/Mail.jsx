@@ -958,7 +958,7 @@ const Mail = () => {
                   </div>
                 ) : combinedItems.length === 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', gap: '10px' }}>
-                    <div style={{ fontSize: '40px', lineHeight: 1 }}>🌿</div>
+                    <div style={{ fontSize: '40px', lineHeight: 1 }}></div>
                     <p style={{ fontSize: '15px', fontWeight: '700', color: '#1b4332', margin: 0, fontFamily: "'Lora', serif" }}>
                       {showUnreadOnly ? 'No Unread Items' : 'No Messages Yet'}
                     </p>

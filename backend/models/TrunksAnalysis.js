@@ -21,14 +21,17 @@ const trunkAnalysisSchema = new mongoose.Schema({
       required: true,
       index: true
     },
-    name: String,
+    class_id: Number,
+    class_name: String,
     display_name: String,
+    name: String,
     confidence: {
       type: Number,
       required: true,
       min: 0,
       max: 100
     },
+    health_status: String,
     severity: {
       type: String,
       enum: ['low', 'medium', 'high', 'critical', 'none', 'mild', 'moderate', 'severe', 
@@ -37,8 +40,10 @@ const trunkAnalysisSchema = new mongoose.Schema({
   },
   allDetections: [{
     class: String,
-    name: String,
+    class_id: Number,
+    class_name: String,
     display_name: String,
+    name: String,
     confidence: Number,
     bbox: [Number],
     severity: {
@@ -50,7 +55,7 @@ const trunkAnalysisSchema = new mongoose.Schema({
   maturity: {
     class: {
       type: String,
-      enum: ['immature', 'mature', 'unknown']
+      enum: ['immature', 'mature', 'unknown', 'Immature', 'Mature']
     },
     confidence: Number,
     estimatedAge: {
@@ -66,14 +71,15 @@ const trunkAnalysisSchema = new mongoose.Schema({
     primaryColor: String,
     barkCondition: {
       type: String,
-      enum: ['healthy', 'rough', 'cracked', 'peeling', 'unknown']
+      enum: ['healthy', 'rough', 'cracked', 'peeling', 'unknown', 'Excellent', 'Good', 'Fair', 'Poor', 'Critical']
     },
-    discoloration: Number
+    discoloration: Number,
+    uniformity: String,
+    variability: Number
   },
   textureAnalysis: {
-    smoothness: Number,
-    roughness: Number,
-    pattern: String
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
   healthScore: {
     type: Number,
@@ -87,10 +93,37 @@ const trunkAnalysisSchema = new mongoose.Schema({
     min: 0,
     max: 100
   },
+  age_estimation: {
+    estimated_years: Number,
+    range: String,
+    confidence: Number,
+    basis: String
+  },
+  disease: {
+    name: String,
+    class: String,
+    severity: String,
+    confidence: Number,
+    description: String,
+    treatment: String,
+    symptoms: [String],
+    latex_impact: String,
+    urgency: {
+      type: String,
+      enum: ['low', 'medium', 'high', 'critical']
+    },
+    detected: Boolean
+  },
+  visual_analysis: {
+    color: mongoose.Schema.Types.Mixed,
+    texture: mongoose.Schema.Types.Mixed,
+    lesions: mongoose.Schema.Types.Mixed,
+    bark_condition: mongoose.Schema.Types.Mixed
+  },
   careRecommendations: [{
     priority: {
       type: String,
-      enum: ['immediate', 'soon', 'monitor', 'routine']
+      enum: ['immediate', 'soon', 'monitor', 'routine', 'low', 'medium', 'high', 'critical']
     },
     action: String,
     description: String,
@@ -104,6 +137,8 @@ const trunkAnalysisSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  model_info: mongoose.Schema.Types.Mixed,
+  image_metadata: mongoose.Schema.Types.Mixed,
   createdAt: {
     type: Date,
     default: Date.now,
@@ -151,17 +186,21 @@ trunkAnalysisSchema.virtual('priority').get(function() {
 // Method to check if tree needs immediate attention
 trunkAnalysisSchema.methods.needsImmediateAttention = function() {
   return this.healthScore <= 30 || 
-         (this.primaryDetection && this.primaryDetection.severity === 'critical');
+         (this.primaryDetection && this.primaryDetection.severity === 'critical') ||
+         (this.disease && this.disease.urgency === 'critical');
 };
 
 // Method to get urgent recommendations
 trunkAnalysisSchema.methods.getUrgentRecommendations = function() {
-  return this.careRecommendations.filter(rec => rec.priority === 'immediate');
+  return this.careRecommendations.filter(rec => 
+    rec.priority === 'immediate' || rec.priority === 'critical' || rec.priority === 'high'
+  );
 };
 
 // Method to check if tree is mature
 trunkAnalysisSchema.methods.isMature = function() {
-  return this.maturity.class === 'mature';
+  const maturityClass = this.maturity?.class?.toLowerCase();
+  return maturityClass === 'mature' || maturityClass === 'mature';
 };
 
 module.exports = mongoose.model('TrunksAnalysis', trunkAnalysisSchema);

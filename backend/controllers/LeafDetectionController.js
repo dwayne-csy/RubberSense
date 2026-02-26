@@ -4,7 +4,7 @@ const os = require('os');
 const fs = require('fs');
 const leafService = require('../services/LeafServices');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinary');
-const LeafAnalysis = require('../models/LeafAnalysis'); // You'll need to create this model
+const LeafAnalysis = require('../models/LeafAnalysis');
 
 // Use memory storage
 const leafUpload = multer({
@@ -70,7 +70,8 @@ exports.analyzeLeaf = async (req, res) => {
       });
     }
     
-    console.log(`📸 Leaf image uploaded: ${req.file.originalname}`);
+    console.log(`📸 Leaf image uploaded: ${req.file.originalname} (${req.file.size} bytes)`);
+    console.log('User:', req.user ? req.user.email : 'No user');
     
     let cloudinaryResult = null;
     let tempFilePath = null;
@@ -86,23 +87,26 @@ exports.analyzeLeaf = async (req, res) => {
       
       tempFilePath = path.join(tempDir, `leaf-${Date.now()}${path.extname(req.file.originalname)}`);
       fs.writeFileSync(tempFilePath, req.file.buffer);
+      console.log('✅ Temp file created:', tempFilePath);
       
       cloudinaryResult = await uploadToCloudinary(tempFilePath, 'rubbersense/leaf');
       console.log(`✅ Uploaded to Cloudinary: ${cloudinaryResult.url}`);
       
       // Check model availability first
       const modelAvailable = await leafService.checkModelAvailability();
-      
-      if (!modelAvailable) {
-        console.warn('⚠️ Warning: Trained Leaf model not found at expected path');
-      }
+      console.log('Model available:', modelAvailable);
       
       // Analyze the image using the service with trained model
+      console.log('Starting analysis...');
       const analysis = await leafService.analyzeLeaf(
         tempFilePath,
         req.user?._id || req.user?.id,
         { returnVisualization: true }
       );
+      
+      console.log('Analysis completed:', analysis.disease_detected);
+      console.log('Confidence:', analysis.confidence);
+      console.log('ML Model Used:', analysis.ml_model_used);
       
       // Add Cloudinary image info
       analysis.image = {
@@ -166,6 +170,7 @@ exports.analyzeLeaf = async (req, res) => {
       
     } catch (analysisError) {
       console.error('❌ Analysis error:', analysisError);
+      console.error('Error stack:', analysisError.stack);
       
       // If analysis failed and we uploaded to Cloudinary, delete the image
       if (cloudinaryResult && cloudinaryResult.public_id) {
@@ -180,7 +185,8 @@ exports.analyzeLeaf = async (req, res) => {
       res.status(500).json({
         success: false,
         message: 'Error analyzing leaf image',
-        error: analysisError.message
+        error: analysisError.message,
+        stack: process.env.NODE_ENV === 'development' ? analysisError.stack : undefined
       });
     } finally {
       // Clean up temp file

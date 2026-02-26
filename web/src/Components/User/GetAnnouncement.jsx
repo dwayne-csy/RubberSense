@@ -778,7 +778,7 @@ const UserGetAnnouncement = () => {
                 display: 'flex', flexDirection: 'column', alignItems: 'center',
                 padding: '80px 20px', gap: '12px',
               }}>
-                <div style={{ fontSize: '48px', lineHeight: 1 }}>🌿</div>
+                <div style={{ fontSize: '48px', lineHeight: 1 }}></div>
                 <p style={{ fontSize: '17px', fontWeight: '700', color: '#1b4332', margin: 0, fontFamily: "'Lora', serif" }}>
                   No Announcements Found
                 </p>

@@ -13,7 +13,6 @@ class LeafService {
     this.modelPath = path.join(__dirname, '../ML-Models/Leaf.pt');
     this.pythonScriptPath = path.join(__dirname, '../ML-Models/leaf_inference.py');
     this.tempDir = path.join(__dirname, '../temp');
-    this.modelInfo = null;
     this.diseaseDatabase = this.initializeDiseaseDatabase();
     this.initTempDir();
   }
@@ -24,6 +23,7 @@ class LeafService {
   async initTempDir() {
     try {
       await fs.mkdir(this.tempDir, { recursive: true });
+      console.log('✅ Temp directory created:', this.tempDir);
     } catch (error) {
       console.error('Error creating temp directory:', error);
     }
@@ -251,8 +251,9 @@ class LeafService {
    */
   getModelInfo() {
     try {
-      if (require('fs').existsSync(this.modelPath)) {
-        const stats = require('fs').statSync(this.modelPath);
+      const fs = require('fs');
+      if (fs.existsSync(this.modelPath)) {
+        const stats = fs.statSync(this.modelPath);
         return {
           fileSize: stats.size,
           lastModified: stats.mtime,
@@ -271,9 +272,16 @@ class LeafService {
    */
   async checkPythonAvailability() {
     try {
-      const { stdout } = await execPromise('python --version');
-      console.log('✅ Python available:', stdout.trim());
-      return true;
+      // Try python3 first, then python
+      try {
+        const { stdout } = await execPromise('python3 --version');
+        console.log('✅ Python3 available:', stdout.trim());
+        return true;
+      } catch (e) {
+        const { stdout } = await execPromise('python --version');
+        console.log('✅ Python available:', stdout.trim());
+        return true;
+      }
     } catch (error) {
       console.warn('❌ Python not available:', error.message);
       return false;
@@ -287,7 +295,11 @@ class LeafService {
     try {
       const packages = ['ultralytics', 'numpy', 'cv2'];
       for (const pkg of packages) {
-        await execPromise(`python -c "import ${pkg}"`);
+        try {
+          await execPromise(`python3 -c "import ${pkg}"`);
+        } catch (e) {
+          await execPromise(`python -c "import ${pkg}"`);
+        }
       }
       console.log('✅ All Python packages available');
       return true;
@@ -383,28 +395,86 @@ class LeafService {
   async analyzeLeaf(imagePath, userId = null, options = { returnVisualization: true }) {
     try {
       // Check if Python script exists
-      await fs.access(this.pythonScriptPath);
-      
+      try {
+        await fs.access(this.pythonScriptPath);
+        console.log('✅ Python script found at:', this.pythonScriptPath);
+      } catch (error) {
+        console.error('❌ Python script not found at:', this.pythonScriptPath);
+        return this.fallbackAnalysis(imagePath, 'Python script not found');
+      }
+
+      // Check if model exists
+      try {
+        await fs.access(this.modelPath);
+        console.log('✅ Model found at:', this.modelPath);
+      } catch (error) {
+        console.error('❌ Model not found at:', this.modelPath);
+        return this.fallbackAnalysis(imagePath, 'Model file not found');
+      }
+
+      // Check if image exists
+      try {
+        await fs.access(imagePath);
+        console.log('✅ Image found at:', imagePath);
+      } catch (error) {
+        console.error('❌ Image not found at:', imagePath);
+        return this.fallbackAnalysis(imagePath, 'Image file not found');
+      }
+
       console.log('🔬 Running leaf analysis with trained model...');
       
-      // Execute Python script
-      const { stdout, stderr } = await execPromise(
-        `python "${this.pythonScriptPath}" "${imagePath}" json`
-      );
+      // Try different python commands
+      let stdout, stderr;
+      let pythonCommand = 'python3';
+      
+      try {
+        // Try python3 first
+        console.log(`Executing: ${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`);
+        const result = await execPromise(
+          `${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`
+        );
+        stdout = result.stdout;
+        stderr = result.stderr;
+      } catch (error) {
+        // If python3 fails, try python
+        pythonCommand = 'python';
+        console.log('Python3 failed, trying python...');
+        console.log(`Executing: ${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`);
+        
+        try {
+          const result = await execPromise(
+            `${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`
+          );
+          stdout = result.stdout;
+          stderr = result.stderr;
+        } catch (secondError) {
+          console.error('Both python commands failed');
+          throw secondError;
+        }
+      }
 
       if (stderr) {
         console.warn('Python stderr:', stderr);
       }
 
+      console.log('Python stdout:', stdout.substring(0, 200) + '...');
+
       // Parse JSON output
-      const result = JSON.parse(stdout);
+      let result;
+      try {
+        result = JSON.parse(stdout);
+        console.log('✅ Successfully parsed Python output');
+      } catch (parseError) {
+        console.error('Failed to parse Python output:', stdout);
+        return this.fallbackAnalysis(imagePath, 'Invalid Python output: ' + parseError.message);
+      }
       
       if (!result.success) {
         throw new Error(result.error || 'Inference failed');
       }
 
       // Format the result with disease database information
-      const formattedResult = this.formatAnalysisResult(result);
+      const formattedResult = this.formatAnalysisResult(result, imagePath);
       
       // Add model info
       formattedResult.modelInfo = {
@@ -414,15 +484,11 @@ class LeafService {
         ...result.model_info
       };
       
-      // Save to history if userId provided
-      if (userId) {
-        await this.saveToHistory(userId, formattedResult, imagePath);
-      }
-
       return formattedResult;
 
     } catch (error) {
-      console.error('Analysis execution error:', error);
+      console.error('❌ Analysis execution error:', error);
+      console.error('Error stack:', error.stack);
       
       // Fallback to heuristic analysis if ML fails
       console.warn('⚠️ Falling back to heuristic analysis');
@@ -433,7 +499,7 @@ class LeafService {
   /**
    * Format analysis result from Python
    */
-  formatAnalysisResult(rawResult) {
+  formatAnalysisResult(rawResult, imagePath) {
     const detection = rawResult.disease_detection || {};
     const visual = rawResult.visual_analysis || {};
 
@@ -441,6 +507,16 @@ class LeafService {
     const diseaseName = detection.primary_disease || 'Unknown';
     const originalClass = detection.original_class || diseaseName.toLowerCase().replace(/\s+/g, '_');
     const diseaseInfo = this.getDiseaseInformation(originalClass);
+
+    // Get file stats
+    let fileSizeKB = 0;
+    try {
+      const fs = require('fs');
+      const stats = fs.statSync(imagePath);
+      fileSizeKB = Math.round(stats.size / 1024);
+    } catch (e) {
+      console.error('Error getting file stats:', e);
+    }
 
     return {
       diseaseInfo: {
@@ -489,7 +565,7 @@ class LeafService {
       imageMetadata: {
         analyzedAt: new Date().toISOString(),
         filename: path.basename(imagePath),
-        fileSizeKB: 0,
+        fileSizeKB: fileSizeKB,
         source: 'ml_analysis'
       }
     };
@@ -552,8 +628,14 @@ class LeafService {
   async fallbackAnalysis(imagePath, reason = 'ML model unavailable') {
     console.log(`Using fallback analysis. Reason: ${reason}`);
     
-    const stats = require('fs').statSync(imagePath);
-    const fileSizeKB = stats.size / 1024;
+    let fileSizeKB = 0;
+    try {
+      const fs = require('fs');
+      const stats = fs.statSync(imagePath);
+      fileSizeKB = Math.round(stats.size / 1024);
+    } catch (e) {
+      console.error('Error getting file stats:', e);
+    }
     
     return {
       diseaseInfo: {
@@ -616,7 +698,7 @@ class LeafService {
       imageMetadata: {
         analyzedAt: new Date().toISOString(),
         filename: path.basename(imagePath),
-        fileSizeKB: Math.round(fileSizeKB),
+        fileSizeKB: fileSizeKB,
         source: 'fallback_analysis'
       }
     };
