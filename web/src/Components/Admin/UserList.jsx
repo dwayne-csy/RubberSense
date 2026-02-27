@@ -236,6 +236,13 @@ const globalStyles = `
     display: flex; align-items: center; justify-content: center;
     color: #fff; font-family: 'Playfair Display', serif;
     font-size: 1.2rem; font-weight: 700; flex-shrink: 0; position: relative;
+    overflow: hidden;
+  }
+  .ul-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
   }
   .ul-avatar-dot {
     position: absolute; bottom: 1px; right: 1px;
@@ -387,6 +394,13 @@ const globalStyles = `
     display: flex; align-items: center; justify-content: center;
     color: #fff; font-family: 'Playfair Display', serif; font-size: 1.6rem; font-weight: 700;
     position: relative;
+    overflow: hidden;
+  }
+  .ul-modal-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
   }
   .ul-modal-avatar-dot {
     position: absolute; bottom: 2px; right: 2px;
@@ -592,6 +606,28 @@ const UserList = () => {
     { key: 'inactive', colorClass: 'inactive', Icon: XIcon,      label: 'Inactive',    count: inactiveCount },
   ];
 
+  // Helper function to render avatar with fallback
+  const renderAvatar = (user, size = 'default') => {
+    if (user.avatar && user.avatar.url) {
+      return (
+        <img 
+          src={user.avatar.url} 
+          alt={user.name || 'User avatar'}
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const parent = e.target.parentElement;
+            parent.style.background = 'linear-gradient(135deg, var(--green-mid), var(--accent))';
+            const initial = document.createElement('span');
+            initial.textContent = getInitial(user.name);
+            initial.style.cssText = 'font-family: "Playfair Display", serif; font-size: 1.2rem; font-weight: 700;';
+            parent.appendChild(initial);
+          }}
+        />
+      );
+    }
+    return getInitial(user.name);
+  };
+
   return (
     <>
       <style>{globalStyles}</style>
@@ -705,7 +741,7 @@ const UserList = () => {
                   <div className="ul-card-header">
                     <div className="ul-card-left">
                       <div className="ul-avatar">
-                        {getInitial(user.name)}
+                        {renderAvatar(user)}
                         <span className={`ul-avatar-dot ${online ? 'online' : 'offline'}`} />
                       </div>
                       <div>
@@ -802,8 +838,25 @@ const UserList = () => {
                 <div className="ul-modal-body">
                   <div className="ul-modal-avatar-row">
                     <div className="ul-modal-avatar">
-                      {getInitial(selectedUser.name)}
-                      <span className="ul-modal-avatar-dot"
+                      {selectedUser.avatar && selectedUser.avatar.url ? (
+                        <img 
+                          src={selectedUser.avatar.url} 
+                          alt={selectedUser.name || 'User avatar'}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const parent = e.target.parentElement;
+                            parent.style.background = 'linear-gradient(135deg, var(--green-mid), var(--accent))';
+                            const initial = document.createElement('span');
+                            initial.textContent = getInitial(selectedUser.name);
+                            initial.style.cssText = 'font-family: "Playfair Display", serif; font-size: 1.6rem; font-weight: 700;';
+                            parent.appendChild(initial);
+                          }}
+                        />
+                      ) : (
+                        getInitial(selectedUser.name)
+                      )}
+                      <span 
+                        className="ul-modal-avatar-dot"
                         style={{ background: userOnlineStatus[selectedUser._id] ? '#00c853' : '#90a4ae' }}
                       />
                     </div>
@@ -906,6 +959,3 @@ const UserList = () => {
 };
 
 export default UserList;
-
-
-
