@@ -7,22 +7,67 @@ const crypto = require('crypto');
 /**
  * Latex Detection Service
  * This service handles communication between Node.js and Python ML inference
- * for latex quality analysis using the trained Latex.pt model
+ * for latex quality analysis using the trained Latex-v2.pt model
  * Integrated with enhanced Python inference script
  */
 
 class LatexService {
   constructor() {
-    // Fixed paths - using correct case for ML-Models folder
-    this.pythonScript = path.join(__dirname, '..', 'ML-Models', 'latex_inference.py');
-    this.modelPath = path.join(__dirname, '..', 'ML-Models', 'Latex.pt');
+    this.projectRoot = path.join(__dirname, '..');
+    this.pythonScript = path.join(__dirname, '..', 'ML-models', 'latex_inference.py');
+    this.modelPath = this.resolveModelPath();
     this.isPythonAvailable = null;
     this.pythonVersion = null;
-    this.pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+    this.pythonCmd = this.resolvePythonCommand();
     this.fallbackReason = null;
+    this.lastPackageCheckDetails = null;
     
     // Log paths for debugging
     this._logInitialization();
+  }
+
+  /**
+   * Resolve Python command, preferring project virtual environment.
+   */
+  resolvePythonCommand() {
+    const candidates = process.platform === 'win32'
+      ? [
+          path.join(this.projectRoot, 'venv', 'Scripts', 'python.exe'),
+          'python'
+        ]
+      : [
+          path.join(this.projectRoot, 'venv', 'bin', 'python'),
+          'python3',
+          'python'
+        ];
+
+    for (const candidate of candidates) {
+      if (!path.isAbsolute(candidate) || fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+
+    return process.platform === 'win32' ? 'python' : 'python3';
+  }
+
+  /**
+   * Resolve latex model path, preferring Latex-v2.pt.
+   */
+  resolveModelPath() {
+    const candidates = ['Latex-v2.pt', 'Latex.pt'];
+    for (const file of candidates) {
+      const fullPath = path.join(this.projectRoot, 'ML-models', file);
+      if (fs.existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+    // Keep predictable default even if file is missing.
+    return path.join(this.projectRoot, 'ML-models', 'Latex-v2.pt');
+  }
+
+  getActiveModelName() {
+    this.modelPath = this.resolveModelPath();
+    return path.basename(this.modelPath || 'Latex-v2.pt');
   }
 
   /**
@@ -63,10 +108,13 @@ class LatexService {
     }
 
     return new Promise((resolve) => {
-      const proc = spawn(this.pythonCmd, ['--version'], { shell: true });
+      const proc = spawn(this.pythonCmd, ['--version'], { shell: false });
       let output = '';
 
       proc.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      proc.stderr.on('data', (data) => {
         output += data.toString();
       });
 
@@ -96,10 +144,13 @@ class LatexService {
     if (this.pythonVersion) return this.pythonVersion;
     
     return new Promise((resolve) => {
-      const proc = spawn(this.pythonCmd, ['--version'], { shell: true });
+      const proc = spawn(this.pythonCmd, ['--version'], { shell: false });
       let output = '';
 
       proc.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      proc.stderr.on('data', (data) => {
         output += data.toString();
       });
 
@@ -115,17 +166,53 @@ class LatexService {
    */
   async checkPythonPackages() {
     return new Promise((resolve) => {
+      const requiredModules = ['ultralytics', 'torch', 'cv2', 'numpy'];
       const proc = spawn(this.pythonCmd, [
         '-c', 
-        'import torch; import torchvision; import ultralytics; import PIL; import numpy; import cv2; print("All packages available")'
-      ], { shell: true });
+        'import ultralytics, torch, cv2, numpy'
+      ], { shell: false });
+
+      let stderr = '';
+      proc.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
 
       proc.on('close', (code) => {
         const available = code === 0;
-        if (!available) {
-          this.fallbackReason = 'Required Python packages missing';
+        if (available) {
+          this.lastPackageCheckDetails = null;
+          console.log(`✅ Required Python packages are installed (${this.pythonCmd})`);
+          resolve(true);
+          return;
         }
+
+        const missing = [];
+        const moduleRegex = /No module named ['"]([^'"]+)['"]/gi;
+        let match;
+        while ((match = moduleRegex.exec(stderr)) !== null) {
+          missing.push(match[1]);
+        }
+        const uniqueMissing = [...new Set(missing)];
+        const missingText = uniqueMissing.length ? uniqueMissing.join(', ') : 'unknown';
+
+        this.lastPackageCheckDetails = {
+          requiredModules,
+          missing: uniqueMissing,
+          stderr: stderr.trim()
+        };
+        this.fallbackReason = `Required Python packages missing: ${missingText}`;
+        console.warn(`⚠️ Latex Python packages missing (${this.pythonCmd}): ${missingText}`);
         resolve(available);
+      });
+
+      proc.on('error', (error) => {
+        this.lastPackageCheckDetails = {
+          requiredModules,
+          missing: [],
+          stderr: error.message
+        };
+        this.fallbackReason = `Required Python packages missing: ${error.message}`;
+        resolve(false);
       });
     });
   }
@@ -134,6 +221,7 @@ class LatexService {
    * Check if the trained model exists
    */
   checkModelAvailability() {
+    this.modelPath = this.resolveModelPath();
     const exists = fs.existsSync(this.modelPath);
     console.log(`Model ${this.modelPath} exists: ${exists}`);
     return exists;
@@ -144,16 +232,21 @@ class LatexService {
    */
   getModelInfo() {
     try {
+      this.modelPath = this.resolveModelPath();
       if (!fs.existsSync(this.modelPath)) {
         return {
           exists: false,
-          error: 'Model file not found'
+          error: 'Model file not found',
+          path: this.modelPath,
+          modelFile: path.basename(this.modelPath || 'Latex-v2.pt')
         };
       }
       
       const stats = fs.statSync(this.modelPath);
       return {
         exists: true,
+        path: this.modelPath,
+        modelFile: path.basename(this.modelPath),
         sizeKB: Math.round(stats.size / 1024),
         sizeMB: (stats.size / (1024 * 1024)).toFixed(2),
         modifiedAt: stats.mtime.toISOString(),
@@ -171,13 +264,14 @@ class LatexService {
    * Get detailed model information from Python
    */
   async getModelDetails() {
+    this.modelPath = this.resolveModelPath();
     if (!fs.existsSync(this.pythonScript) || !fs.existsSync(this.modelPath)) {
       return { error: 'Model or script not found' };
     }
 
     return new Promise((resolve) => {
       const args = [this.pythonScript, '--info', '--model', this.modelPath];
-      const proc = spawn(this.pythonCmd, args, { shell: true });
+      const proc = spawn(this.pythonCmd, args, { shell: false });
       
       let stdout = '';
       let stderr = '';
@@ -244,6 +338,9 @@ class LatexService {
       throw new Error('Image file not found');
     }
 
+    // Resolve active model path before any checks.
+    this.modelPath = this.resolveModelPath();
+
     // Get image file info
     const imageStats = fs.statSync(imagePath);
     const imageInfo = {
@@ -260,32 +357,30 @@ class LatexService {
     const pythonAvailable = await this.checkPythonAvailability();
     
     if (!pythonAvailable) {
-      console.warn('⚠️ Python not available, using fallback analysis');
       this.fallbackReason = 'Python not available';
-      return this.fallbackAnalysis(imagePath, 'Python not available', startTime);
+      throw new Error('Latex ML analysis unavailable: Python not available');
     }
 
     // Check if required packages are installed
     const packagesAvailable = await this.checkPythonPackages();
     if (!packagesAvailable) {
-      console.warn('⚠️ Required Python packages not installed, using fallback analysis');
-      this.fallbackReason = 'Required Python packages missing';
-      return this.fallbackAnalysis(imagePath, 'Required Python packages missing', startTime);
+      const missing = this.lastPackageCheckDetails?.missing?.length
+        ? ` (${this.lastPackageCheckDetails.missing.join(', ')})`
+        : '';
+      throw new Error(`Latex ML analysis unavailable: Required Python packages missing${missing}`);
     }
 
     // Check if the Python script exists
     if (!fs.existsSync(this.pythonScript)) {
-      console.warn('⚠️ Python inference script not found, using fallback analysis');
       this.fallbackReason = 'Inference script not found';
-      return this.fallbackAnalysis(imagePath, 'Inference script not found', startTime);
+      throw new Error('Latex ML analysis unavailable: Inference script not found');
     }
 
     // Check if the trained model exists
     const modelInfo = this.getModelInfo();
     if (!modelInfo.exists) {
-      console.warn('⚠️ Trained Latex model not found, using fallback analysis');
       this.fallbackReason = 'Trained model not found';
-      return this.fallbackAnalysis(imagePath, 'Trained model not found', startTime);
+      throw new Error('Latex ML analysis unavailable: Trained model not found');
     }
 
     console.log(`✅ Using trained model: ${this.modelPath} (${modelInfo.sizeKB} KB)`);
@@ -312,7 +407,7 @@ class LatexService {
       console.log(`🚀 Running ML inference: ${this.pythonCmd} ${args.join(' ')}`);
       
       const proc = spawn(this.pythonCmd, args, {
-        shell: true,
+        shell: false,
         env: { 
           ...process.env, 
           PYTHONIOENCODING: 'utf-8',
@@ -325,13 +420,6 @@ class LatexService {
 
       proc.stdout.on('data', (data) => {
         stdout += data.toString();
-        // Log progress updates if they're not JSON
-        const lines = data.toString().split('\n');
-        lines.forEach(line => {
-          if (line.trim() && !line.startsWith('{') && !line.endsWith('}')) {
-            console.log(`🐍 Python: ${line}`);
-          }
-        });
       });
 
       proc.stderr.on('data', (data) => {
@@ -345,9 +433,7 @@ class LatexService {
       proc.on('error', (error) => {
         clearTimeout(timeoutId);
         console.error('❌ Python process error:', error);
-        this.fallbackAnalysis(imagePath, 'Python process error', startTime)
-          .then(resolve)
-          .catch(() => reject(new Error('Failed to run ML inference')));
+        reject(new Error(`Failed to run ${path.basename(this.modelPath || 'Latex-v2.pt')} inference: ${error.message}`));
       });
 
       proc.on('close', (code) => {
@@ -376,10 +462,7 @@ class LatexService {
             // Not JSON output
           }
           
-          // Fall back to local analysis
-          this.fallbackAnalysis(imagePath, `Python script error (code ${code})`, startTime)
-            .then(resolve)
-            .catch(() => reject(new Error('ML inference failed')));
+          reject(new Error(`${path.basename(this.modelPath || 'Latex-v2.pt')} inference script failed (code ${code})`));
           return;
         }
 
@@ -399,9 +482,7 @@ class LatexService {
         if (!jsonOutput) {
           console.error('❌ No valid JSON output found in stdout');
           console.error('Stdout preview:', stdout.substring(0, 500));
-          this.fallbackAnalysis(imagePath, 'Invalid ML output format', startTime)
-            .then(resolve)
-            .catch(() => reject(new Error('Failed to parse ML output')));
+          reject(new Error(`Invalid JSON output from ${path.basename(this.modelPath || 'Latex-v2.pt')} inference`));
           return;
         }
 
@@ -411,10 +492,28 @@ class LatexService {
             console.error('Traceback:', jsonOutput.traceback);
           }
           
-          this.fallbackAnalysis(imagePath, jsonOutput.error || 'ML inference failed', startTime)
-            .then(resolve)
-            .catch(() => reject(new Error(jsonOutput.error || 'ML inference failed')));
+          reject(new Error(jsonOutput.error || `${path.basename(this.modelPath || 'Latex-v2.pt')} inference failed`));
           return;
+        }
+
+        let usedFallback = false;
+        const returnedFallback =
+          jsonOutput.ml_model_used === false ||
+          jsonOutput.model_used === false ||
+          jsonOutput.is_heuristic === true ||
+          jsonOutput.fallback === true ||
+          jsonOutput.fallback_reason;
+        if (returnedFallback) {
+          const fallbackReason =
+            jsonOutput.fallback_reason ||
+            jsonOutput.note ||
+            (jsonOutput.is_heuristic ? 'Heuristic analysis mode' : 'Fallback output from inference');
+          console.warn(`⚠️ Latex inference returned fallback output: ${fallbackReason}`);
+          // Keep compatibility keys explicit so callers can branch cleanly.
+          jsonOutput.ml_model_used = false;
+          jsonOutput.model_used = false;
+          jsonOutput.fallback_reason = fallbackReason;
+          usedFallback = true;
         }
 
         // Add processing time
@@ -425,7 +524,7 @@ class LatexService {
         // Add model information to the result
         jsonOutput.modelInfo = {
           ...jsonOutput.modelInfo,
-          modelUsed: 'Latex.pt',
+          modelUsed: path.basename(this.modelPath || 'Latex-v2.pt'),
           modelPath: this.modelPath,
           modelType: 'YOLO (PyTorch)',
           trained: true,
@@ -442,7 +541,11 @@ class LatexService {
           };
         }
 
-        console.log(`✅ ML inference successful in ${(processingTime / 1000).toFixed(2)}s`);
+        if (usedFallback) {
+          console.warn(`⚠️ Inference completed in fallback mode in ${(processingTime / 1000).toFixed(2)}s`);
+        } else {
+          console.log(`✅ ML inference successful in ${(processingTime / 1000).toFixed(2)}s`);
+        }
         console.log(`   Quality: ${jsonOutput.latex_analysis?.quality_class || 'Unknown'}`);
         console.log(`   Confidence: ${jsonOutput.latex_analysis?.quality_score || 0}%`);
         

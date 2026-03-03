@@ -52,6 +52,16 @@ const trunkAnalysisSchema = new mongoose.Schema({
              'mild to moderate', 'moderate to severe', 'Mild to Moderate', 'Moderate to Severe']
     }
   }],
+  treeProfileId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tree',
+    index: true,
+    default: null
+  },
+  treeSnapshot: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   maturity: {
     class: {
       type: String,
@@ -157,6 +167,7 @@ trunkAnalysisSchema.index({ userId: 1, createdAt: -1 });
 trunkAnalysisSchema.index({ 'primaryDetection.class': 1, createdAt: -1 });
 trunkAnalysisSchema.index({ healthScore: -1 });
 trunkAnalysisSchema.index({ 'maturity.class': 1 });
+trunkAnalysisSchema.index({ userId: 1, treeProfileId: 1, createdAt: -1 });
 
 // Virtual for formatted date
 trunkAnalysisSchema.virtual('formattedDate').get(function() {

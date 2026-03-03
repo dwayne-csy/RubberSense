@@ -154,12 +154,16 @@ class RubberTreeTrunksAnalyzer:
         Initialize the trunks analyzer with trained model
         
         Args:
-            model_path: Path to the trained Trunks.pt model
+            model_path: Path to the trained trunk model (.pt)
             confidence_threshold: Minimum confidence for reliable detection (0.0-1.0)
         """
         self.model = None
         self.model_path = model_path or self._get_default_model_path()
         self.confidence_threshold = confidence_threshold
+        # Detection inference thresholds (can be overridden via env).
+        self.inference_conf = float(os.getenv('TRUNKS_MODEL_CONF', '0.02'))
+        self.inference_iou = float(os.getenv('TRUNKS_MODEL_IOU', '0.70'))
+        self.min_inference_conf = float(os.getenv('TRUNKS_MODEL_MIN_CONF', '0.001'))
         self.class_names = self.CLASS_NAMES.copy()
         self.model_loaded = False
         self.model_info = {}
@@ -170,21 +174,31 @@ class RubberTreeTrunksAnalyzer:
         
     def _get_default_model_path(self) -> str:
         """Get the default model path for RubberSense backend"""
-        # Try multiple possible locations
+        # Try multiple possible locations (prefer Trunks-v2.pt, then Trunks.pt)
         possible_paths = [
             # Current working directory
-            Path.cwd() / "RubberSense" / "backend" / "ML-Models" / "Trunks.pt",
-            Path.cwd() / "backend" / "ML-Models" / "Trunks.pt",
-            Path.cwd() / "ML-Models" / "Trunks.pt",
+            Path.cwd() / "RubberSense" / "backend" / "ML-models" / "Trunks-v2.pt",
+            Path.cwd() / "RubberSense" / "backend" / "ML-models" / "Trunks.pt",
+            Path.cwd() / "backend" / "ML-models" / "Trunks-v2.pt",
+            Path.cwd() / "backend" / "ML-models" / "Trunks.pt",
+            Path.cwd() / "ML-models" / "Trunks-v2.pt",
+            Path.cwd() / "ML-models" / "Trunks.pt",
+            Path.cwd() / "Trunks-v2.pt",
             Path.cwd() / "Trunks.pt",
             # Script directory
-            Path(__file__).parent / "RubberSense" / "backend" / "ML-Models" / "Trunks.pt",
-            Path(__file__).parent / "backend" / "ML-Models" / "Trunks.pt",
-            Path(__file__).parent / "ML-Models" / "Trunks.pt",
+            Path(__file__).parent / "RubberSense" / "backend" / "ML-models" / "Trunks-v2.pt",
+            Path(__file__).parent / "RubberSense" / "backend" / "ML-models" / "Trunks.pt",
+            Path(__file__).parent / "backend" / "ML-models" / "Trunks-v2.pt",
+            Path(__file__).parent / "backend" / "ML-models" / "Trunks.pt",
+            Path(__file__).parent / "ML-models" / "Trunks-v2.pt",
+            Path(__file__).parent / "ML-models" / "Trunks.pt",
+            Path(__file__).parent / "Trunks-v2.pt",
             Path(__file__).parent / "Trunks.pt",
             # Absolute path for RubberSense
-            Path("/app/RubberSense/backend/ML-Models/Trunks.pt"),
-            Path("/app/backend/ML-Models/Trunks.pt"),
+            Path("/app/RubberSense/backend/ML-models/Trunks-v2.pt"),
+            Path("/app/RubberSense/backend/ML-models/Trunks.pt"),
+            Path("/app/backend/ML-models/Trunks-v2.pt"),
+            Path("/app/backend/ML-models/Trunks.pt"),
         ]
         
         for path in possible_paths:
@@ -193,12 +207,12 @@ class RubberTreeTrunksAnalyzer:
                 return str(path)
         
         # Return the most likely path as default
-        default_path = Path(__file__).parent / "RubberSense" / "backend" / "ML-Models" / "Trunks.pt"
+        default_path = Path(__file__).parent / "RubberSense" / "backend" / "ML-models" / "Trunks-v2.pt"
         logger.warning(f"⚠️ Model not found in any standard location, using: {default_path}")
         return str(default_path)
     
     def _load_model(self) -> bool:
-        """Load the YOLO model from Trunks.pt"""
+        """Load the YOLO trunk model from .pt file."""
         if not YOLO_AVAILABLE:
             logger.error("❌ YOLO not available. Cannot load model.")
             return False
@@ -245,7 +259,7 @@ class RubberTreeTrunksAnalyzer:
             return False
     
     def _search_for_model(self) -> Optional[str]:
-        """Search for Trunks.pt in common locations"""
+        """Search for trunk model in common locations."""
         search_paths = [
             Path.cwd(),
             Path(__file__).parent,
@@ -255,14 +269,17 @@ class RubberTreeTrunksAnalyzer:
         ]
         
         for base_path in search_paths:
-            for pattern in ["**/Trunks.pt", "**/ML-Models/Trunks.pt"]:
+            for pattern in [
+                "**/Trunks-v2.pt", "**/ML-models/Trunks-v2.pt",
+                "**/Trunks.pt", "**/ML-models/Trunks.pt"
+            ]:
                 matches = list(base_path.glob(pattern))
                 if matches:
                     model_path = str(matches[0])
                     logger.info(f"✅ Found model via search: {model_path}")
                     return model_path
         
-        logger.error("❌ Could not find Trunks.pt model file")
+        logger.error("❌ Could not find trunk model file")
         return None
     
     def preprocess_image(self, image_input: Union[str, np.ndarray, bytes]) -> Optional[np.ndarray]:
@@ -387,53 +404,138 @@ class RubberTreeTrunksAnalyzer:
                 "trunk_analysis": None
             }
         
-        # Perform inference with trained model
+        # Perform inference with trained model (ML-only mode; no heuristic fallback).
         if self.model_loaded and self.model is not None:
             return self._run_model_inference(img, return_visualization, detailed_analysis)
-        else:
-            logger.warning("⚠️ Model not loaded, attempting to reload...")
-            if self._load_model():
-                return self._run_model_inference(img, return_visualization, detailed_analysis)
-            else:
-                logger.warning("⚠️ Using heuristic analysis as fallback")
-                return self._heuristic_analysis(img, return_visualization)
+
+        logger.warning("⚠️ Model not loaded, attempting to reload...")
+        if self._load_model():
+            return self._run_model_inference(img, return_visualization, detailed_analysis)
+
+        return {
+            "success": False,
+            "error": "Trunks.pt model could not be loaded",
+            "model_used": False,
+            "model_info": {
+                "loaded": False,
+                "model_path": self.model_path
+            }
+        }
     
     def _run_model_inference(self, img: np.ndarray, 
                             return_visualization: bool,
                             detailed_analysis: bool) -> Dict:
         """Run inference using the trained YOLO model"""
         try:
-            logger.info("🔬 Running inference with trained Trunks.pt model...")
+            logger.info(f"🔬 Running inference with trained {Path(self.model_path).name} model...")
             
             # Run inference
-            results = self.model(img, verbose=False)
+            applied_conf = self.inference_conf
+            results = self.model(
+                img,
+                conf=self.inference_conf,
+                iou=self.inference_iou,
+                verbose=False
+            )
+            result0 = results[0]
+
+            # For detection/OBB models, retry with lower confidence thresholds before
+            # declaring no detections to reduce false "No Detection" outcomes.
+            if (hasattr(result0, 'obb') or hasattr(result0, 'boxes')) and self._count_result_detections(result0) == 0:
+                for retry_conf in self._iter_backoff_conf_thresholds(self.inference_conf):
+                    logger.info(f"🔁 No detections at conf={applied_conf:.4f}; retrying at conf={retry_conf:.4f}")
+                    retry_results = self.model(
+                        img,
+                        conf=retry_conf,
+                        iou=self.inference_iou,
+                        verbose=False
+                    )
+                    retry_result0 = retry_results[0]
+                    if self._count_result_detections(retry_result0) > 0:
+                        results = retry_results
+                        result0 = retry_result0
+                        applied_conf = retry_conf
+                        logger.info(
+                            f"✅ Detection recovered at conf={applied_conf:.4f} "
+                            f"with {self._count_result_detections(result0)} detection(s)"
+                        )
+                        break
             
-            # Process results based on model type
-            if hasattr(results[0], 'probs'):
+            # Process results based on model type.
+            # Note: some result objects expose `probs` attribute but set it to None.
+            if hasattr(result0, 'probs') and result0.probs is not None:
                 # Classification model
                 return self._process_classification_results(
                     results, img, return_visualization, detailed_analysis
                 )
-            elif hasattr(results[0], 'boxes'):
+            elif hasattr(result0, 'obb') or hasattr(result0, 'boxes'):
                 # Detection model
                 return self._process_detection_results(
-                    results, img, return_visualization, detailed_analysis
+                    results, img, return_visualization, detailed_analysis, applied_conf=applied_conf
                 )
             else:
-                # Unknown model type
-                logger.warning("⚠️ Unknown model output type, using heuristic")
-                return self._heuristic_analysis(img, return_visualization)
+                return {
+                    "success": False,
+                    "error": "Unsupported Trunks.pt output type: expected classification or detection results",
+                    "model_used": True,
+                    "model_info": {
+                        "model_file": os.path.basename(self.model_path),
+                        "classes": self.class_names
+                    }
+                }
                 
         except Exception as e:
             logger.error(f"❌ Inference failed: {str(e)}")
             logger.debug(traceback.format_exc())
-            return self._heuristic_analysis(img, return_visualization)
+            return {
+                "success": False,
+                "error": f"Trunks.pt inference failed: {str(e)}",
+                "model_used": True,
+                "model_info": {
+                    "model_file": os.path.basename(self.model_path),
+                    "classes": self.class_names
+                }
+            }
+
+    def _count_result_detections(self, result_obj) -> int:
+        """Count detections from either OBB or regular boxes result objects."""
+        try:
+            obb = getattr(result_obj, 'obb', None)
+            if obb is not None:
+                return len(obb)
+            boxes = getattr(result_obj, 'boxes', None)
+            if boxes is not None:
+                return len(boxes)
+        except Exception:
+            return 0
+        return 0
+
+    def _iter_backoff_conf_thresholds(self, start_conf: float) -> List[float]:
+        """Yield lower confidence levels to retry when initial inference has zero detections."""
+        min_conf = max(min(float(self.min_inference_conf), 1.0), 0.0001)
+        base_levels = [0.01, 0.005, 0.003, 0.001]
+        output = []
+        seen = set()
+
+        for level in base_levels:
+            value = max(min(float(level), 1.0), 0.0001)
+            if value < start_conf and value >= min_conf and value not in seen:
+                output.append(value)
+                seen.add(value)
+
+        if min_conf < start_conf and min_conf not in seen:
+            output.append(min_conf)
+
+        return output
     
     def _process_classification_results(self, results, original_img, 
                                        return_visualization, detailed_analysis):
         """Process classification model results"""
         try:
             probs = results[0].probs
+            if probs is None:
+                logger.info("📊 Classification probabilities unavailable; switching to detection parser")
+                return self._process_detection_results(results, original_img, return_visualization, detailed_analysis)
             
             # Get top predictions
             top5_indices = probs.top5
@@ -453,7 +555,7 @@ class RubberTreeTrunksAnalyzer:
             is_confident = primary_confidence >= self.confidence_threshold
             
             # Get disease info from database
-            disease_info = self._get_disease_info(primary_class_idx, primary_confidence)
+            disease_info = self._get_disease_info(primary_class_idx, primary_confidence, class_name)
             
             # Get all predictions for transparency
             all_predictions = []
@@ -463,7 +565,7 @@ class RubberTreeTrunksAnalyzer:
                 display_name = self._format_class_name(class_name)
                 
                 # Get disease info for this prediction
-                pred_disease = self._get_disease_info(class_id, float(conf))
+                pred_disease = self._get_disease_info(class_id, float(conf), class_name)
                 
                 all_predictions.append({
                     "class": display_name,
@@ -478,15 +580,17 @@ class RubberTreeTrunksAnalyzer:
             if detailed_analysis:
                 visual_analysis = self._analyze_visual_features(original_img)
             
-            # Determine health status
-            is_healthy = primary_class_idx == 0  # healthy_trunk is class 0
+            # Determine health status by class semantics instead of fixed class index.
+            is_healthy = not self._is_diseased_label(class_name)
             health_status = "healthy" if is_healthy else "diseased"
             
             # Calculate health score
             health_score = self._calculate_health_score(
                 primary_class_idx,
                 primary_confidence,
-                visual_analysis
+                visual_analysis,
+                class_name=class_name,
+                severity=disease_info.get('severity')
             )
             
             # Estimate tree age based on visual features
@@ -518,7 +622,8 @@ class RubberTreeTrunksAnalyzer:
                 "model_info": {
                     "type": "YOLO Classification",
                     "model_file": os.path.basename(self.model_path),
-                    "classes": len(self.class_names),
+                    "classes": self.class_names,
+                    "num_classes": len(self.class_names),
                     "confidence_threshold": self.confidence_threshold
                 },
                 "primary_detection": {
@@ -545,81 +650,246 @@ class RubberTreeTrunksAnalyzer:
             if visualization:
                 result["visualization"] = visualization
                 
-            # Add metadata
-            if isinstance(image_input, str) and os.path.exists(image_input):
-                image_stats = os.stat(image_input)
-                result["image_metadata"] = {
-                    "filename": os.path.basename(image_input),
-                    "file_size_kb": round(image_stats.st_size / 1024, 1),
-                    "analyzed_at": datetime.datetime.now().isoformat()
-                }
-                
             return result
             
         except Exception as e:
             logger.error(f"❌ Result processing failed: {e}")
             logger.debug(traceback.format_exc())
-            return self._heuristic_analysis(original_img, return_visualization)
+            return {
+                "success": False,
+                "error": f"Trunks.pt classification result processing failed: {str(e)}",
+                "model_used": True,
+                "model_info": {
+                    "type": "YOLO Classification",
+                    "model_file": os.path.basename(self.model_path),
+                    "classes": self.class_names
+                }
+            }
     
     def _process_detection_results(self, results, original_img, 
-                                   return_visualization, detailed_analysis):
+                                   return_visualization, detailed_analysis,
+                                   applied_conf: Optional[float] = None):
         """Process detection model results (if model is detection-based)"""
         try:
-            boxes = results[0].boxes
-            
-            if boxes is None or len(boxes) == 0:
-                # No detections
-                return {
+            result0 = results[0]
+            obb = getattr(result0, 'obb', None)
+            boxes = getattr(result0, 'boxes', None)
+            use_obb = obb is not None
+            detections_obj = obb if use_obb else boxes
+            num_detections = 0 if detections_obj is None else len(detections_obj)
+            used_conf = float(self.inference_conf if applied_conf is None else applied_conf)
+
+            if detections_obj is None or num_detections == 0:
+                # No detections: return model-only shape without heuristic analysis.
+                disease_info = {
+                    'name': 'No Disease Detected',
+                    'class': 'no_detection',
+                    'severity': 'None',
+                    'confidence': 0.0,
+                    'description': 'No trunk disease detections found in the uploaded image.',
+                    'treatment': 'Continue routine monitoring and good agronomic practices.',
+                    'symptoms': ['No disease detections produced by the model for this image.'],
+                    'latex_impact': 'No disease-related latex impact identified from this image.',
+                    'urgency': 'low',
+                    'detected': False
+                }
+                visual_analysis = self._build_detection_visual_analysis([], original_img.shape)
+                detailed_visual = None
+                age_estimation = None
+                if detailed_analysis:
+                    detailed_visual = self._analyze_visual_features(original_img)
+                    if isinstance(detailed_visual, dict):
+                        # Keep model-derived lesion summary as primary signal while exposing color/texture context.
+                        visual_analysis = {**detailed_visual, **visual_analysis}
+                        visual_analysis['source'] = 'model_detection_plus_visual'
+                        age_estimation = self._estimate_tree_age_from_visuals(detailed_visual)
+                health_score = self._calculate_health_score(
+                    -1,
+                    0.0,
+                    None,
+                    class_name='no_detection',
+                    severity='none'
+                )
+                care_recommendations = self._get_care_recommendations(
+                    disease_info, health_score, None
+                )
+
+                result = {
                     "success": True,
                     "model_used": True,
                     "model_info": {
-                        "type": "YOLO Detection",
-                        "model_file": os.path.basename(self.model_path)
+                        "type": "YOLO OBB Detection" if use_obb else "YOLO Detection",
+                        "model_file": os.path.basename(self.model_path),
+                        "classes": self.class_names,
+                        "num_classes": len(self.class_names),
+                        "num_detections": 0,
+                        "inference_conf": used_conf,
+                        "inference_iou": self.inference_iou
                     },
+                    "primary_detection": {
+                        "class_id": -1,
+                        "class_name": "no_detection",
+                        "display_name": "No Detection",
+                        "confidence": 0.0,
+                        "is_confident": False,
+                        "health_status": "healthy",
+                        "severity": "none"
+                    },
+                    "disease": disease_info,
+                    "all_predictions": [],
                     "detections": [],
+                    "all_detections": [],
+                    "has_disease": False,
+                    "health_score": round(health_score, 2),
+                    "care_recommendations": care_recommendations,
+                    "visual_analysis": visual_analysis,
                     "message": "No trunk diseases detected"
                 }
+
+                if age_estimation:
+                    result["age_estimation"] = age_estimation
+                
+                if return_visualization:
+                    visualization = self._create_detection_visualization(original_img, [])
+                    if visualization:
+                        result["visualization"] = visualization
+                
+                return result
             
             # Process each detection
             detections = []
-            for box in boxes:
-                class_id = int(box.cls[0])
-                confidence = float(box.conf[0])
-                bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
+            for i in range(num_detections):
+                class_id = int(detections_obj.cls[i])
+                confidence = float(detections_obj.conf[i])
+                polygon = None
+                if use_obb and hasattr(detections_obj, 'xyxyxyxy'):
+                    polygon = detections_obj.xyxyxyxy[i].tolist()
+                    xs = [float(pt[0]) for pt in polygon]
+                    ys = [float(pt[1]) for pt in polygon]
+                    bbox = [min(xs), min(ys), max(xs), max(ys)]
+                else:
+                    bbox = detections_obj.xyxy[i].tolist()  # [x1, y1, x2, y2]
                 
                 class_name = self.class_names.get(class_id, f"class_{class_id}")
-                disease_info = self._get_disease_info(class_id, confidence)
+                disease_info = self._get_disease_info(class_id, confidence, class_name)
                 
-                detections.append({
+                det_row = {
                     "class_id": class_id,
                     "class_name": class_name,
                     "display_name": self._format_class_name(class_name),
                     "confidence": round(confidence * 100, 2),
                     "bbox": bbox,
+                    "severity": disease_info.get("severity", "Unknown"),
+                    "health_status": "diseased" if disease_info.get("detected") else "healthy",
                     "disease": disease_info
-                })
+                }
+                if polygon is not None:
+                    det_row["obb_polygon"] = [[round(float(x), 2), round(float(y), 2)] for x, y in polygon]
+                detections.append(det_row)
             
             # Sort by confidence
             detections.sort(key=lambda x: x['confidence'], reverse=True)
             
             # Get primary detection
             primary = detections[0] if detections else None
+            primary_disease = primary.get('disease') if primary else None
             
             # Determine overall health status
-            has_disease = any(d['class_id'] != 0 for d in detections)
+            has_disease = any(d.get('disease', {}).get('detected', False) for d in detections)
+            primary_health_status = "diseased" if (primary_disease and primary_disease.get('detected')) else "healthy"
+
+            primary_class_id = primary['class_id'] if primary else 0
+            primary_class_name = primary['class_name'] if primary else "no_detection"
+            primary_conf_raw = (primary['confidence'] / 100.0) if primary else 0.0
+            health_score = self._calculate_health_score(
+                primary_class_id,
+                primary_conf_raw,
+                None,
+                class_name=primary_class_name,
+                severity=(primary_disease or {}).get('severity')
+            )
+
+            care_recommendations = self._get_care_recommendations(
+                primary_disease if primary_disease else {
+                    'name': 'Unknown Condition',
+                    'class': 'unknown',
+                    'severity': 'Unknown',
+                    'confidence': 0.0,
+                    'description': 'No primary disease info available.',
+                    'treatment': 'Consult agricultural expert.',
+                    'symptoms': ['Insufficient detection context'],
+                    'latex_impact': 'Unknown',
+                    'urgency': 'medium',
+                    'detected': False
+                },
+                health_score,
+                None
+            )
+
+            visual_analysis = self._build_detection_visual_analysis(detections, original_img.shape)
+            detailed_visual = None
+            age_estimation = None
+            if detailed_analysis:
+                detailed_visual = self._analyze_visual_features(original_img)
+                if isinstance(detailed_visual, dict):
+                    # Keep model-derived lesion summary as primary signal while exposing color/texture context.
+                    visual_analysis = {**detailed_visual, **visual_analysis}
+                    visual_analysis['source'] = 'model_detection_plus_visual'
+                    age_estimation = self._estimate_tree_age_from_visuals(detailed_visual)
             
             result = {
                 "success": True,
                 "model_used": True,
                 "model_info": {
-                    "type": "YOLO Detection",
+                    "type": "YOLO OBB Detection" if use_obb else "YOLO Detection",
                     "model_file": os.path.basename(self.model_path),
-                    "num_detections": len(detections)
+                    "classes": self.class_names,
+                    "num_classes": len(self.class_names),
+                    "num_detections": len(detections),
+                    "inference_conf": used_conf,
+                    "inference_iou": self.inference_iou
                 },
-                "primary_detection": primary,
+                "primary_detection": {
+                    "class_id": primary["class_id"] if primary else -1,
+                    "class_name": primary["class_name"] if primary else "unknown",
+                    "display_name": primary["display_name"] if primary else "Unknown",
+                    "confidence": primary["confidence"] if primary else 0.0,
+                    "is_confident": (primary["confidence"] >= (self.confidence_threshold * 100)) if primary else False,
+                    "health_status": primary_health_status,
+                    "severity": primary.get("severity", "Unknown") if primary else "Unknown"
+                },
+                "disease": primary_disease if primary_disease else {
+                    'name': 'Unknown Condition',
+                    'class': 'unknown',
+                    'severity': 'Unknown',
+                    'confidence': 0.0,
+                    'description': 'No primary disease info available.',
+                    'treatment': 'Consult agricultural expert.',
+                    'symptoms': ['Insufficient detection context'],
+                    'latex_impact': 'Unknown',
+                    'urgency': 'medium',
+                    'detected': False
+                },
+                "all_predictions": [
+                    {
+                        "class": d["display_name"],
+                        "original_class": d["class_name"],
+                        "class_id": d["class_id"],
+                        "confidence": d["confidence"],
+                        "severity": d.get("severity", "Unknown")
+                    }
+                    for d in detections[:5]
+                ],
                 "detections": detections[:10],  # Limit to 10 detections
-                "has_disease": has_disease
+                "all_detections": detections[:10],
+                "has_disease": has_disease,
+                "health_score": round(health_score, 2),
+                "care_recommendations": care_recommendations,
+                "visual_analysis": visual_analysis
             }
+
+            if age_estimation:
+                result["age_estimation"] = age_estimation
             
             # Add visualization if requested
             if return_visualization:
@@ -633,23 +903,192 @@ class RubberTreeTrunksAnalyzer:
             
         except Exception as e:
             logger.error(f"❌ Detection processing failed: {e}")
-            return self._heuristic_analysis(original_img, return_visualization)
+            logger.debug(traceback.format_exc())
+            return {
+                "success": False,
+                "error": f"Trunks.pt detection result processing failed: {str(e)}",
+                "model_used": True,
+                "model_info": {
+                    "type": "YOLO Detection",
+                    "model_file": os.path.basename(self.model_path),
+                    "classes": self.class_names
+                }
+            }
+
+    def _build_detection_visual_analysis(self, detections: List[Dict], image_shape) -> Dict:
+        """Build model-only visual summary from YOLO detections (no heuristic CV analysis)."""
+        try:
+            height = int(image_shape[0]) if image_shape is not None else 0
+            width = int(image_shape[1]) if image_shape is not None else 0
+            total_area = float(max(1, height * width))
+
+            disease_detections = [d for d in detections if d.get('health_status') == 'diseased']
+            healthy_detections = [d for d in detections if d.get('health_status') != 'diseased']
+
+            all_area = 0.0
+            disease_area = 0.0
+            box_rows = []
+            for d in detections[:10]:
+                x1, y1, x2, y2 = [float(v) for v in (d.get('bbox') or [0, 0, 0, 0])]
+                w = max(0.0, x2 - x1)
+                h = max(0.0, y2 - y1)
+                area = w * h
+                all_area += area
+                if d.get('health_status') == 'diseased':
+                    disease_area += area
+                box_rows.append({
+                    'class_name': d.get('class_name'),
+                    'display_name': d.get('display_name'),
+                    'confidence': d.get('confidence', 0),
+                    'bbox': [round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)],
+                    'area_percentage': round(min(100.0, (area / total_area) * 100.0), 2)
+                })
+
+            disease_coverage = round(min(100.0, (disease_area / total_area) * 100.0), 2)
+            all_coverage = round(min(100.0, (all_area / total_area) * 100.0), 2)
+
+            if disease_coverage == 0:
+                lesion_severity = 'none'
+            elif disease_coverage < 5:
+                lesion_severity = 'low'
+            elif disease_coverage < 15:
+                lesion_severity = 'medium'
+            else:
+                lesion_severity = 'high'
+
+            disease_types = sorted({d.get('display_name', 'Unknown') for d in disease_detections})
+
+            return {
+                'source': 'model_detection',
+                'image_dimensions': {
+                    'height': height,
+                    'width': width,
+                    'aspect_ratio': round((width / height), 2) if height > 0 else 0
+                },
+                'detections_summary': {
+                    'count': len(detections),
+                    'disease_count': len(disease_detections),
+                    'healthy_count': len(healthy_detections),
+                    'coverage_percentage': all_coverage
+                },
+                'lesions': {
+                    'detected': len(disease_detections) > 0,
+                    'count': len(disease_detections),
+                    'affected_area_percentage': disease_coverage,
+                    'severity': lesion_severity,
+                    'types': disease_types[:5],
+                    'description': (
+                        'No disease detections from model boxes.'
+                        if len(disease_detections) == 0
+                        else f"Model detected {len(disease_detections)} disease box(es)."
+                    )
+                },
+                'model_boxes': box_rows
+            }
+        except Exception as e:
+            logger.error(f"Model visual summary build failed: {e}")
+            return {
+                'source': 'model_detection',
+                'detections_summary': {
+                    'count': len(detections),
+                    'disease_count': 0,
+                    'healthy_count': len(detections),
+                    'coverage_percentage': 0.0
+                }
+            }
     
-    def _get_disease_info(self, class_id: int, confidence: float) -> Dict:
-        """Get comprehensive disease information from database"""
-        # Get base info from database
-        base_info = self.DISEASE_DATABASE.get(class_id, {
-            'class': 'unknown',
-            'name': 'Unknown Condition',
-            'severity': 'Unknown',
-            'description': 'Condition not in database',
-            'treatment': 'Consult agricultural expert',
-            'symptoms': ['Unable to determine symptoms'],
-            'latex_impact': 'Unknown',
-            'urgency': 'medium'
-        })
-        
-        # Add confidence and detection info
+    def _normalize_class_label(self, class_name: str) -> str:
+        return str(class_name or '').strip().lower().replace('_', ' ').replace('-', ' ')
+
+    def _is_diseased_label(self, class_name: str) -> bool:
+        label = self._normalize_class_label(class_name)
+        if not label:
+            return False
+        disease_keywords = [
+            'disease', 'rot', 'mildew', 'mold', 'blight',
+            'canker', 'pustule', 'fishbone', 'black line', 'dry crust'
+        ]
+        healthy_keywords = [
+            'healthy', 'normal', 'nayang normal', 'rubber tree',
+            'rubber leaf', 'rubber leaves', 'rubber root'
+        ]
+        if any(k in label for k in healthy_keywords):
+            return False
+        return any(k in label for k in disease_keywords)
+
+    def _infer_generic_severity(self, class_name: str) -> str:
+        label = self._normalize_class_label(class_name)
+        if not self._is_diseased_label(label):
+            return 'None'
+        if any(k in label for k in ['white root', 'brown root', 'black line', 'rot']):
+            return 'Moderate to Severe'
+        if any(k in label for k in ['mildew', 'mold', 'fishbone', 'dry crust']):
+            return 'Moderate'
+        return 'Low'
+
+    def _urgency_from_severity(self, severity: str) -> str:
+        sev = str(severity or '').strip().lower()
+        if 'critical' in sev:
+            return 'critical'
+        if 'severe' in sev or sev in ['high', 'moderate to severe']:
+            return 'high'
+        if 'moderate' in sev or sev == 'medium':
+            return 'medium'
+        return 'low'
+
+    def _get_disease_info(self, class_id: int, confidence: float, class_name: Optional[str] = None) -> Dict:
+        """Get comprehensive disease information from database."""
+        # Prefer class-name mapping first because custom-trained models may not
+        # preserve legacy class-id ordering.
+        base_info = None
+        normalized_class = self._normalize_class_label(class_name)
+
+        if normalized_class:
+            for info in self.DISEASE_DATABASE.values():
+                info_class = self._normalize_class_label(info.get('class', ''))
+                info_name = self._normalize_class_label(info.get('name', ''))
+                if normalized_class == info_class or normalized_class == info_name or info_class in normalized_class:
+                    base_info = info
+                    break
+
+        # Fall back to class-id mapping only when class-name mapping is unavailable.
+        if base_info is None:
+            base_info = self.DISEASE_DATABASE.get(class_id)
+
+        # Generic profile for unseen custom classes.
+        if base_info is None:
+            detected = self._is_diseased_label(normalized_class)
+            generic_severity = self._infer_generic_severity(normalized_class)
+            display_name = self._format_class_name(class_name) if class_name else 'Unknown Condition'
+            base_info = {
+                'class': class_name if class_name else 'unknown',
+                'name': display_name if display_name else ('Healthy' if not detected else 'Unknown Disease'),
+                'severity': generic_severity,
+                'description': (
+                    f"Model identified class '{display_name}'."
+                    if class_name else
+                    'Condition not in local disease database.'
+                ),
+                'treatment': (
+                    'Continue monitoring and maintain standard tapping hygiene.'
+                    if not detected else
+                    'Apply targeted disease management and verify with field inspection.'
+                ),
+                'symptoms': (
+                    ['No disease label keywords detected for this class.']
+                    if not detected else
+                    [f"Detected model class: {display_name}"]
+                ),
+                'latex_impact': (
+                    'No direct disease impact inferred from this class label.'
+                    if not detected else
+                    'Potential reduction in latex yield; inspect affected panel and nearby roots.'
+                ),
+                'urgency': self._urgency_from_severity(generic_severity)
+            }
+
+        detected = self._is_diseased_label(class_name if class_name else base_info.get('class', ''))
+
         return {
             'name': base_info['name'],
             'class': base_info['class'],
@@ -659,13 +1098,15 @@ class RubberTreeTrunksAnalyzer:
             'treatment': base_info['treatment'],
             'symptoms': base_info['symptoms'],
             'latex_impact': base_info['latex_impact'],
-            'urgency': base_info['urgency'],
-            'detected': class_id != 0  # Not healthy
+            'urgency': base_info.get('urgency', self._urgency_from_severity(base_info.get('severity', 'low'))),
+            'detected': detected
         }
     
     def _format_class_name(self, class_name: str) -> str:
         """Format class name for display"""
-        return class_name.replace('_', ' ').title()
+        if not class_name:
+            return "Unknown"
+        return str(class_name).replace('_', ' ').replace('-', ' ').title()
     
     def _analyze_visual_features(self, img: np.ndarray) -> Dict:
         """Analyze visual features of trunk (color, texture, lesions)"""
@@ -985,39 +1426,47 @@ class RubberTreeTrunksAnalyzer:
                 'metrics': {}
             }
     
-    def _calculate_health_score(self, class_id: int, confidence: float, 
-                               visual_analysis: Optional[Dict]) -> float:
+    def _calculate_health_score(self, class_id: int, confidence: float,
+                               visual_analysis: Optional[Dict],
+                               class_name: Optional[str] = None,
+                               severity: Optional[str] = None) -> float:
         """Calculate overall health score (0-100)"""
-        # Base score from disease class
-        if class_id == 0:  # healthy
-            base_score = 95
-        elif class_id in [5]:  # mild issues (bark cracking)
-            base_score = 70
-        elif class_id in [4, 6]:  # moderate (pink disease, gummosis)
-            base_score = 55
-        elif class_id in [1, 2, 7]:  # moderate-severe
-            base_score = 40
-        elif class_id == 3:  # severe (rigidoporus)
-            base_score = 25
+        label = class_name or self.class_names.get(class_id, '')
+        normalized_label = self._normalize_class_label(label)
+        if normalized_label in ['no detection', 'unknown'] and float(confidence) <= 0:
+            return 0.0
+        inferred_severity = str(severity or self._infer_generic_severity(label)).lower()
+        is_diseased = self._is_diseased_label(label)
+
+        if (not is_diseased) or ('none' in inferred_severity):
+            base_score = 92
+        elif 'critical' in inferred_severity:
+            base_score = 22
+        elif 'severe' in inferred_severity or inferred_severity in ['high', 'moderate to severe']:
+            base_score = 35
+        elif 'moderate' in inferred_severity or inferred_severity == 'medium':
+            base_score = 52
         else:
-            base_score = 50
-        
-        # Adjust by confidence
-        score = base_score * confidence
+            base_score = 68
+
+        # Use confidence as weighting while avoiding collapse to near-zero scores.
+        conf = max(0.0, min(1.0, float(confidence)))
+        score = base_score * (0.55 + (0.45 * conf))
         
         # Adjust based on visual analysis if available
         if visual_analysis:
             # Lesion impact
-            if visual_analysis['lesions']['detected']:
-                affected = visual_analysis['lesions']['affected_area_percentage']
+            lesions = visual_analysis.get('lesions', {})
+            if lesions.get('detected'):
+                affected = lesions.get('affected_area_percentage', 0)
                 score -= min(30, affected * 2)
             
             # Texture impact
-            texture_health = visual_analysis['texture'].get('health_indicator', 50)
+            texture_health = visual_analysis.get('texture', {}).get('health_indicator', 50)
             score = score * (texture_health / 100)
             
             # Bark condition impact
-            bark_condition = visual_analysis['bark_condition']['condition']
+            bark_condition = visual_analysis.get('bark_condition', {}).get('condition')
             if bark_condition == 'Poor':
                 score *= 0.7
             elif bark_condition == 'Critical':
@@ -1339,7 +1788,7 @@ class RubberTreeTrunksAnalyzer:
                 "loaded": False,
                 "model_path": self.model_path,
                 "error": "Model not loaded",
-                "suggestion": "Ensure Trunks.pt exists in RubberSense/backend/ML-Models/"
+                "suggestion": "Ensure Trunks-v2.pt (or Trunks.pt) exists in RubberSense/backend/ML-models/"
             }
     
     def batch_analyze(self, image_paths: List[str], 
@@ -1379,9 +1828,9 @@ def main():
                 base_dir = base_dir.parent
             
             if base_dir.name == "RubberSense":
-                model_path = str(base_dir / "backend" / "ML-Models" / "Trunks.pt")
+                model_path = str(base_dir / "backend" / "ML-models" / "Trunks-v2.pt")
             else:
-                model_path = os.path.join(os.path.dirname(__file__), "Trunks.pt")
+                model_path = os.path.join(os.path.dirname(__file__), "Trunks-v2.pt")
         
         logger.info(f"🔧 Initializing analyzer with model: {model_path}")
         analyzer = RubberTreeTrunksAnalyzer(model_path)

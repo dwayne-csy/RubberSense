@@ -19,6 +19,12 @@ const CommunityCommentSchema = new mongoose.Schema({
     url: {
       type: String
     },
+    secure_url: {
+      type: String
+    },
+    public_id: {
+      type: String
+    },
     mimetype: {
       type: String
     },
@@ -30,6 +36,15 @@ const CommunityCommentSchema = new mongoose.Schema({
     },
     originalname: {
       type: String
+    },
+    format: {
+      type: String
+    },
+    width: {
+      type: Number
+    },
+    height: {
+      type: Number
     }
   },
   parentComment: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import UserHeader from '../layouts/UserHeader';
@@ -31,7 +31,8 @@ import {
   MenuItem,
   Select,
   FormControl,
-  InputLabel
+  InputLabel,
+  TextField
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -75,6 +76,11 @@ const LatexDetection = () => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
   const [selectedRegion, setSelectedRegion] = useState('global_avg');
+  const [batchID, setBatchID] = useState('');
+  const [volume, setVolume] = useState('');
+  const [dryWeight, setDryWeight] = useState('');
+  const [notes, setNotes] = useState('');
+  const [liveMarketData, setLiveMarketData] = useState(null);
 
   // Source chooser
   const [chooserOpen, setChooserOpen] = useState(false);
@@ -102,6 +108,38 @@ const LatexDetection = () => {
     { value: 'vietnam', label: 'Vietnam' },
     { value: 'india', label: 'India' }
   ];
+
+  const fetchLiveMarketData = async (forceRefresh = false) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+
+      const endpoints = ['/api/v1/market/latest', '/api/market/latest'];
+      for (const endpoint of endpoints) {
+        try {
+          const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
+            params: { force: forceRefresh },
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (res.data?.success) {
+            setLiveMarketData(res.data.data || null);
+            return res.data.data || null;
+          }
+        } catch (requestError) {
+          if (requestError?.response?.status === 404) {
+            continue;
+          }
+          throw requestError;
+        }
+      }
+
+      return null;
+    } catch (err) {
+      console.log('Market data fetch error:', err);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -136,6 +174,7 @@ const LatexDetection = () => {
     
     checkAuth();
     fetchSystemInfo();
+    fetchLiveMarketData(false);
   }, [navigate, API_BASE_URL]);
 
   useEffect(() => {
@@ -236,6 +275,9 @@ const LatexDetection = () => {
     setSelectedImage(file);
     setAnalysisResult(null);
     setSuccessMessage(null);
+    if (!batchID) {
+      setBatchID(`WEB-${Date.now().toString(36).toUpperCase()}`);
+    }
     
     const reader = new FileReader();
     reader.onload = e => setImagePreview(e.target.result);
@@ -256,6 +298,10 @@ const LatexDetection = () => {
       const formData = new FormData();
       formData.append('image', selectedImage);
       formData.append('region', selectedRegion);
+      formData.append('batchID', batchID || '');
+      formData.append('volume', volume || '0');
+      formData.append('dryWeight', dryWeight || '0');
+      formData.append('notes', notes || '');
       
       const res = await axios.post(`${API_BASE_URL}/api/v1/latex/analyze`, formData, {
         headers: {
@@ -268,6 +314,7 @@ const LatexDetection = () => {
       if (res.data.success) {
         setAnalysisResult(res.data.data);
         setSuccessMessage('Latex analysis completed successfully!');
+        fetchLiveMarketData(false);
       } else {
         throw new Error(res.data.message || 'Analysis failed');
       }
@@ -294,6 +341,10 @@ const LatexDetection = () => {
     setAnalysisResult(null);
     setError(null);
     setSuccessMessage(null);
+    setBatchID('');
+    setVolume('');
+    setDryWeight('');
+    setNotes('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -397,9 +448,54 @@ const LatexDetection = () => {
   const yield_est = analysis.estimated_yield || {};
   const market = analysisResult?.market_analysis || {};
   const recommendations = analysisResult?.product_recommendations || {};
-  const modelInfo = analysisResult?.model_info || {};
+  const modelInfo = analysisResult?.model_info || analysisResult?.modelInfo || {};
   const imageMetadata = analysisResult?.image_metadata || {};
   const image = analysisResult?.image || {};
+  const activeModelLabel =
+    analysisResult?.modelInfo?.modelUsed ||
+    modelInfo?.model_file ||
+    modelInfo?.modelUsed ||
+    'Unknown model';
+  const latexDetections = Array.isArray(analysisResult?.detections)
+    ? analysisResult.detections
+    : (Array.isArray(analysis?.detections) ? analysis.detections : []);
+  const visualizationSrc = analysisResult?.visualization
+    ? `data:image/jpeg;base64,${analysisResult.visualization}`
+    : analysisResult?.processedImageURL || null;
+  const analyzedAtValue = imageMetadata?.analyzedAt || imageMetadata?.analyzed_at;
+  const fileNameValue = imageMetadata?.filename || imageMetadata?.fileName || '';
+  const fileSizeValue = imageMetadata?.fileSizeKB || imageMetadata?.file_size_kb;
+  const effectivePricePerKg = (() => {
+    const livePrice = Number(liveMarketData?.price);
+    if (Number.isFinite(livePrice) && livePrice > 0) return livePrice;
+    const scanPrice = Number(market.price_per_kg);
+    return Number.isFinite(scanPrice) ? scanPrice : 0;
+  })();
+  const effectiveDryYieldKg = (() => {
+    const fromProfile = Number(analysisResult?.productYieldEstimation?.estimatedYield);
+    if (Number.isFinite(fromProfile) && fromProfile > 0) return fromProfile;
+    const fromLatex = Number(yield_est?.dry_weight_kg);
+    if (Number.isFinite(fromLatex) && fromLatex > 0) return fromLatex;
+    return 0;
+  })();
+  const effectiveTotalValue = (() => {
+    if (effectivePricePerKg > 0 && effectiveDryYieldKg > 0) {
+      return effectivePricePerKg * effectiveDryYieldKg;
+    }
+    const scanTotal = Number(market.estimated_total_value);
+    return Number.isFinite(scanTotal) ? scanTotal : 0;
+  })();
+  const effectiveCurrency = liveMarketData?.currency || market.currency || 'PHP';
+  const effectiveTrend = String(liveMarketData?.trend || market.market_trend || 'neutral');
+  const effectiveTrendStrengthPct = (() => {
+    const liveChange = Number(liveMarketData?.priceChange);
+    if (Number.isFinite(liveChange)) return Math.abs(liveChange);
+    const scanStrength = Number(market.trend_strength);
+    return Number.isFinite(scanStrength) ? Math.abs(scanStrength * 100) : 0;
+  })();
+  const liveSourceLabel = liveMarketData
+    ? `${String(liveMarketData.source || 'stooq').toUpperCase()}${liveMarketData.sourceSymbol ? ` (${liveMarketData.sourceSymbol})` : ''}`
+    : null;
 
   return (
     <>
@@ -551,6 +647,63 @@ const LatexDetection = () => {
                   Affects market price calculations
                 </Typography>
               </Box>
+            </Paper>
+          </motion.div>
+
+          {/* PRE-SCAN INPUTS */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <Paper elevation={2} sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: 'white', border: '1px solid #c8e6c9' }}>
+              <Typography variant="body2" sx={{ color: '#2e7d32', fontWeight: 700, mb: 2 }}>
+                Pre-Scan Latex Inputs
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Batch Reference ID"
+                    value={batchID}
+                    onChange={(e) => setBatchID(e.target.value)}
+                    placeholder="Auto or manual batch ID"
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Volume (L)"
+                    value={volume}
+                    onChange={(e) => setVolume(e.target.value)}
+                    placeholder="0.0"
+                    inputMode="decimal"
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Dry Weight (%)"
+                    value={dryWeight}
+                    onChange={(e) => setDryWeight(e.target.value)}
+                    placeholder="Optional"
+                    inputMode="decimal"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional note for this scan"
+                  />
+                </Grid>
+              </Grid>
             </Paper>
           </motion.div>
 
@@ -731,7 +884,7 @@ const LatexDetection = () => {
                     <Typography variant="body2">
                       {modelInfo.fallback
                         ? `⚠️ Fallback analysis: ${modelInfo.reason || 'ML model unavailable'}`
-                        : '✅ Analyzed using trained ML model: Latex.pt'}
+                        : `✅ Analyzed using trained ML model: ${activeModelLabel}`}
                     </Typography>
                   </Alert>
                 )}
@@ -983,7 +1136,7 @@ const LatexDetection = () => {
                           <OpacityIcon sx={{ fontSize: 60, color: 'rgba(255,255,255,0.85)' }} />
                         </Box>
                         <Typography variant="subtitle1" sx={{ color: '#2e7d32', fontWeight: 700, textTransform: 'capitalize' }}>
-                          {colorAnalysis.name || '—'}
+                          {colorAnalysis.name || 'â€”'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">Color</Typography>
                         
@@ -1012,7 +1165,7 @@ const LatexDetection = () => {
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <TextureIcon sx={{ color: '#2e7d32' }} />
                                 <Typography variant="body1" sx={{ fontWeight: 700, color: '#1b5e20' }}>
-                                  {analysis.consistency || '—'}
+                                  {analysis.consistency || 'â€”'}
                                 </Typography>
                               </Box>
                             </Box>
@@ -1191,11 +1344,15 @@ const LatexDetection = () => {
                     <Grid container spacing={3}>
                       <Grid item xs={12} md={4}>
                         <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                          <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>Price per kg</Typography>
-                          <Typography variant="h3" sx={{ fontWeight: 900 }}>
-                            ₱{market.price_per_kg?.toFixed(2)}
+                          <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>
+                            Price per kg {liveMarketData ? '(Live RSS3)' : '(Scan Estimate)'}
                           </Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>{market.currency}</Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 900 }}>
+                            PHP {effectivePricePerKg.toFixed(2)}
+                          </Typography>
+                          <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                            {effectiveCurrency}{liveSourceLabel ? ` | ${liveSourceLabel}` : ''}
+                          </Typography>
                         </Box>
                       </Grid>
 
@@ -1203,9 +1360,11 @@ const LatexDetection = () => {
                         <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
                           <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>Total Value</Typography>
                           <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                            ₱{market.estimated_total_value?.toFixed(2)}
+                            PHP {effectiveTotalValue.toFixed(2)}
                           </Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>Estimated</Typography>
+                          <Typography variant="caption" sx={{ opacity: 0.7 }}>
+                            {effectiveDryYieldKg > 0 ? `Based on ${effectiveDryYieldKg.toFixed(2)} kg dry yield` : 'Estimated'}
+                          </Typography>
                         </Box>
                       </Grid>
 
@@ -1215,11 +1374,11 @@ const LatexDetection = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                             <TimelineIcon />
                             <Typography variant="h6" sx={{ fontWeight: 700, textTransform: 'capitalize' }}>
-                              {market.market_trend}
+                              {effectiveTrend.toLowerCase()}
                             </Typography>
                           </Box>
                           <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                            Strength: {(market.trend_strength * 100)?.toFixed(0)}%
+                            Strength: {effectiveTrendStrengthPct.toFixed(2)}%
                           </Typography>
                         </Box>
                       </Grid>
@@ -1242,7 +1401,7 @@ const LatexDetection = () => {
                                   {region}
                                 </Typography>
                                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                  ₱{price}
+                                  PHP {price}
                                 </Typography>
                               </Box>
                             </Grid>
@@ -1419,8 +1578,42 @@ const LatexDetection = () => {
                   </motion.div>
                 )}
 
+                {/* Detection Boxes Summary */}
+                {latexDetections.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.46 }}
+                  >
+                    <Paper elevation={2} sx={{ borderRadius: 3, border: '1px solid #c8e6c9', p: 3, mb: 3, bgcolor: 'white' }}>
+                      <Typography variant="subtitle2" sx={{ color: '#388e3c', fontWeight: 700, mb: 1.5 }}>
+                        Detected Latex Boxes ({latexDetections.length})
+                      </Typography>
+                      <Grid container spacing={1.5}>
+                        {latexDetections.slice(0, 6).map((det, i) => (
+                          <Grid item xs={12} md={6} key={`det-${i}`}>
+                            <Box sx={{ p: 1.5, borderRadius: 2, border: '1px solid #dcedc8', bgcolor: '#f9fff5' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#1b5e20' }}>
+                                {det.class || 'Unknown'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                Confidence: {Number(det.confidence || 0).toFixed(1)}%
+                              </Typography>
+                              {Array.isArray(det.bbox) && det.bbox.length === 4 && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  Box: [{det.bbox.join(', ')}]
+                                </Typography>
+                              )}
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Paper>
+                  </motion.div>
+                )}
+
                 {/* Visualization */}
-                {analysisResult.visualization && (
+                {visualizationSrc && (
                   <motion.div
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1434,7 +1627,7 @@ const LatexDetection = () => {
                         <motion.img
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          src={`data:image/jpeg;base64,${analysisResult.visualization}`}
+                          src={visualizationSrc}
                           alt="Analysis visualization"
                           style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', border: '2px solid #c8e6c9' }}
                         />
@@ -1448,9 +1641,9 @@ const LatexDetection = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 1 }}>
                     <InfoIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
                     <Typography variant="caption" color="text.disabled">
-                      Analyzed: {new Date(imageMetadata.analyzedAt).toLocaleString()} ·
-                      File: {imageMetadata.filename} ·
-                      Size: {imageMetadata.fileSizeKB} KB
+                      Analyzed: {analyzedAtValue ? new Date(analyzedAtValue).toLocaleString() : 'N/A'} ·
+                      File: {fileNameValue || 'N/A'} ·
+                      Size: {fileSizeValue ?? 'N/A'} KB
                     </Typography>
                   </Box>
                 )}
@@ -1637,3 +1830,6 @@ const LatexDetection = () => {
 };
 
 export default LatexDetection;
+
+
+

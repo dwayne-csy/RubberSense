@@ -10,6 +10,73 @@ import rootsImg from '../aboutrubber/roots.jpg';
 import trunksImg from '../aboutrubber/trunks.jpg';
 import seedsImg from '../aboutrubber/seeds.jpg';
 
+// ── SVG Icon Components ──────────────────────────────────────────────────────
+
+const IconGlobe = ({ size = 28, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="2" y1="12" x2="22" y2="12"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+);
+
+const IconMicroscope = ({ size = 28, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 18h8"/>
+    <path d="M3 22h18"/>
+    <path d="M14 22a7 7 0 1 0 0-14h-1"/>
+    <path d="M9 14H4l2-7h5l2 7z"/>
+    <path d="M12 6V3"/>
+    <path d="M10 3h4"/>
+  </svg>
+);
+
+const IconHourglass = ({ size = 28, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 22h14"/>
+    <path d="M5 2h14"/>
+    <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/>
+    <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/>
+  </svg>
+);
+
+const IconTrophy = ({ size = 28, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+    <path d="M4 22h16"/>
+    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+    <path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>
+  </svg>
+);
+
+const IconPackage = ({ size = 28, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/>
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="22.08" x2="12" y2="12"/>
+  </svg>
+);
+
+const IconTree = ({ size = 28, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22v-7"/>
+    <path d="M12 15L4 8h16z"/>
+    <path d="M12 10L6 4h12z"/>
+  </svg>
+);
+
+const IconLeaf = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
+    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+  </svg>
+);
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+
 const rubberParts = [
   {
     image: leafsImg,
@@ -68,12 +135,12 @@ const rubberParts = [
 ];
 
 const funFacts = [
-  { label: 'Native Origin', value: 'Amazon Basin, Brazil', icon: '🌍' },
-  { label: 'Scientific Name', value: 'Hevea brasiliensis', icon: '🔬' },
-  { label: 'Productive Lifespan', value: '25–30 Years', icon: '⏳' },
-  { label: 'Top Producers', value: 'Thailand, Indonesia, Vietnam', icon: '🏆' },
-  { label: 'Annual Global Output', value: '14M+ Metric Tons', icon: '📦' },
-  { label: 'Tree Height', value: 'Up to 30 Meters', icon: '🌳' },
+  { label: 'Native Origin', value: 'Amazon Basin, Brazil', icon: <IconGlobe size={28} color="#555555" /> },
+  { label: 'Scientific Name', value: 'Hevea brasiliensis', icon: <IconMicroscope size={28} color="#555555" /> },
+  { label: 'Productive Lifespan', value: '25–30 Years', icon: <IconHourglass size={28} color="#555555" /> },
+  { label: 'Top Producers', value: 'Thailand, Indonesia, Vietnam', icon: <IconTrophy size={28} color="#555555" /> },
+  { label: 'Annual Global Output', value: '14M+ Metric Tons', icon: <IconPackage size={28} color="#555555" /> },
+  { label: 'Tree Height', value: 'Up to 30 Meters', icon: <IconTree size={28} color="#555555" /> },
 ];
 
 const AboutRubber = () => {
@@ -117,22 +184,15 @@ const AboutRubber = () => {
 
   const addRef = (el, i) => { sectionRefs.current[i] = el; };
 
-  // Attractive Green Line Divider matching Home.jsx style
+  // Green Section Divider with SVG leaf icons
   const GreenSectionDivider = () => (
-    <div style={{
-      maxWidth: '1280px',
-      margin: '0 auto',
-      padding: '0 40px'
-    }}>
-      {/* Main gradient line */}
+    <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 40px' }}>
       <div style={{
         position: 'relative',
         height: '2px',
         background: 'linear-gradient(90deg, transparent 0%, #4ab54a 20%, #2d6a4f 50%, #4ab54a 80%, transparent 100%)',
         marginBottom: '20px'
       }} />
-      
-      {/* Decorative leaf icon in the center */}
       <div style={{
         position: 'relative',
         display: 'flex',
@@ -147,13 +207,14 @@ const AboutRubber = () => {
           alignItems: 'center',
           gap: '8px'
         }}>
-          <span style={{ fontSize: '1.5rem', color: '#2d6a4f', animation: 'pulse 2s ease-in-out infinite' }}></span>
-          <span style={{ fontSize: '1rem', color: '#4a6455', fontWeight: '300', letterSpacing: '2px' }}></span>
-          <span style={{ fontSize: '1.5rem', color: '#2d6a4f', animation: 'pulse 2s ease-in-out infinite' }}></span>
+          <span style={{ display: 'flex', alignItems: 'center', color: '#2d6a4f', animation: 'pulse 2s ease-in-out infinite' }}>
+            <IconLeaf size={22} color="#2d6a4f" />
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', color: '#2d6a4f', animation: 'pulse 2s ease-in-out infinite' }}>
+            <IconLeaf size={22} color="#2d6a4f" />
+          </span>
         </div>
       </div>
-
-      {/* Double line effect for extra visual appeal */}
       <div style={{
         height: '1px',
         background: 'linear-gradient(90deg, transparent, rgba(74,181,74,0.3), rgba(45,106,79,0.5), rgba(74,181,74,0.3), transparent)',
@@ -190,11 +251,9 @@ const AboutRubber = () => {
             <source src="/src/Components/slidingpics/slide4.mp4" type="video/mp4" />
           </video>
 
-          {/* Deep multi-layer overlay - adjusted for white background */}
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.85) 100%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 30% 60%, rgba(0,0,0,0.2) 0%, transparent 60%)' }} />
 
-          {/* Hero text — bottom-left aligned, magazine editorial style */}
           <div style={{
             position: 'absolute',
             bottom: '80px',
@@ -204,9 +263,7 @@ const AboutRubber = () => {
             maxWidth: '780px',
             animation: 'heroReveal 1.2s cubic-bezier(0.16,1,0.3,1) both'
           }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px'
-            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
               <div style={{ width: '60px', height: '1px', background: '#FFFFFF' }}></div>
               <span style={{ color: '#FFFFFF', fontSize: '0.75rem', fontWeight: '600', letterSpacing: '4px', textTransform: 'uppercase' }}>
                 The Tree of Industry
@@ -251,7 +308,7 @@ const AboutRubber = () => {
         </div>
 
         {/* ═══════════════════════════════════════
-            INTRODUCTION — FULL BLEED, WHITE
+            INTRODUCTION
         ═══════════════════════════════════════ */}
         <div
           ref={el => addRef(el, 0)}
@@ -308,7 +365,7 @@ const AboutRubber = () => {
         <GreenSectionDivider />
 
         {/* ═══════════════════════════════════════
-            QUICK FACTS — FULL BLEED WHITE
+            QUICK FACTS
         ═══════════════════════════════════════ */}
         <div
           ref={el => addRef(el, 1)}
@@ -353,7 +410,7 @@ const AboutRubber = () => {
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F5F5'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
               >
-                <div style={{ fontSize: '2rem', marginBottom: '16px' }}>{fact.icon}</div>
+                <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center' }}>{fact.icon}</div>
                 <div style={{ color: '#999999', fontSize: '0.7rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '10px' }}>{fact.label}</div>
                 <div style={{ color: '#000000', fontSize: '1.2rem', fontWeight: '500', lineHeight: '1.3' }}>{fact.value}</div>
               </div>
@@ -444,14 +501,12 @@ const AboutRubber = () => {
                         display: 'block'
                       }}
                     />
-                    {/* Color overlay on hover/open */}
                     <div style={{
                       position: 'absolute', inset: 0,
                       background: `linear-gradient(to top, ${part.color}CC 0%, transparent 50%)`,
                       opacity: isOpen ? 1 : 0,
                       transition: 'opacity 0.4s ease'
                     }} />
-                    {/* Part number */}
                     <div style={{
                       position: 'absolute', top: '14px', left: '14px',
                       background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
@@ -514,7 +569,7 @@ const AboutRubber = () => {
         <GreenSectionDivider />
 
         {/* ═══════════════════════════════════════
-            ENVIRONMENTAL ROLE — FULL BLEED WHITE
+            ENVIRONMENTAL ROLE
         ═══════════════════════════════════════ */}
         <div
           ref={el => addRef(el, 3)}
@@ -537,7 +592,6 @@ const AboutRubber = () => {
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', position: 'absolute', inset: 0 }}
             />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, transparent 60%, #FFFFFF 100%)' }} />
-            {/* Big stat overlay */}
             <div style={{ position: 'absolute', bottom: '48px', left: '48px' }}>
               <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '5rem', fontWeight: '700', color: '#000000', lineHeight: '1', textShadow: '0 4px 24px rgba(255,255,255,0.8)' }}>72kg</div>
               <div style={{ color: '#333333', fontSize: '0.9rem', fontWeight: '400', letterSpacing: '1px', marginTop: '6px' }}>CO₂ absorbed per tree / year</div>
@@ -571,7 +625,7 @@ const AboutRubber = () => {
         <GreenSectionDivider />
 
         {/* ═══════════════════════════════════════
-            WHY IT MATTERS — FULL BLEED WHITE
+            WHY IT MATTERS
         ═══════════════════════════════════════ */}
         <div
           ref={el => addRef(el, 4)}

@@ -2,74 +2,167 @@ const multer = require('multer');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinary');
 
-// Create a separate upload directory for community media
-const communityUploadDir = path.join(os.tmpdir(), 'rubbersense_community_uploads');
-if (!fs.existsSync(communityUploadDir)) {
-  fs.mkdirSync(communityUploadDir, { recursive: true });
-}
-
-// Configure multer for community media with different settings
-const communityStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, communityUploadDir);
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB per file
   },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const base = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, base + ext);
+  fileFilter: (req, file, cb) => {
+    const allowedImageTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/svg+xml',
+      'image/bmp',
+      'image/tiff'
+    ];
+    
+    const allowedVideoTypes = [
+      'video/mp4',
+      'video/mpeg',
+      'video/ogg',
+      'video/webm',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/x-ms-wmv'
+    ];
+    
+    const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
+    
+    if (allAllowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed types: images (JPEG, PNG, GIF, WebP, etc.) and videos (MP4, WebM, etc.)'), false);
+    }
   }
 });
 
-// Allow more file types for community
-const communityFileFilter = (req, file, cb) => {
-  const allowedImageTypes = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'image/svg+xml',
-    'image/bmp',
-    'image/tiff'
-  ];
+// Helper function to convert buffer to base64
+const bufferToBase64 = (file) => {
+  const base64 = file.buffer.toString('base64');
+  const dataUrl = `data:${file.mimetype};base64,${base64}`;
   
-  const allowedVideoTypes = [
-    'video/mp4',
-    'video/mpeg',
-    'video/ogg',
-    'video/webm',
-    'video/quicktime',
-    'video/x-msvideo',
-    'video/x-ms-wmv'
-  ];
+  // Log first 100 characters of base64 to verify format
+  console.log(`📸 File: ${file.originalname}, Size: ${file.size} bytes, MIME: ${file.mimetype}`);
+  console.log(`🔤 Base64 preview: ${dataUrl.substring(0, 100)}...`);
+  console.log(`🔤 Base64 total length: ${base64.length} characters`);
   
-  const allAllowedTypes = [...allowedImageTypes, ...allowedVideoTypes];
-  
-  if (allAllowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Allowed types: images (JPEG, PNG, GIF, WebP, etc.) and videos (MP4, WebM, etc.)'), false);
-  }
+  return dataUrl;
 };
 
-const communityUpload = multer({
-  storage: communityStorage,
-  fileFilter: communityFileFilter,
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB per file for videos
-    files: 10 // Max 10 files
-  }
-});
+// Helper function to upload files to Cloudinary using temp files (more reliable)
+const uploadFilesToCloudinaryWithTempFiles = async (files, folder = 'rubbersense/community') => {
+  if (!files || files.length === 0) return [];
+  
+  console.log(`📤 Starting upload of ${files.length} files to Cloudinary folder: ${folder}`);
+  
+  const uploadPromises = files.map(async (file) => {
+    let tempFilePath = null;
+    try {
+      // Create temp directory if it doesn't exist
+      const tempDir = path.join(os.tmpdir(), 'rubbersense_temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+        console.log(`📁 Created temp directory: ${tempDir}`);
+      }
+      
+      // Create temp file with proper extension
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 15);
+      const ext = path.extname(file.originalname) || '.jpg'; // Default to .jpg if no extension
+      tempFilePath = path.join(tempDir, `community-${timestamp}-${random}${ext}`);
+      
+      console.log(`📝 Writing temp file: ${tempFilePath}`);
+      console.log(`📝 File size: ${file.size} bytes`);
+      
+      // Write buffer to temp file
+      fs.writeFileSync(tempFilePath, file.buffer);
+      
+      // Verify file was written
+      if (!fs.existsSync(tempFilePath)) {
+        throw new Error('Temp file was not created');
+      }
+      
+      const stats = fs.statSync(tempFilePath);
+      console.log(`📝 Temp file written: ${stats.size} bytes`);
+      
+      if (stats.size === 0) {
+        throw new Error('Temp file is empty');
+      }
+      
+      if (stats.size !== file.size) {
+        console.warn(`⚠️ File size mismatch: original ${file.size} vs temp ${stats.size}`);
+      }
+      
+      // Check if it's a video for Cloudinary resource type
+      const isVideo = file.mimetype.startsWith('video/');
+      console.log(`🎥 Is video: ${isVideo}`);
+      
+      // Upload to Cloudinary using file path
+      console.log(`☁️ Uploading to Cloudinary...`);
+      const result = await uploadToCloudinary(tempFilePath, folder);
+      
+      console.log(`✅ Uploaded to Cloudinary successfully: ${result.url}`);
+      console.log(`📋 Public ID: ${result.public_id}`);
+      
+      return {
+        url: result.url,
+        secure_url: result.url,
+        public_id: result.public_id,
+        mimetype: file.mimetype,
+        filename: result.public_id,
+        size: file.size,
+        originalname: file.originalname,
+        format: file.mimetype.split('/')[1] || 'jpg'
+      };
+    } catch (error) {
+      console.error('❌ Error uploading to Cloudinary:', error);
+      console.error('Error details:', error.message);
+      if (tempFilePath) {
+        console.error('Temp file path:', tempFilePath);
+        try {
+          if (fs.existsSync(tempFilePath)) {
+            const stats = fs.statSync(tempFilePath);
+            console.error('Temp file exists, size:', stats.size);
+          }
+        } catch (e) {
+          console.error('Error checking temp file:', e);
+        }
+      }
+      return null;
+    } finally {
+      // Clean up temp file
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+          console.log(`🧹 Temp file deleted: ${tempFilePath}`);
+        } catch (unlinkError) {
+          console.error('Error deleting temp file:', unlinkError);
+        }
+      }
+    }
+  });
+  
+  const results = await Promise.all(uploadPromises);
+  const successfulUploads = results.filter(result => result !== null);
+  console.log(`✅ Upload complete: ${successfulUploads.length}/${files.length} files uploaded successfully`);
+  
+  return successfulUploads;
+};
 
 // @desc    Upload single file for community (comments)
 // @route   POST /api/v1/upload/community/single
 // @access  Private
-exports.uploadCommunitySingle = async (req, res, next) => {
+exports.uploadCommunitySingle = async (req, res) => {
   try {
-    const uploadSingle = communityUpload.single('media');
+    const uploadSingle = upload.single('media');
     
-    uploadSingle(req, res, (err) => {
+    uploadSingle(req, res, async (err) => {
       if (err) {
         console.error('Community single upload error:', err);
         return res.status(400).json({
@@ -85,17 +178,26 @@ exports.uploadCommunitySingle = async (req, res, next) => {
         });
       }
       
-      const fileInfo = {
-        url: `/uploads/community/${req.file.filename}`,
+      console.log('📥 Received file for single upload:', req.file.originalname);
+      console.log('File details:', {
         mimetype: req.file.mimetype,
-        filename: req.file.filename,
         size: req.file.size,
         originalname: req.file.originalname
-      };
+      });
+      
+      // Upload to Cloudinary using temp files
+      const uploadedFiles = await uploadFilesToCloudinaryWithTempFiles([req.file], 'rubbersense/community/comments');
+      
+      if (uploadedFiles.length === 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload file to Cloudinary'
+        });
+      }
       
       res.status(200).json({
         success: true,
-        file: fileInfo
+        file: uploadedFiles[0]
       });
     });
   } catch (error) {
@@ -110,11 +212,11 @@ exports.uploadCommunitySingle = async (req, res, next) => {
 // @desc    Upload multiple files for community (posts)
 // @route   POST /api/v1/upload/community/multiple
 // @access  Private
-exports.uploadCommunityMultiple = async (req, res, next) => {
+exports.uploadCommunityMultiple = async (req, res) => {
   try {
-    const uploadMultiple = communityUpload.array('media', 10);
+    const uploadMultiple = upload.array('media', 10);
     
-    uploadMultiple(req, res, (err) => {
+    uploadMultiple(req, res, async (err) => {
       if (err) {
         console.error('Community multiple upload error:', err);
         return res.status(400).json({
@@ -130,17 +232,28 @@ exports.uploadCommunityMultiple = async (req, res, next) => {
         });
       }
       
-      const files = req.files.map(file => ({
-        url: `/uploads/community/${file.filename}`,
-        mimetype: file.mimetype,
-        filename: file.filename,
-        size: file.size,
-        originalname: file.originalname
-      }));
+      console.log(`📥 Received ${req.files.length} files for multiple upload`);
+      req.files.forEach((file, index) => {
+        console.log(`File ${index + 1}:`, {
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size
+        });
+      });
+      
+      // Upload all files to Cloudinary using temp files
+      const uploadedFiles = await uploadFilesToCloudinaryWithTempFiles(req.files, 'rubbersense/community/posts');
+      
+      if (uploadedFiles.length === 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload files to Cloudinary'
+        });
+      }
 
       res.status(200).json({
         success: true,
-        files: files
+        files: uploadedFiles
       });
     });
   } catch (error) {
@@ -152,12 +265,42 @@ exports.uploadCommunityMultiple = async (req, res, next) => {
   }
 };
 
-// @desc    Handle direct community post creation with media
+// @desc    Delete a file from Cloudinary
+// @route   DELETE /api/v1/upload/community/:publicId
+// @access  Private
+exports.deleteCommunityFile = async (req, res) => {
+  try {
+    const { publicId } = req.params;
+    
+    if (!publicId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Public ID is required'
+      });
+    }
+    
+    const result = await deleteFromCloudinary(publicId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'File deleted successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Delete community file error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during file deletion'
+    });
+  }
+};
+
+// @desc    Handle direct community post creation with media (legacy endpoint)
 // @route   POST /api/v1/upload/community/post
 // @access  Private
-exports.createCommunityPostWithMedia = async (req, res, next) => {
+exports.createCommunityPostWithMedia = async (req, res) => {
   try {
-    const uploadMultiple = communityUpload.array('media', 10);
+    const uploadMultiple = upload.array('media', 10);
     
     uploadMultiple(req, res, async (err) => {
       if (err) {
@@ -186,14 +329,12 @@ exports.createCommunityPostWithMedia = async (req, res, next) => {
         });
       }
       
-      // Process uploaded files
-      const media = req.files ? req.files.map(file => ({
-        url: `/uploads/community/${file.filename}`,
-        mimetype: file.mimetype,
-        filename: file.filename,
-        size: file.size,
-        originalname: file.originalname
-      })) : [];
+      // Upload files to Cloudinary
+      let media = [];
+      if (req.files && req.files.length > 0) {
+        media = await uploadFilesToCloudinaryWithTempFiles(req.files, 'rubbersense/community/posts');
+        console.log(`✅ Uploaded ${media.length} files to Cloudinary`);
+      }
       
       // Here you would create the post in your database
       // For now, return the processed data

@@ -9,6 +9,7 @@ import os
 import sys
 import json
 import base64
+import argparse
 import numpy as np
 import cv2
 from pathlib import Path
@@ -42,7 +43,7 @@ except ImportError as e:
 class RubberTreeLatexAnalyzer:
     """
     Main analyzer class for rubber tree latex quality assessment
-    Uses trained Latex.pt model for accurate quality classification
+    Uses trained Latex-v2.pt model for accurate quality classification
     Integrated with RubberSense backend ML models
     """
     
@@ -119,7 +120,7 @@ class RubberTreeLatexAnalyzer:
         Initialize the latex analyzer with trained model
         
         Args:
-            model_path: Path to the trained Latex.pt model
+            model_path: Path to the trained Latex model (.pt)
         """
         self.model = None
         self.model_path = model_path or self._get_default_model_path()
@@ -132,27 +133,97 @@ class RubberTreeLatexAnalyzer:
         # Load model on initialization
         self._load_model()
         logger.info("✅ RubberTreeLatexAnalyzer initialized")
+
+    def _build_class_profile_from_name(self, class_name: str) -> Dict[str, Any]:
+        """Infer class profile from model class label."""
+        normalized = class_name.lower().replace('-', ' ').replace('_', ' ')
+
+        if any(term in normalized for term in ['water', 'watery', 'dilute']):
+            return {
+                "name": class_name,
+                "display_name": "Watery Latex",
+                "quality_class": "Low Class",
+                "drc_range": (15, 35),
+                "price_multiplier": 0.35,
+                "color_profile": "translucent",
+                "characteristics": ["High water content", "Low concentration", "Needs reprocessing"]
+            }
+
+        if any(term in normalized for term in ['contaminated', 'contamination', 'impure', 'dirty']):
+            return {
+                "name": class_name,
+                "display_name": "Contaminated Latex",
+                "quality_class": "Low Class",
+                "drc_range": (20, 40),
+                "price_multiplier": 0.45,
+                "color_profile": "dark",
+                "characteristics": ["Visible impurities", "Discolored", "Requires purification"]
+            }
+
+        if any(term in normalized for term in ['coagulated', 'coagulation', 'lump']):
+            return {
+                "name": class_name,
+                "display_name": "Coagulated Latex",
+                "quality_class": "Medium Class",
+                "drc_range": (55, 75),
+                "price_multiplier": 0.8,
+                "color_profile": "lumpy",
+                "characteristics": ["Partial coagulation", "Uneven texture", "Requires filtering"]
+            }
+
+        if any(term in normalized for term in ['yellow', 'oxidized', 'aged']):
+            return {
+                "name": class_name,
+                "display_name": "Yellow Latex",
+                "quality_class": "Medium Class",
+                "drc_range": (45, 65),
+                "price_multiplier": 0.75,
+                "color_profile": "yellowish",
+                "characteristics": ["Oxidation signs", "Reduced purity", "Moderate quality"]
+            }
+
+        if any(term in normalized for term in ['white', 'premium', 'high', 'pure']):
+            return {
+                "name": class_name,
+                "display_name": "White Latex",
+                "quality_class": "High Class",
+                "drc_range": (75, 92),
+                "price_multiplier": 1.2,
+                "color_profile": "pure_white",
+                "characteristics": ["Clean latex", "High purity", "Suitable for premium products"]
+            }
+
+        return {
+            "name": class_name,
+            "display_name": self._format_class_name(class_name),
+            "quality_class": "Medium Class",
+            "drc_range": (40, 75),
+            "price_multiplier": 0.9,
+            "color_profile": "unknown",
+            "characteristics": ["Model-defined class"]
+        }
         
     def _get_default_model_path(self) -> str:
-        """Get the default model path based on RubberSense structure"""
-        # Try multiple possible locations
-        possible_paths = [
-            # RubberSense backend structure
-            Path(__file__).parent / "RubberSense" / "backend" / "ML-Models" / "Latex.pt",
-            Path(__file__).parent / "backend" / "ML-Models" / "Latex.pt",
-            Path(__file__).parent / "ML-Models" / "Latex.pt",
-            Path(__file__).parent / "Latex.pt",
-            # Absolute path for deployment
-            Path("/app/backend/ML-Models/Latex.pt"),
+        """Get default model path, preferring Latex-v2.pt then Latex.pt."""
+        current_dir = Path(__file__).parent
+        base_dirs = [
+            current_dir / "RubberSense" / "backend" / "ML-models",
+            current_dir / "backend" / "ML-models",
+            current_dir / "ML-models",
+            current_dir,
+            Path("/app/backend/ML-models"),
         ]
-        
-        for path in possible_paths:
-            if path.exists():
-                logger.info(f"✅ Found model at: {path}")
-                return str(path)
-        
-        # Return the most likely path
-        return str(Path(__file__).parent / "RubberSense" / "backend" / "ML-Models" / "Latex.pt")
+        candidate_names = ["Latex-v2.pt", "Latex.pt"]
+
+        for base_dir in base_dirs:
+            for filename in candidate_names:
+                model_candidate = base_dir / filename
+                if model_candidate.exists():
+                    logger.info(f"✅ Found model at: {model_candidate}")
+                    return str(model_candidate)
+
+        # Return the preferred default path even if not found yet.
+        return str(current_dir / "RubberSense" / "backend" / "ML-models" / "Latex-v2.pt")
     
     def _load_model(self) -> bool:
         """Load the YOLO model with enhanced metadata extraction"""
@@ -184,22 +255,11 @@ class RubberTreeLatexAnalyzer:
             if hasattr(self.model, 'names'):
                 self.class_names = self.model.names
                 logger.info(f"📋 Model classes ({len(self.class_names)}): {self.class_names}")
-                
-                # Update class info with model's class names
+
+                # Override class mapping from actual model labels (not fixed indices)
+                self.class_info = {}
                 for idx, name in self.class_names.items():
-                    if idx in self.class_info:
-                        self.class_info[idx]["name"] = name
-                    else:
-                        # Add custom class from model
-                        self.class_info[idx] = {
-                            "name": name,
-                            "display_name": name.replace('_', ' ').title(),
-                            "quality_class": "Custom Class",
-                            "drc_range": (40, 80),
-                            "price_multiplier": 0.9,
-                            "color_profile": "unknown",
-                            "characteristics": ["Custom classification"]
-                        }
+                    self.class_info[idx] = self._build_class_profile_from_name(str(name))
             else:
                 # Use default class info
                 self.class_names = {i: info["name"] for i, info in self.class_info.items()}
@@ -350,7 +410,7 @@ class RubberTreeLatexAnalyzer:
             return self._heuristic_analysis(img, return_visualization)
         
         try:
-            logger.info("🔬 Running inference with trained Latex.pt model...")
+            logger.info(f"🔬 Running inference with trained {os.path.basename(self.model_path)} model...")
             
             # Run inference with optimized parameters
             results = self.model(
@@ -363,7 +423,7 @@ class RubberTreeLatexAnalyzer:
             
             # Process results from trained model
             return self._process_classification_results(
-                results, img, return_visualization, region
+                results, img, return_visualization, region, image_input
             )
                 
         except Exception as e:
@@ -378,7 +438,8 @@ class RubberTreeLatexAnalyzer:
                                        results, 
                                        original_img: np.ndarray, 
                                        return_visualization: bool,
-                                       region: str) -> Dict[str, Any]:
+                                       region: str,
+                                       image_input: Optional[Union[str, np.ndarray, bytes]] = None) -> Dict[str, Any]:
         """Process classification results from trained model"""
         try:
             # Get predictions
@@ -386,7 +447,13 @@ class RubberTreeLatexAnalyzer:
             
             if probs is None:
                 # Handle detection model instead of classification
-                return self._process_detection_results(results, original_img, return_visualization, region)
+                return self._process_detection_results(
+                    results,
+                    original_img,
+                    return_visualization,
+                    region,
+                    image_input=image_input
+                )
             
             # Get top predictions
             top5_indices = probs.top5
@@ -444,9 +511,10 @@ class RubberTreeLatexAnalyzer:
             )
             
             # Calculate market price with regional adjustment
+            estimated_volume_ml = quantity_estimation.get('estimated_volume_ml', 0.0)
             market_price = self._calculate_market_price_regional(
                 quality_class,
-                quantity_estimation['estimatedVolume'],
+                estimated_volume_ml,
                 drc,
                 region
             )
@@ -502,7 +570,7 @@ class RubberTreeLatexAnalyzer:
                     "consistency": visual_analysis['consistency'],
                     "impurities": visual_analysis['impurities'],
                     "quantity_estimation": quantity_estimation,
-                    "estimated_yield": self._estimate_yield(quantity_estimation['estimatedVolume'], drc)
+                    "estimated_yield": self._estimate_yield(estimated_volume_ml, drc)
                 },
                 "product_recommendations": {
                     "recommended_products": product_recommendations,
@@ -530,45 +598,181 @@ class RubberTreeLatexAnalyzer:
             logger.debug(traceback.format_exc())
             return self._heuristic_analysis(original_img, return_visualization)
     
-    def _process_detection_results(self, results, original_img, return_visualization, region):
-        """Handle detection model results (if model is detection-based)"""
+    def _process_detection_results(self,
+                                   results,
+                                   original_img,
+                                   return_visualization,
+                                   region,
+                                   image_input: Optional[Union[str, np.ndarray, bytes]] = None):
+        """Handle detection model results (regular boxes or OBB)."""
         try:
-            boxes = results[0].boxes
-            if boxes is None or len(boxes) == 0:
-                return self._heuristic_analysis(original_img, return_visualization)
-            
-            # Get the highest confidence detection
-            confidences = boxes.conf.cpu().numpy()
-            classes = boxes.cls.cpu().numpy().astype(int)
-            
-            best_idx = np.argmax(confidences)
-            primary_class_idx = classes[best_idx]
-            primary_confidence = confidences[best_idx] * 100
-            
-            # Rest of processing similar to classification
-            class_name = self.class_names.get(primary_class_idx, f"class_{primary_class_idx}")
-            class_details = self.class_info.get(primary_class_idx, {})
-            display_name = class_details.get("display_name", self._format_class_name(class_name))
-            
-            # Simplified response for detection
-            return {
+            result0 = results[0]
+            obb = getattr(result0, 'obb', None)
+            boxes = getattr(result0, 'boxes', None)
+            use_obb = obb is not None and len(obb) > 0
+            detections_obj = obb if use_obb else boxes
+
+            if detections_obj is None or len(detections_obj) == 0:
+                return {
+                    "success": False,
+                    "error": "Detected part non-latex only. Please capture a clear latex sample image and try again.",
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "ml_model_used": True,
+                    "model_info": {
+                        "type": "YOLO OBB Detection" if use_obb else "YOLO Detection",
+                        "model_path": self.model_path,
+                        "model_file": os.path.basename(self.model_path),
+                        "num_classes": len(self.class_names),
+                        "task": "obb_detection" if use_obb else "detection",
+                        "detection_count": 0
+                    }
+                }
+
+            detections = []
+            for i in range(len(detections_obj)):
+                cls_id = int(detections_obj.cls[i])
+                confidence = float(detections_obj.conf[i]) * 100
+                class_name = self.class_names.get(cls_id, f"class_{cls_id}")
+                class_details = self.class_info.get(cls_id, self._build_class_profile_from_name(str(class_name)))
+                display_name = class_details.get("display_name", self._format_class_name(str(class_name)))
+                polygon = None
+
+                if use_obb and hasattr(detections_obj, 'xyxyxyxy'):
+                    polygon = detections_obj.xyxyxyxy[i].tolist()
+                    xs = [float(pt[0]) for pt in polygon]
+                    ys = [float(pt[1]) for pt in polygon]
+                    x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
+                else:
+                    x1, y1, x2, y2 = detections_obj.xyxy[i].tolist()
+
+                bbox = [int(x1), int(y1), int(x2), int(y2)]
+                area_px = max(0, bbox[2] - bbox[0]) * max(0, bbox[3] - bbox[1])
+
+                row = {
+                    "class_id": cls_id,
+                    "class": display_name,
+                    "original_class": str(class_name),
+                    "quality_class": class_details.get("quality_class", "Medium Class"),
+                    "confidence": round(confidence, 2),
+                    "bbox": bbox,
+                    "area_px": int(area_px)
+                }
+                if polygon is not None:
+                    row["obb_polygon"] = [[round(float(x), 2), round(float(y), 2)] for x, y in polygon]
+                detections.append(row)
+
+            detections.sort(key=lambda d: d.get("confidence", 0), reverse=True)
+            primary = detections[0]
+            primary_class_idx = int(primary.get("class_id", 0))
+            primary_confidence = float(primary.get("confidence", 0))
+            primary_quality_class = primary.get("quality_class", "Medium Class")
+
+            quality_info = self._determine_quality_from_model(primary_class_idx, primary_confidence)
+            visual_analysis = self._analyze_visual_features(original_img)
+            drc = self._calculate_drc_from_model(primary_class_idx, primary_confidence, visual_analysis)
+            quantity_estimation = self._estimate_quantity(original_img, primary.get("class", "Latex"))
+            estimated_volume_ml = quantity_estimation.get('estimated_volume_ml', 0.0)
+            market_price = self._calculate_market_price_regional(
+                primary_quality_class,
+                estimated_volume_ml,
+                drc,
+                region
+            )
+            product_recommendations = self._get_product_recommendations(
+                primary_quality_class,
+                quality_info.get('has_contamination', False),
+                primary_class_idx
+            )
+
+            all_predictions = [
+                {
+                    "class": d.get("class", "Unknown"),
+                    "original_class": d.get("original_class", "unknown"),
+                    "confidence": round(float(d.get("confidence", 0)), 2),
+                    "quality_class": d.get("quality_class", "Unknown")
+                }
+                for d in detections[:5]
+            ]
+
+            analysis_id = hashlib.md5(
+                f"{datetime.datetime.now().isoformat()}{primary_confidence}{len(detections)}".encode()
+            ).hexdigest()[:8]
+
+            visualization = None
+            if return_visualization:
+                visualization = self._create_detection_visualization(original_img, detections)
+
+            result = {
                 "success": True,
+                "analysis_id": analysis_id,
                 "timestamp": datetime.datetime.now().isoformat(),
                 "ml_model_used": True,
-                "model_type": "YOLO Detection",
+                "model_info": {
+                    "type": "YOLO OBB Detection" if use_obb else "YOLO Detection",
+                    "model_path": self.model_path,
+                    "model_file": os.path.basename(self.model_path),
+                    "model_size_mb": self.model_metadata.get('file_size_mb', 0),
+                    "num_classes": len(self.class_names),
+                    "task": "obb_detection" if use_obb else "detection",
+                    "detection_count": len(detections)
+                },
                 "latex_analysis": {
                     "primary_classification": {
-                        "class": display_name,
+                        "class": primary.get("class", "Unknown"),
+                        "quality_class": primary_quality_class,
                         "confidence": round(primary_confidence, 2),
+                        "is_confident": primary_confidence >= (self.confidence_threshold * 100),
+                        "characteristics": self.class_info.get(primary_class_idx, {}).get("characteristics", [])
                     },
-                    "detections": len(boxes),
-                    "quality_class": class_details.get("quality_class", "Standard Class")
-                }
+                    "quality_score": round(primary_confidence, 2),
+                    "quality_class": primary_quality_class,
+                    "contamination": {
+                        "detected": quality_info.get('has_contamination', False),
+                        "probability": round(float(quality_info.get('contamination_prob', 0)), 2),
+                        "type": quality_info.get('contamination_type', 'none')
+                    },
+                    "dry_rubber_content": round(drc, 2),
+                    "drc_category": self._categorize_drc(drc),
+                    "color_analysis": visual_analysis.get('color_analysis', {}),
+                    "consistency": visual_analysis.get('consistency', 'unknown'),
+                    "impurities": visual_analysis.get('impurities', {}),
+                    "quantity_estimation": quantity_estimation,
+                    "estimated_yield": self._estimate_yield(estimated_volume_ml, drc),
+                    "detection_count": len(detections),
+                    "detections": detections[:10]
+                },
+                "detections": detections[:10],
+                "all_predictions": all_predictions,
+                "product_recommendations": {
+                    "recommended_products": product_recommendations,
+                    "processing_required": quality_info.get('has_contamination', False),
+                    "suggested_applications": self._get_applications(primary_quality_class, drc)
+                },
+                "market_analysis": market_price
             }
-            
+
+            if visualization:
+                result["visualization"] = visualization
+
+            if isinstance(image_input, str) and os.path.exists(image_input):
+                image_stats = os.stat(image_input)
+                result["image_metadata"] = {
+                    "filename": os.path.basename(image_input),
+                    "file_size_kb": round(image_stats.st_size / 1024, 1),
+                    "analyzed_at": result["timestamp"]
+                }
+
+            return result
+
         except Exception as e:
             logger.error(f"Detection processing failed: {e}")
-            return self._heuristic_analysis(original_img, return_visualization)
+            logger.debug(traceback.format_exc())
+            return {
+                "success": False,
+                "error": f"Latex detection result processing failed: {str(e)}",
+                "timestamp": datetime.datetime.now().isoformat(),
+                "ml_model_used": True
+            }
     
     def _determine_quality_from_model(self, class_idx: int, confidence: float) -> Dict[str, Any]:
         """Determine quality based on model classification"""
@@ -1118,6 +1322,77 @@ class RubberTreeLatexAnalyzer:
             base_recs[0]["characteristics"] = class_info["characteristics"]
         
         return base_recs
+
+    def _create_detection_visualization(self, img: np.ndarray, detections: List[Dict[str, Any]]) -> Optional[str]:
+        """Create visualization with detection boxes/polygons and labels."""
+        try:
+            vis_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            h, w = vis_img.shape[:2]
+
+            # Compact top bar with detection summary.
+            overlay = vis_img.copy()
+            cv2.rectangle(overlay, (10, 10), (min(520, w - 10), 70), (0, 0, 0), -1)
+            cv2.addWeighted(overlay, 0.6, vis_img, 0.4, 0, vis_img)
+            cv2.putText(
+                vis_img,
+                f"Latex Detections: {len(detections)}",
+                (20, 35),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2
+            )
+
+            for det in detections[:10]:
+                bbox = det.get('bbox')
+                if not bbox or len(bbox) != 4:
+                    continue
+
+                x1, y1, x2, y2 = [int(v) for v in bbox]
+                confidence = float(det.get('confidence', 0))
+                class_name = det.get('class', 'Latex')
+                quality_class = str(det.get('quality_class', '')).lower()
+
+                if 'high' in quality_class:
+                    color = (34, 197, 94)
+                elif 'low' in quality_class:
+                    color = (60, 76, 231)
+                else:
+                    color = (59, 130, 246)
+
+                polygon = det.get('obb_polygon')
+                if polygon:
+                    pts = np.array(polygon, dtype=np.int32).reshape((-1, 1, 2))
+                    cv2.polylines(vis_img, [pts], True, color, 2)
+                else:
+                    cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
+
+                label = f"{class_name} {confidence:.1f}%"
+                (text_w, text_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+                text_top = max(16, y1 - text_h - 8)
+                cv2.rectangle(
+                    vis_img,
+                    (x1, text_top),
+                    (min(w - 5, x1 + text_w + 10), text_top + text_h + 8),
+                    color,
+                    -1
+                )
+                cv2.putText(
+                    vis_img,
+                    label,
+                    (x1 + 5, text_top + text_h + 1),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (255, 255, 255),
+                    1
+                )
+
+            _, buffer = cv2.imencode('.jpg', vis_img, [cv2.IMWRITE_JPEG_QUALITY, 92])
+            return base64.b64encode(buffer).decode('utf-8')
+
+        except Exception as e:
+            logger.error(f"Detection visualization failed: {e}")
+            return None
     
     def _create_enhanced_visualization(self, 
                                       img: np.ndarray, 
@@ -1288,7 +1563,7 @@ class RubberTreeLatexAnalyzer:
             },
             "market_analysis": price,
             "visualization": visualization,
-            "note": "Heuristic analysis - ML model unavailable. Please ensure Latex.pt is in RubberSense/backend/ML-Models/"
+            "note": "Heuristic analysis fallback used (low-confidence/no-detection or model processing fallback)."
         }
     
     def get_model_info(self) -> Dict[str, Any]:
@@ -1317,7 +1592,7 @@ class RubberTreeLatexAnalyzer:
                 "model_path": self.model_path,
                 "model_exists": os.path.exists(self.model_path),
                 "error": "Model not loaded",
-                "suggestion": "Ensure Latex.pt is in the correct path: RubberSense/backend/ML-Models/Latex.pt"
+                "suggestion": "Ensure Latex-v2.pt (or Latex.pt) is in RubberSense/backend/ML-models/"
             }
     
     def batch_analyze(self, image_paths: List[str], **kwargs) -> List[Dict[str, Any]]:
@@ -1354,14 +1629,54 @@ def main():
             }
         }, indent=2))
         return
-    
-    image_input = sys.argv[1]
-    output_format = sys.argv[2] if len(sys.argv) > 2 else "json"
-    region = sys.argv[3] if len(sys.argv) > 3 else "global_avg"
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("image_path", nargs="?", default=None)
+    parser.add_argument("output_format", nargs="?", default="json")
+    parser.add_argument("legacy_region", nargs="?", default=None)
+    parser.add_argument("--model", dest="model_path", default=None)
+    parser.add_argument("--region", dest="region", default=None)
+    parser.add_argument("--format", dest="format_arg", default=None)
+    parser.add_argument("--visualize", action="store_true")
+    parser.add_argument("--no-visualize", action="store_true")
+    parser.add_argument("--info", action="store_true")
+    parser.add_argument("--help", action="store_true")
+    args, _ = parser.parse_known_args(sys.argv[1:])
+
+    if args.help:
+        print(json.dumps({
+            "success": True,
+            "usage": {
+                "legacy": "python latex_inference.py <image_path> [json|pretty] [region]",
+                "recommended": "python latex_inference.py <image_path> --model <path> --region <region> [--visualize]",
+                "flags": ["--model", "--region", "--format", "--visualize", "--no-visualize", "--info"]
+            }
+        }))
+        return
+
+    output_format = args.format_arg or args.output_format or "json"
+    region = args.region or args.legacy_region or "global_avg"
+    return_visualization = args.visualize and not args.no_visualize
+
+    if args.info:
+        analyzer = RubberTreeLatexAnalyzer(model_path=args.model_path)
+        print(json.dumps({
+            "success": True,
+            "model_info": analyzer.get_model_info()
+        }))
+        return
+
+    image_input = args.image_path
+    if not image_input:
+        print(json.dumps({
+            "success": False,
+            "error": "Missing image path"
+        }))
+        return
     
     try:
         # Initialize analyzer with model from RubberSense structure
-        analyzer = RubberTreeLatexAnalyzer()
+        analyzer = RubberTreeLatexAnalyzer(model_path=args.model_path)
         
         # Check if model exists
         model_info = analyzer.get_model_info()
@@ -1371,7 +1686,7 @@ def main():
         # Analyze image
         result = analyzer.analyze_latex(
             image_input, 
-            return_visualization=True,
+            return_visualization=return_visualization,
             region=region
         )
         

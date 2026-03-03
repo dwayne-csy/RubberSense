@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Rubber Tree Leaf Disease Detection System
-Uses trained YOLO model (Leaf.pt) for accurate leaf disease classification
+Uses trained YOLO model (leaf-v2.pt) for accurate leaf disease classification
 """
 
 import os
@@ -36,7 +36,7 @@ except ImportError as e:
 class RubberTreeLeafAnalyzer:
     """
     Main analyzer class for rubber tree leaf disease detection
-    Uses trained Leaf.pt model for accurate classification
+    Uses trained leaf-v2.pt model for accurate classification
     """
     
     def __init__(self, model_path=None):
@@ -44,13 +44,15 @@ class RubberTreeLeafAnalyzer:
         Initialize the leaf analyzer with trained model
         
         Args:
-            model_path: Path to the trained Leaf.pt model
+            model_path: Path to the trained leaf model (.pt)
         """
         self.model = None
         self.model_path = model_path or self._get_default_model_path()
         self.class_names = []
         self.health_status = "unknown"
         self.confidence_threshold = 0.35  # Minimum confidence for reliable detection
+        self.inference_conf = float(os.getenv('LEAF_MODEL_CONF', '0.10'))
+        self.inference_iou = float(os.getenv('LEAF_MODEL_IOU', '0.70'))
         
         # Load model on initialization
         self._load_model()
@@ -59,7 +61,42 @@ class RubberTreeLeafAnalyzer:
     def _get_default_model_path(self):
         """Get the default model path based on file location"""
         current_dir = Path(__file__).parent.absolute()
-        return str(current_dir / "Leaf.pt")
+        candidates = [
+            current_dir / "leaf-v2.pt",
+            current_dir / "Leaf-v2.pt",
+            current_dir / "Leaf-obb.pt",
+            current_dir / "Leaf-detect.pt",
+            current_dir / "leaf.pt",
+            current_dir / "Leaf.pt",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
+        return str(current_dir / "leaf-v2.pt")
+
+    def _model_task(self):
+        """Return model task if available (classify/detect/obb/segment...)."""
+        task = getattr(self.model, 'task', None)
+        if task:
+            return str(task).lower()
+        model_obj = getattr(self.model, 'model', None)
+        inner_task = getattr(model_obj, 'task', None)
+        return str(inner_task).lower() if inner_task else 'unknown'
+
+    def _get_class_name(self, class_id):
+        """Safely map class index to class name for dict/list class maps."""
+        try:
+            idx = int(class_id)
+        except Exception:
+            return str(class_id)
+
+        if isinstance(self.class_names, dict):
+            return self.class_names.get(idx, f"class_{idx}")
+        if isinstance(self.class_names, (list, tuple)):
+            if 0 <= idx < len(self.class_names):
+                return self.class_names[idx]
+            return f"class_{idx}"
+        return f"class_{idx}"
     
     def _load_model(self):
         """Load the YOLO model"""
@@ -220,7 +257,16 @@ class RubberTreeLeafAnalyzer:
             logger.info("🔬 Running inference on leaf image...")
             
             # Run inference
-            results = self.model(img, verbose=False)
+            model_task = self._model_task()
+            if model_task == 'classify':
+                results = self.model(img, verbose=False)
+            else:
+                results = self.model(
+                    img,
+                    conf=self.inference_conf,
+                    iou=self.inference_iou,
+                    verbose=False
+                )
             
             # Process results based on model type
             if hasattr(results[0], 'probs') and results[0].probs is not None:
@@ -229,7 +275,7 @@ class RubberTreeLeafAnalyzer:
                 return self._process_classification_results(results, img, return_visualization)
             else:
                 # Detection model (fallback)
-                logger.info("📊 Processing detection results")
+                logger.info("📊 Processing detection/OBB results")
                 return self._process_detection_results(results, img, return_visualization)
                 
         except Exception as e:
@@ -251,7 +297,7 @@ class RubberTreeLeafAnalyzer:
             
             # Primary prediction
             primary_class_idx = probs.top1
-            primary_class_name = self.class_names.get(primary_class_idx, f"class_{primary_class_idx}")
+            primary_class_name = self._get_class_name(primary_class_idx)
             # Clean class name for display
             display_name = primary_class_name.replace('_', ' ').title()
             primary_confidence = float(probs.top1conf) * 100
@@ -261,10 +307,10 @@ class RubberTreeLeafAnalyzer:
             # Get all predictions for detailed analysis
             all_predictions = []
             for idx, conf in zip(top5_indices, top5_confidences):
-                class_name = self.class_names.get(int(idx), f"class_{idx}")
-                display_name = class_name.replace('_', ' ').title()
+                class_name = self._get_class_name(int(idx))
+                pred_display_name = class_name.replace('_', ' ').title()
                 all_predictions.append({
-                    "class": display_name,
+                    "class": pred_display_name,
                     "original_class": class_name,
                     "confidence": float(conf) * 100,
                     "index": int(idx)
@@ -306,7 +352,9 @@ class RubberTreeLeafAnalyzer:
                 "model_info": {
                     "type": "classification",
                     "classes": len(self.class_names),
-                    "model_path": self.model_path
+                    "model_path": self.model_path,
+                    "model_file": os.path.basename(self.model_path),
+                    "task": self._model_task()
                 }
             }
             
@@ -320,72 +368,108 @@ class RubberTreeLeafAnalyzer:
             return self._heuristic_analysis(original_img, return_visualization)
     
     def _process_detection_results(self, results, original_img, return_visualization):
-        """Process detection model results (if using object detection)"""
+        """Process detection model results (regular boxes or OBB)."""
         try:
-            boxes = results[0].boxes
-            
+            result0 = results[0]
+            obb = getattr(result0, 'obb', None)
+            boxes = getattr(result0, 'boxes', None)
+            use_obb = obb is not None
+            det_obj = obb if use_obb else boxes
+
             detections = []
-            if boxes is not None and len(boxes) > 0:
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    conf = float(box.conf[0])
-                    cls_id = int(box.cls[0])
-                    class_name = self.class_names.get(cls_id, f"class_{cls_id}")
-                    display_name = class_name.replace('_', ' ').title()
-                    
-                    detections.append({
+            if det_obj is not None and len(det_obj) > 0:
+                for i in range(len(det_obj)):
+                    conf = float(det_obj.conf[i])
+                    cls_id = int(det_obj.cls[i])
+                    class_name = self._get_class_name(cls_id)
+                    display_name = str(class_name).replace('_', ' ').replace('-', ' ').title()
+                    polygon = None
+
+                    if use_obb and hasattr(det_obj, 'xyxyxyxy'):
+                        polygon = det_obj.xyxyxyxy[i].tolist()
+                        xs = [float(pt[0]) for pt in polygon]
+                        ys = [float(pt[1]) for pt in polygon]
+                        x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
+                    else:
+                        x1, y1, x2, y2 = det_obj.xyxy[i].tolist()
+
+                    row = {
                         "class": display_name,
                         "original_class": class_name,
                         "confidence": conf * 100,
                         "bbox": [int(x1), int(y1), int(x2), int(y2)]
-                    })
-            
+                    }
+                    if polygon is not None:
+                        row["obb_polygon"] = [[round(float(x), 2), round(float(y), 2)] for x, y in polygon]
+                    detections.append(row)
+
+            detections.sort(key=lambda d: d.get("confidence", 0), reverse=True)
+
             # Determine primary detection
             primary_detection = detections[0] if detections else {
-                "class": "Unknown",
-                "original_class": "unknown",
+                "class": "No Detection",
+                "original_class": "no_detection",
                 "confidence": 0,
                 "bbox": None
             }
-            
+
             # Visual analysis
             visual_analysis = self._analyze_visual_features(original_img)
-            
-            # Determine severity
+
+            # Determine health + severity
+            original_class_lower = str(primary_detection.get("original_class", "unknown")).lower()
+            is_healthy = any(token in original_class_lower for token in ["healthy", "normal", "no_detection"])
             severity = self._determine_severity(
-                primary_detection.get("original_class", "unknown"), 
+                primary_detection.get("original_class", "unknown"),
                 primary_detection.get("confidence", 0)
             )
-            
+
             # Create visualization
             visualization = None
-            if return_visualization and detections:
+            if return_visualization:
                 visualization = self._create_detection_visualization(original_img, detections)
-            
+
             result = {
                 "success": True,
                 "disease_detection": {
                     "primary_disease": primary_detection["class"],
                     "original_class": primary_detection["original_class"],
                     "confidence": round(primary_detection["confidence"], 2),
-                    "health_status": "diseased" if primary_detection["original_class"] != "healthy" else "healthy",
+                    "health_status": "healthy" if is_healthy else "diseased",
                     "severity": severity,
                     "detections": detections,
+                    "all_predictions": [
+                        {
+                            "class": d.get("class", "Unknown"),
+                            "original_class": d.get("original_class", "unknown"),
+                            "confidence": round(float(d.get("confidence", 0)), 2)
+                        }
+                        for d in detections[:5]
+                    ],
                     "detection_count": len(detections),
                     "is_confident": primary_detection["confidence"] >= (self.confidence_threshold * 100)
                 },
-                "visual_analysis": visual_analysis
+                "visual_analysis": visual_analysis,
+                "model_info": {
+                    "type": "obb_detection" if use_obb else "detection",
+                    "classes": len(self.class_names),
+                    "model_path": self.model_path,
+                    "model_file": os.path.basename(self.model_path),
+                    "task": self._model_task(),
+                    "detection_count": len(detections),
+                    "inference_conf": self.inference_conf,
+                    "inference_iou": self.inference_iou
+                }
             }
-            
+
             if visualization:
                 result["visualization"] = visualization
-                
+
             return result
-            
+
         except Exception as e:
-            logger.error(f"❌ Detection processing failed: {e}")
+            logger.error(f"? Detection processing failed: {e}")
             return self._heuristic_analysis(original_img, return_visualization)
-    
     def _heuristic_analysis(self, img, return_visualization):
         """Fallback heuristic analysis when model fails"""
         logger.info("🔧 Running heuristic analysis...")
@@ -709,9 +793,13 @@ class RubberTreeLeafAnalyzer:
                 if det.get('bbox'):
                     x1, y1, x2, y2 = det['bbox']
                     color = (0, 255, 0) if 'healthy' in det['original_class'].lower() else (0, 0, 255)
-                    
-                    # Draw box
-                    cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
+
+                    # Draw polygon for OBB when present, otherwise axis-aligned rectangle.
+                    if det.get('obb_polygon'):
+                        pts = np.array(det['obb_polygon'], dtype=np.int32).reshape((-1, 1, 2))
+                        cv2.polylines(vis_img, [pts], True, color, 2)
+                    else:
+                        cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
                     
                     # Label background
                     label = f"{det['class']} ({det['confidence']:.1f}%)"
@@ -733,12 +821,20 @@ class RubberTreeLeafAnalyzer:
     def get_model_info(self):
         """Get information about the loaded model"""
         if self.model:
+            model_task = self._model_task()
+            class_values = (
+                list(self.class_names.values())
+                if isinstance(self.class_names, dict)
+                else list(self.class_names or [])
+            )
             return {
                 "loaded": True,
                 "model_path": self.model_path,
-                "classes": list(self.class_names.values()) if self.class_names else [],
+                "model_file": os.path.basename(self.model_path),
+                "classes": class_values,
                 "num_classes": len(self.class_names),
-                "type": "classification" if hasattr(self.model, 'names') else "detection"
+                "task": model_task,
+                "type": "classification" if model_task == "classify" else ("obb_detection" if model_task == "obb" else "detection")
             }
         else:
             return {
@@ -757,16 +853,16 @@ def main():
     if len(sys.argv) < 2:
         print(json.dumps({
             "success": False,
-            "error": "Missing arguments. Usage: python leaf_inference.py <image_path> [output_format]"
+            "error": "Missing arguments. Usage: python leaf_inference.py <image_path> [output_format] [model_path]"
         }))
         return
     
     image_input = sys.argv[1]
     output_format = sys.argv[2] if len(sys.argv) > 2 else "json"
+    model_path = sys.argv[3] if len(sys.argv) > 3 else None
     
     try:
-        # Initialize analyzer with model from same directory
-        model_path = os.path.join(os.path.dirname(__file__), "Leaf.pt")
+        # Initialize analyzer with explicit or default model path
         analyzer = RubberTreeLeafAnalyzer(model_path)
         
         # Analyze image
@@ -790,3 +886,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

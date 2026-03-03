@@ -4,6 +4,152 @@ import { useNavigate } from 'react-router-dom';
 import UserHeader from '../layouts/UserHeader';
 import UserFooter from '../layouts/UserFooter';
 
+// ── SVG Icon Components ──────────────────────────────────────────────────────
+
+const IconSun = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+    <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+    <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+);
+
+const IconCloudSun = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41"/>
+    <path d="M17 12a5 5 0 1 0-9.9-1H6a3 3 0 0 0 0 6h11a3 3 0 0 0 0-6z"/>
+  </svg>
+);
+
+const IconCloud = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+  </svg>
+);
+
+const IconCloudRain = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/>
+    <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>
+  </svg>
+);
+
+const IconSnowflake = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+    <path d="M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/>
+  </svg>
+);
+
+const IconZap = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
+
+const IconFog = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+    <line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="17" x2="21" y2="17"/>
+  </svg>
+);
+
+const IconPin = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+    <circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+
+const IconTree = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22v-7"/><path d="M12 15L4 8h16z"/><path d="M12 10L6 4h12z"/>
+  </svg>
+);
+
+const IconThermometer = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+  </svg>
+);
+
+const IconDroplets = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/>
+    <path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>
+  </svg>
+);
+
+const IconWind = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
+  </svg>
+);
+
+const IconCalendar = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+
+const IconClock = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const IconAlertTriangle = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
+const IconX = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const IconFactory = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+    <path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/>
+  </svg>
+);
+
+const IconArrowRight = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+  </svg>
+);
+
+const IconArrowDown = ({ size = 12, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+  </svg>
+);
+
+// Map emoji icon strings -> SVG components
+const WeatherIconFromEmoji = ({ icon, size = 20, color = 'currentColor' }) => {
+  const map = {
+    '☀️': <IconSun size={size} color={color} />,
+    '🌤️': <IconCloudSun size={size} color={color} />,
+    '⛅': <IconCloudSun size={size} color={color} />,
+    '☁️': <IconCloud size={size} color={color} />,
+    '🌫️': <IconFog size={size} color={color} />,
+    '🌧️': <IconCloudRain size={size} color={color} />,
+    '🌨️': <IconSnowflake size={size} color={color} />,
+    '⛈️': <IconZap size={size} color={color} />,
+  };
+  return map[icon] || <IconCloudSun size={size} color={color} />;
+};
+
+// ── Component ────────────────────────────────────────────────────────────────
+
 const Weather = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -143,7 +289,8 @@ const Weather = () => {
         icon: dayWeather.icon,
         condition: dayWeather.condition,
         low: dailyData[i].temp_min,
-        color: dayWeather.color
+        color: dayWeather.color,
+        weather_code: dayCode
       });
     }
     return forecastData;
@@ -364,28 +511,25 @@ const Weather = () => {
   };
 
   const getPlantationTypeIcon = (type) => {
-    switch(type) {
-      case 'large': return '🌳';
-      case 'medium': return '🌳';
-      case 'small': return '🌳';
-      default: return '🌳';
-    }
+    const colors = { large: '#4CAF50', medium: '#FFC107', small: '#F44336' };
+    return <IconTree size={16} color={colors[type] || '#666'} />;
   };
 
   if (loading) {
     return (
       <div style={{
-        minHeight: '100vh', background: '#ffffff',
+        minHeight: '100vh', background: '#f2f7f2',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'Lora', Georgia, serif"
+        fontFamily: "'DM Sans', sans-serif"
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '56px', height: '56px', border: '3px solid #e8f5e9',
-            borderTop: '3px solid #2e7d32', borderRadius: '50%',
-            animation: 'spin 1s linear infinite', margin: '0 auto 20px'
-          }} />
-          <p style={{ color: '#2e7d32', fontWeight: '600', fontSize: '1rem', letterSpacing: '0.05em' }}>
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" style={{ margin: '0 auto 20px', display: 'block' }}>
+            <circle cx="28" cy="28" r="24" stroke="#d1ead1" strokeWidth="3"/>
+            <path d="M28 4a24 24 0 0 1 24 24" stroke="#2e7d32" strokeWidth="3" strokeLinecap="round">
+              <animateTransform attributeName="transform" type="rotate" from="0 28 28" to="360 28 28" dur="0.9s" repeatCount="indefinite"/>
+            </path>
+          </svg>
+          <p style={{ color: '#2e7d32', fontWeight: '600', fontSize: '1rem', letterSpacing: '0.05em', margin: 0 }}>
             Loading Weather Dashboard...
           </p>
         </div>
@@ -402,392 +546,266 @@ const Weather = () => {
       <UserHeader />
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
-        
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
+
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes shimmer {
-          0% { background-position: -200% 0; }
-          100% { background-position: 200% 0; }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInOut {
+          0%   { opacity: 0; transform: translateY(8px); }
+          15%  { opacity: 1; transform: translateY(0); }
+          85%  { opacity: 1; }
+          100% { opacity: 0; }
         }
 
-        .weather-page { font-family: 'DM Sans', sans-serif; background: #ffffff; min-height: 100vh; }
-        
-        .stat-card {
-          background: #ffffff;
-          border: 1px solid #e8f5e9;
-          border-radius: 16px;
-          padding: 24px 20px;
-          display: flex; flex-direction: column; align-items: flex-start;
-          transition: all 0.25s ease;
-          box-shadow: 0 1px 4px rgba(46,125,50,0.06);
-          animation: fadeIn 0.4s ease both;
-        }
-        .stat-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 24px rgba(46,125,50,0.1);
-          border-color: #a5d6a7;
-        }
-
-        .plantation-item {
-          background: #ffffff;
-          border: 1px solid #f0f0f0;
-          border-radius: 12px;
-          padding: 14px 16px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          margin-bottom: 8px;
-          display: flex; align-items: center; justify-content: space-between;
-        }
-        .plantation-item:hover {
-          border-color: #a5d6a7;
-          background: #f9fdf9;
-          transform: translateX(2px);
-          box-shadow: 0 2px 8px rgba(46,125,50,0.08);
-        }
-        .plantation-item.selected {
-          border-color: #2e7d32;
-          background: #f1f8e9;
-          box-shadow: 0 2px 12px rgba(46,125,50,0.12);
-        }
-
-        .forecast-card {
-          background: #ffffff;
-          border: 1px solid #e8f5e9;
-          border-radius: 14px;
-          padding: 16px 12px;
-          text-align: center;
-          transition: all 0.2s ease;
-          flex: 1;
-        }
-        .forecast-card:hover {
-          border-color: #81c784;
-          transform: translateY(-4px);
-          box-shadow: 0 6px 20px rgba(46,125,50,0.1);
-        }
-
-        .my-location-btn {
-          background: #2e7d32;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 10px;
+        .rs-weather-page {
           font-family: 'DM Sans', sans-serif;
-          font-size: 0.875rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex; align-items: center; gap: 6px;
-          letter-spacing: 0.01em;
-          white-space: nowrap;
-        }
-        .my-location-btn:hover {
-          background: #1b5e20;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(46,125,50,0.25);
+          background: #f2f7f2;
+          min-height: 100vh;
+          padding-top: 64px;
         }
 
-        .type-select {
-          background: #f9fdf9;
-          color: #2e7d32;
-          border: 1.5px solid #c8e6c9;
-          padding: 10px 16px;
-          border-radius: 10px;
-          font-family: 'DM Sans', sans-serif;
-          font-size: 0.875rem;
-          cursor: pointer;
-          outline: none;
-          font-weight: 500;
-          transition: border-color 0.2s;
+        .rs-stat-card {
+          border-radius: 20px; padding: 26px 22px;
+          display: flex; flex-direction: column;
+          position: relative; overflow: hidden;
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+          animation: fadeUp 0.5s ease both;
         }
-        .type-select:hover, .type-select:focus { border-color: #2e7d32; }
+        .rs-stat-card:hover { transform: translateY(-5px); }
+        .rs-stat-card .deco-a { position: absolute; top: -20px; right: -20px; width: 88px; height: 88px; background: rgba(255,255,255,0.1); border-radius: 50%; }
+        .rs-stat-card .deco-b { position: absolute; bottom: -24px; left: -8px; width: 64px; height: 64px; background: rgba(255,255,255,0.06); border-radius: 50%; }
+        .rs-stat-card .icon-box { background: rgba(255,255,255,0.18); border-radius: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+        .rs-stat-card .badge-pill { background: rgba(255,255,255,0.22); color: #fff; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; }
+        .rs-stat-card .big-num { font-family: 'Playfair Display', Georgia, serif; font-size: 3.2rem; font-weight: 700; color: #fff; line-height: 1; position: relative; margin-top: 14px; }
+        .rs-stat-card .sub-label { color: rgba(255,255,255,0.72); font-size: 0.78rem; font-weight: 500; margin-top: 5px; position: relative; }
 
-        .weather-detail-chip {
-          background: #f9fdf9;
-          border: 1px solid #e8f5e9;
-          border-radius: 12px;
-          padding: 14px 18px;
-          display: flex; flex-direction: column; align-items: center;
-          gap: 4px;
-          flex: 1;
-        }
+        .rs-panel { background: #fff; border: 1px solid #ddeedd; border-radius: 22px; overflow: hidden; box-shadow: 0 2px 16px rgba(46,125,50,0.07); animation: fadeUp 0.5s ease 0.08s both; }
+        .rs-panel-header { padding: 18px 24px; border-bottom: 1px solid #eef6ee; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: #fafcfa; }
 
-        .loading-indicator {
-          width: 18px; height: 18px;
-          border: 2px solid #e8f5e9;
-          border-top-color: #2e7d32;
-          border-radius: 50%;
-          animation: spin 0.8s linear infinite;
-        }
+        .rs-weather-hero { background: linear-gradient(135deg, #1a4d1e 0%, #2e7d32 45%, #388e3c 100%); border-radius: 18px; padding: 28px 28px 26px; position: relative; overflow: hidden; margin-bottom: 22px; }
+        .rs-weather-hero .hero-deco-a { position: absolute; top: -36px; right: -36px; width: 160px; height: 160px; background: rgba(255,255,255,0.05); border-radius: 50%; }
+        .rs-weather-hero .hero-deco-b { position: absolute; bottom: -24px; left: 30%; width: 110px; height: 110px; background: rgba(255,255,255,0.04); border-radius: 50%; }
 
-        .section-title {
-          font-family: 'Lora', Georgia, serif;
-          font-weight: 600;
-          color: #1b3a1d;
-          font-size: 1.05rem;
-          letter-spacing: -0.01em;
-        }
+        .rs-chip { background: #f4fbf4; border: 1px solid #ddeedd; border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; transition: border-color 0.2s, background 0.2s; }
+        .rs-chip:hover { background: #eaf6ea; border-color: #a5d6a7; }
 
-        .badge {
-          font-size: 0.65rem;
-          font-weight: 700;
-          letter-spacing: 0.08em;
-          padding: 3px 8px;
-          border-radius: 20px;
-          text-transform: uppercase;
-        }
+        .rs-forecast-card { background: #f4fbf4; border: 1px solid #ddeedd; border-radius: 14px; padding: 14px 10px; text-align: center; flex: 1; transition: all 0.2s ease; cursor: default; }
+        .rs-forecast-card:hover { background: #1a4d1e; border-color: #1a4d1e; transform: translateY(-5px); box-shadow: 0 8px 24px rgba(26,77,30,0.2); }
+        .rs-forecast-card:hover .fc-day,
+        .rs-forecast-card:hover .fc-temp,
+        .rs-forecast-card:hover .fc-cond,
+        .rs-forecast-card:hover .fc-low { color: rgba(255,255,255,0.85) !important; }
+        .rs-forecast-card:hover .fc-temp { color: #ffffff !important; }
 
-        .divider { height: 1px; background: linear-gradient(90deg, transparent, #e8f5e9, transparent); margin: 4px 0; }
+        .rs-plantation-item { background: #fff; border: 1px solid #eef0ee; border-radius: 12px; padding: 12px 14px; cursor: pointer; transition: all 0.2s ease; margin-bottom: 7px; display: flex; align-items: center; justify-content: space-between; }
+        .rs-plantation-item:hover { border-color: #a5d6a7; background: #f5fbf5; transform: translateX(3px); box-shadow: 0 2px 10px rgba(46,125,50,0.09); }
+        .rs-plantation-item.selected { border-color: #2e7d32; background: #f0f9f0; box-shadow: 0 2px 14px rgba(46,125,50,0.13); }
+
+        .rs-my-loc-btn { background: linear-gradient(135deg, #2e7d32, #388e3c); color: white; border: none; padding: 9px 18px; border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 7px; letter-spacing: 0.01em; white-space: nowrap; box-shadow: 0 2px 8px rgba(46,125,50,0.22); }
+        .rs-my-loc-btn:hover { background: linear-gradient(135deg, #1b5e20, #2e7d32); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(46,125,50,0.32); }
+
+        .rs-type-select { background: #f5fbf5; color: #2e7d32; border: 1.5px solid #c8e6c9; padding: 9px 34px 9px 14px; border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 0.84rem; cursor: pointer; outline: none; font-weight: 500; transition: border-color 0.2s; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%232e7d32' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+        .rs-type-select:hover, .rs-type-select:focus { border-color: #2e7d32; }
+
+        .rs-spinner { width: 17px; height: 17px; border: 2px solid #d1ead1; border-top-color: #2e7d32; border-radius: 50%; animation: spin 0.75s linear infinite; flex-shrink: 0; }
+
+        .rs-section-label { font-family: 'Playfair Display', Georgia, serif; font-weight: 600; color: #1a3d1e; font-size: 1rem; letter-spacing: -0.01em; }
+
+        .rs-badge { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; }
+
+        .rs-datetime-bar { display: flex; align-items: center; gap: 18px; padding: 13px 18px; background: #f5fbf5; border-radius: 12px; border: 1px solid #ddeedd; margin-bottom: 20px; }
+
+        .rs-sidebar { background: #fff; border: 1px solid #ddeedd; border-radius: 22px; overflow: hidden; box-shadow: 0 2px 16px rgba(46,125,50,0.07); animation: fadeUp 0.5s ease 0.14s both; }
+        .rs-sidebar-header { padding: 17px 20px; border-bottom: 1px solid #eef6ee; display: flex; align-items: center; justify-content: space-between; background: #fafcfa; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #f0f7f0; }
+        ::-webkit-scrollbar-thumb { background: #a5d6a7; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2e7d32; }
       `}</style>
 
-      <div className="weather-page">
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 20px 48px' }}>
+      <div className="rs-weather-page">
+        <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '36px 24px 56px' }}>
 
-          {/* Page Header */}
-          <div style={{ marginBottom: '32px', animation: 'fadeIn 0.5s ease' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+          {/* ── Page Header ── */}
+          <div style={{ marginBottom: '36px', animation: 'fadeUp 0.4s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
               <div style={{
-                width: '40px', height: '40px', background: 'linear-gradient(135deg, #e8f5e9, #c8e6c9)',
-                borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.25rem', border: '1px solid #a5d6a7'
-              }}>🌤️</div>
-              <h1 style={{
-                fontFamily: 'Lora, Georgia, serif', fontSize: '1.75rem', fontWeight: '700',
-                color: '#1b3a1d', margin: 0, letterSpacing: '-0.02em'
-              }}>RubberSense Weather</h1>
-            </div>
-            <p style={{ color: '#5a7b5e', margin: 0, fontSize: '0.95rem', paddingLeft: '52px' }}>
-              Monitor weather conditions for optimal rubber tree cultivation.
-            </p>
-          </div>
-
-          {/* Stats Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
-            {/* Large - Green */}
-            <div style={{
-              background: 'linear-gradient(135deg, #2e7d32 0%, #388e3c 60%, #43a047 100%)',
-              borderRadius: '18px', padding: '24px 22px',
-              display: 'flex', flexDirection: 'column',
-              boxShadow: '0 4px 20px rgba(46,125,50,0.25)',
-              animation: 'fadeIn 0.4s ease 0.05s both',
-              position: 'relative', overflow: 'hidden',
-              transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.boxShadow='0 10px 30px rgba(46,125,50,0.35)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 4px 20px rgba(46,125,50,0.25)'; }}
-            >
-              <div style={{ position:'absolute', top:'-18px', right:'-18px', width:'90px', height:'90px', background:'rgba(255,255,255,0.08)', borderRadius:'50%' }} />
-              <div style={{ position:'absolute', bottom:'-24px', left:'-10px', width:'70px', height:'70px', background:'rgba(255,255,255,0.05)', borderRadius:'50%' }} />
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', position:'relative' }}>
-                <div style={{ background:'rgba(255,255,255,0.2)', borderRadius:'10px', width:'40px', height:'40px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.3rem' }}>🌳</div>
-                <span style={{ background:'rgba(255,255,255,0.25)', color:'#fff', fontSize:'0.62rem', fontWeight:'700', letterSpacing:'0.1em', padding:'3px 10px', borderRadius:'20px', textTransform:'uppercase' }}>Large</span>
+                width: '44px', height: '44px',
+                background: 'linear-gradient(135deg, #e8f5e9, #c8e6c9)',
+                borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '1px solid #a5d6a7', boxShadow: '0 2px 8px rgba(46,125,50,0.12)', flexShrink: 0
+              }}>
+                <IconCloudSun size={22} color="#2e7d32" />
               </div>
-              <div style={{ fontFamily:'Lora, Georgia, serif', fontSize:'3rem', fontWeight:'700', color:'#ffffff', lineHeight:1, position:'relative' }}>{stats.largeCount}</div>
-              <div style={{ color:'rgba(255,255,255,0.75)', fontSize:'0.8rem', marginTop:'6px', fontWeight:'500', position:'relative' }}>Plantation Sites</div>
-            </div>
-
-            {/* Medium - Yellow/Amber */}
-            <div style={{
-              background: 'linear-gradient(135deg, #f57f17 0%, #f9a825 60%, #fbc02d 100%)',
-              borderRadius: '18px', padding: '24px 22px',
-              display: 'flex', flexDirection: 'column',
-              boxShadow: '0 4px 20px rgba(245,127,23,0.28)',
-              animation: 'fadeIn 0.4s ease 0.1s both',
-              position: 'relative', overflow: 'hidden',
-              transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.boxShadow='0 10px 30px rgba(245,127,23,0.38)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 4px 20px rgba(245,127,23,0.28)'; }}
-            >
-              <div style={{ position:'absolute', top:'-18px', right:'-18px', width:'90px', height:'90px', background:'rgba(255,255,255,0.08)', borderRadius:'50%' }} />
-              <div style={{ position:'absolute', bottom:'-24px', left:'-10px', width:'70px', height:'70px', background:'rgba(255,255,255,0.05)', borderRadius:'50%' }} />
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', position:'relative' }}>
-                <div style={{ background:'rgba(255,255,255,0.2)', borderRadius:'10px', width:'40px', height:'40px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.3rem' }}>🌳</div>
-                <span style={{ background:'rgba(255,255,255,0.25)', color:'#fff', fontSize:'0.62rem', fontWeight:'700', letterSpacing:'0.1em', padding:'3px 10px', borderRadius:'20px', textTransform:'uppercase' }}>Medium</span>
+              <div>
+                <h1 style={{
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontSize: '1.8rem', fontWeight: '700',
+                  color: '#1a3d1e', margin: 0, letterSpacing: '-0.02em', lineHeight: 1.1
+                }}>RubberSense Weather</h1>
+                <p style={{ color: '#5a7b5e', margin: '4px 0 0', fontSize: '0.9rem' }}>
+                  Monitor weather conditions for optimal rubber tree cultivation.
+                </p>
               </div>
-              <div style={{ fontFamily:'Lora, Georgia, serif', fontSize:'3rem', fontWeight:'700', color:'#ffffff', lineHeight:1, position:'relative' }}>{stats.mediumCount}</div>
-              <div style={{ color:'rgba(255,255,255,0.8)', fontSize:'0.8rem', marginTop:'6px', fontWeight:'500', position:'relative' }}>Plantation Sites</div>
-            </div>
-
-            {/* Small - Red */}
-            <div style={{
-              background: 'linear-gradient(135deg, #c62828 0%, #d32f2f 60%, #e53935 100%)',
-              borderRadius: '18px', padding: '24px 22px',
-              display: 'flex', flexDirection: 'column',
-              boxShadow: '0 4px 20px rgba(198,40,40,0.25)',
-              animation: 'fadeIn 0.4s ease 0.15s both',
-              position: 'relative', overflow: 'hidden',
-              transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.boxShadow='0 10px 30px rgba(198,40,40,0.35)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 4px 20px rgba(198,40,40,0.25)'; }}
-            >
-              <div style={{ position:'absolute', top:'-18px', right:'-18px', width:'90px', height:'90px', background:'rgba(255,255,255,0.08)', borderRadius:'50%' }} />
-              <div style={{ position:'absolute', bottom:'-24px', left:'-10px', width:'70px', height:'70px', background:'rgba(255,255,255,0.05)', borderRadius:'50%' }} />
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', position:'relative' }}>
-                <div style={{ background:'rgba(255,255,255,0.2)', borderRadius:'10px', width:'40px', height:'40px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.3rem' }}>🌳</div>
-                <span style={{ background:'rgba(255,255,255,0.25)', color:'#fff', fontSize:'0.62rem', fontWeight:'700', letterSpacing:'0.1em', padding:'3px 10px', borderRadius:'20px', textTransform:'uppercase' }}>Small</span>
-              </div>
-              <div style={{ fontFamily:'Lora, Georgia, serif', fontSize:'3rem', fontWeight:'700', color:'#ffffff', lineHeight:1, position:'relative' }}>{stats.smallCount}</div>
-              <div style={{ color:'rgba(255,255,255,0.75)', fontSize:'0.8rem', marginTop:'6px', fontWeight:'500', position:'relative' }}>Plantation Sites</div>
             </div>
           </div>
 
-          {/* Main Layout */}
+          {/* ── Stat Cards ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', marginBottom: '28px' }}>
+            {/* Large */}
+            <div className="rs-stat-card" style={{ background: 'linear-gradient(135deg, #2e7d32 0%, #388e3c 60%, #43a047 100%)', boxShadow: '0 4px 20px rgba(46,125,50,0.28)', animationDelay: '0.05s' }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 12px 32px rgba(46,125,50,0.38)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(46,125,50,0.28)'}
+            >
+              <div className="deco-a" /><div className="deco-b" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                <div className="icon-box"><IconTree size={20} color="rgba(255,255,255,0.9)" /></div>
+                <span className="badge-pill">Large</span>
+              </div>
+              <div className="big-num">{stats.largeCount}</div>
+              <div className="sub-label">Plantation Sites</div>
+            </div>
+
+            {/* Medium */}
+            <div className="rs-stat-card" style={{ background: 'linear-gradient(135deg, #f57f17 0%, #f9a825 60%, #fbc02d 100%)', boxShadow: '0 4px 20px rgba(245,127,23,0.28)', animationDelay: '0.1s' }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 12px 32px rgba(245,127,23,0.4)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(245,127,23,0.28)'}
+            >
+              <div className="deco-a" /><div className="deco-b" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                <div className="icon-box"><IconTree size={20} color="rgba(255,255,255,0.9)" /></div>
+                <span className="badge-pill">Medium</span>
+              </div>
+              <div className="big-num">{stats.mediumCount}</div>
+              <div className="sub-label">Plantation Sites</div>
+            </div>
+
+            {/* Small */}
+            <div className="rs-stat-card" style={{ background: 'linear-gradient(135deg, #c62828 0%, #d32f2f 60%, #e53935 100%)', boxShadow: '0 4px 20px rgba(198,40,40,0.25)', animationDelay: '0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 12px 32px rgba(198,40,40,0.38)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(198,40,40,0.25)'}
+            >
+              <div className="deco-a" /><div className="deco-b" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                <div className="icon-box"><IconTree size={20} color="rgba(255,255,255,0.9)" /></div>
+                <span className="badge-pill">Small</span>
+              </div>
+              <div className="big-num">{stats.smallCount}</div>
+              <div className="sub-label">Plantation Sites</div>
+            </div>
+          </div>
+
+          {/* ── Main Layout ── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
 
             {/* Left: Weather Panel */}
-            <div style={{
-              background: '#ffffff',
-              border: '1px solid #e8f5e9',
-              borderRadius: '20px',
-              overflow: 'hidden',
-              boxShadow: '0 2px 12px rgba(46,125,50,0.06)',
-              animation: 'fadeIn 0.5s ease 0.1s both'
-            }}>
-              {/* Panel Header */}
-              <div style={{
-                padding: '20px 24px',
-                borderBottom: '1px solid #f0f7f0',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px'
-              }}>
+            <div className="rs-panel">
+              <div className="rs-panel-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '1.1rem' }}>{viewMode === 'plantation' ? '🏭' : '📍'}</span>
-                  <span className="section-title">
+                  {viewMode === 'plantation'
+                    ? <IconFactory size={18} color="#2e7d32" />
+                    : <IconPin size={18} color="#2e7d32" />}
+                  <span className="rs-section-label">
                     {viewMode === 'plantation' ? `${selectedPlantation?.name || ''}` : 'Your Location Weather'}
                   </span>
                   {weatherLoading && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <div className="loading-indicator" />
-                      <span style={{ fontSize: '0.75rem', color: '#81c784', fontWeight: '500' }}>Loading</span>
+                      <div className="rs-spinner" />
+                      <span style={{ fontSize: '0.74rem', color: '#81c784', fontWeight: '600' }}>Loading</span>
                     </div>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <select
-                    className="type-select"
-                    value={selectedPlantationType}
-                    onChange={(e) => setSelectedPlantationType(e.target.value)}
-                  >
+                  <select className="rs-type-select" value={selectedPlantationType} onChange={(e) => setSelectedPlantationType(e.target.value)}>
                     <option value="all">All Plantations</option>
                     <option value="large">Large Plantations</option>
                     <option value="medium">Medium Plantations</option>
                     <option value="small">Small Plantations</option>
                   </select>
-                  <button className="my-location-btn" onClick={handleMyLocation}>
-                    📍 My Location
+                  <button className="rs-my-loc-btn" onClick={handleMyLocation}>
+                    <IconPin size={14} color="white" /> My Location
                   </button>
                 </div>
               </div>
 
               <div style={{ padding: '24px' }}>
-                {/* Date & Time */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '20px',
-                  padding: '14px 18px',
-                  background: '#f9fdf9', borderRadius: '12px',
-                  border: '1px solid #e8f5e9', marginBottom: '20px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.9rem' }}></span>
-                    <span style={{ color: '#3a6b3e', fontSize: '0.875rem', fontWeight: '500' }}>{currentDate}</span>
+                {/* Date/Time */}
+                <div className="rs-datetime-bar">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <IconCalendar size={14} color="#5a7b5e" />
+                    <span style={{ color: '#3a6b3e', fontSize: '0.85rem', fontWeight: '500' }}>{currentDate}</span>
                   </div>
-                  <div style={{ width: '1px', height: '18px', background: '#c8e6c9' }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.9rem' }}></span>
-                    <span style={{ color: '#3a6b3e', fontSize: '0.875rem', fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>{currentTime}</span>
+                  <div style={{ width: '1px', height: '16px', background: '#c8e6c9', flexShrink: 0 }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                    <IconClock size={14} color="#5a7b5e" />
+                    <span style={{ color: '#3a6b3e', fontSize: '0.85rem', fontWeight: '600', fontVariantNumeric: 'tabular-nums' }}>{currentTime}</span>
                   </div>
                 </div>
 
                 {/* Location Error */}
                 {locationError && (
-                  <div style={{
-                    background: '#fff8e1', border: '1px solid #ffe082',
-                    borderRadius: '12px', padding: '14px 16px',
-                    display: 'flex', alignItems: 'flex-start', gap: '10px',
-                    marginBottom: '20px'
-                  }}>
-                    <span style={{ fontSize: '1rem' }}>⚠️</span>
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '13px 15px', display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '20px', animation: 'fadeUp 0.3s ease' }}>
+                    <IconAlertTriangle size={16} color="#d97706" />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '600', color: '#856404', fontSize: '0.85rem', marginBottom: '2px' }}>Location Issue</div>
-                      <div style={{ color: '#856404', fontSize: '0.82rem' }}>{locationError}</div>
+                      <div style={{ fontWeight: '600', color: '#92400e', fontSize: '0.84rem', marginBottom: '2px' }}>Location Issue</div>
+                      <div style={{ color: '#92400e', fontSize: '0.8rem' }}>{locationError}</div>
                     </div>
-                    <button
-                      onClick={() => setLocationError(null)}
-                      style={{ background: 'none', border: 'none', color: '#856404', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: '0' }}
-                    >×</button>
+                    <button onClick={() => setLocationError(null)} style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                      <IconX size={16} color="#92400e" />
+                    </button>
                   </div>
                 )}
 
                 {/* Current Weather */}
                 {currentWeather ? (
-                  <div style={{ animation: 'fadeIn 0.4s ease' }}>
-                    {/* Main Card */}
-                    <div style={{
-                      background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 40%, #388e3c 100%)',
-                      borderRadius: '20px',
-                      padding: '28px',
-                      marginBottom: '20px',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      minHeight: '160px'
-                    }}>
-                      {/* Decorative background circles */}
-                      <div style={{ position:'absolute', top:'-30px', right:'-30px', width:'150px', height:'150px', background:'rgba(255,255,255,0.06)', borderRadius:'50%' }} />
-                      <div style={{ position:'absolute', bottom:'-20px', left:'30%', width:'100px', height:'100px', background:'rgba(255,255,255,0.04)', borderRadius:'50%' }} />
-
-                      {/* SVG Rubber Tree - main large */}
-                      <div style={{ position:'absolute', right:'24px', bottom:'0', opacity:0.18, pointerEvents:'none' }}>
-                        <svg width="120" height="130" viewBox="0 0 120 130" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <rect x="52" y="90" width="16" height="40" rx="4" fill="#ffffff"/>
-                          <ellipse cx="60" cy="85" rx="38" ry="26" fill="#ffffff"/>
-                          <ellipse cx="60" cy="62" rx="30" ry="22" fill="#ffffff"/>
-                          <ellipse cx="60" cy="40" rx="22" ry="18" fill="#ffffff"/>
-                          <ellipse cx="60" cy="22" rx="13" ry="12" fill="#ffffff"/>
+                  <div style={{ animation: 'fadeUp 0.4s ease' }}>
+                    {/* Hero Card */}
+                    <div className="rs-weather-hero">
+                      <div className="hero-deco-a" />
+                      <div className="hero-deco-b" />
+                      {/* Decorative tree silhouette */}
+                      <div style={{ position: 'absolute', right: '20px', bottom: 0, opacity: 0.13, pointerEvents: 'none' }}>
+                        <svg width="110" height="125" viewBox="0 0 110 125" fill="white">
+                          <rect x="47" y="85" width="14" height="40" rx="4"/>
+                          <ellipse cx="54" cy="80" rx="35" ry="24"/>
+                          <ellipse cx="54" cy="58" rx="27" ry="20"/>
+                          <ellipse cx="54" cy="37" rx="20" ry="16"/>
+                          <ellipse cx="54" cy="19" rx="12" ry="11"/>
                         </svg>
                       </div>
-
-                      {/* SVG Rubber Tree - smaller accent */}
-                      <div style={{ position:'absolute', right:'155px', bottom:'0', opacity:0.09, pointerEvents:'none' }}>
-                        <svg width="60" height="80" viewBox="0 0 60 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <rect x="26" y="55" width="8" height="25" rx="3" fill="#ffffff"/>
-                          <ellipse cx="30" cy="50" rx="20" ry="15" fill="#ffffff"/>
-                          <ellipse cx="30" cy="34" rx="15" ry="13" fill="#ffffff"/>
-                          <ellipse cx="30" cy="18" rx="10" ry="10" fill="#ffffff"/>
+                      <div style={{ position: 'absolute', right: '145px', bottom: 0, opacity: 0.07, pointerEvents: 'none' }}>
+                        <svg width="55" height="78" viewBox="0 0 55 78" fill="white">
+                          <rect x="23" y="52" width="8" height="26" rx="3"/>
+                          <ellipse cx="27" cy="46" rx="19" ry="14"/>
+                          <ellipse cx="27" cy="31" rx="14" ry="12"/>
+                          <ellipse cx="27" cy="17" rx="9" ry="9"/>
                         </svg>
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', position: 'relative' }}>
                         <div>
-                          <div style={{
-                            fontSize: '0.68rem', fontWeight: '700', letterSpacing: '0.12em',
-                            color: 'rgba(255,255,255,0.7)',
-                            marginBottom: '10px', textTransform: 'uppercase'
-                          }}>
+                          <div style={{ fontSize: '0.66rem', fontWeight: '700', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.6)', marginBottom: '10px', textTransform: 'uppercase' }}>
                             {currentWeather.isPlantation ? 'Plantation Weather' : 'Your Location Weather'}
                           </div>
-                          <div style={{
-                            fontFamily: "'Lora', Georgia, serif", fontSize: '4.5rem', fontWeight: '700',
-                            color: '#ffffff', lineHeight: 1, letterSpacing: '-0.03em'
-                          }}>
-                            {currentWeather.temp}°<span style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.65)' }}>C</span>
+                          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '4.8rem', fontWeight: '700', color: '#ffffff', lineHeight: 1, letterSpacing: '-0.03em' }}>
+                            {currentWeather.temp}°
+                            <span style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.55)', fontWeight: '400' }}>C</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '10px' }}>
-                            <span style={{ fontSize: '1.1rem' }}>{currentWeather.icon}</span>
-                            <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '500', fontSize: '0.95rem' }}>{currentWeather.condition}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '12px' }}>
+                            <WeatherIconFromEmoji icon={currentWeather.icon} size={18} color="rgba(255,255,255,0.85)" />
+                            <span style={{ color: 'rgba(255,255,255,0.88)', fontWeight: '500', fontSize: '0.95rem' }}>{currentWeather.condition}</span>
                           </div>
-                          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.82rem', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span>📍</span>
-                            <span>{currentWeather.location}</span>
+                          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <IconPin size={13} color="rgba(255,255,255,0.55)" />{currentWeather.location}
                           </div>
                         </div>
-                        <div style={{
-                          fontSize: '3.5rem', lineHeight: 1,
-                          filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.2))',
-                          marginTop: '4px'
-                        }}>
-                          {currentWeather.icon}
+                        <div style={{ marginTop: '4px', opacity: 0.88 }}>
+                          <WeatherIconFromEmoji icon={currentWeather.icon} size={56} color="rgba(255,255,255,0.85)" />
                         </div>
                       </div>
                     </div>
@@ -795,39 +813,36 @@ const Weather = () => {
                     {/* Detail Chips */}
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
                       {[
-                        { icon: '', value: `${currentWeather.feels_like}°C`, label: 'Feels Like' },
-                        { icon: '', value: `${currentWeather.humidity}%`, label: 'Humidity' },
-                        { icon: '', value: `${currentWeather.wind}`, label: 'km/h Wind' }
+                        { Icon: IconThermometer, value: `${currentWeather.feels_like}°C`, label: 'Feels Like', iconColor: '#ef5350' },
+                        { Icon: IconDroplets, value: `${currentWeather.humidity}%`, label: 'Humidity', iconColor: '#42a5f5' },
+                        { Icon: IconWind, value: `${currentWeather.wind}`, label: 'km/h Wind', iconColor: '#26a69a' }
                       ].map((chip, i) => (
-                        <div key={i} className="weather-detail-chip">
-                          <span style={{ fontSize: '1.1rem' }}>{chip.icon}</span>
-                          <span style={{ fontFamily: "'Lora', Georgia, serif", fontSize: '1.3rem', fontWeight: '700', color: '#1b3a1d' }}>{chip.value}</span>
-                          <span style={{ color: '#7a9e7e', fontSize: '0.72rem', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{chip.label}</span>
+                        <div key={i} className="rs-chip">
+                          <chip.Icon size={16} color={chip.iconColor} />
+                          <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.3rem', fontWeight: '700', color: '#1a3d1e' }}>{chip.value}</span>
+                          <span style={{ color: '#7a9e7e', fontSize: '0.7rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{chip.label}</span>
                         </div>
                       ))}
                     </div>
 
-                    {/* Plantation Info Badge */}
+                    {/* Plantation Info */}
                     {currentWeather.isPlantation && currentWeather.plantationInfo && (
-                      <div style={{
-                        background: '#f1f8e9', border: '1px solid #c8e6c9',
-                        borderRadius: '12px', padding: '14px 18px',
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        marginBottom: '24px'
-                      }}>
-                        <span style={{ fontSize: '1.3rem' }}>{getPlantationTypeIcon(currentWeather.plantationInfo.type)}</span>
+                      <div style={{ background: '#f0f9f0', border: '1px solid #c8e6c9', borderRadius: '14px', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '22px' }}>
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
+                          background: currentWeather.plantationInfo.type === 'large' ? '#e8f5e9' : currentWeather.plantationInfo.type === 'medium' ? '#fff8e1' : '#fce4ec',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                          {getPlantationTypeIcon(currentWeather.plantationInfo.type)}
+                        </div>
                         <div>
-                          <div style={{ fontWeight: '600', color: '#2e7d32', fontSize: '0.9rem' }}>{currentWeather.plantationInfo.name}</div>
-                          <div>
-                            <span className="badge" style={{
-                              background: currentWeather.plantationInfo.type === 'large' ? '#e8f5e9' :
-                                         currentWeather.plantationInfo.type === 'medium' ? '#fff8e1' : '#fce4ec',
-                              color: currentWeather.plantationInfo.type === 'large' ? '#2e7d32' :
-                                     currentWeather.plantationInfo.type === 'medium' ? '#f57f17' : '#c62828'
-                            }}>
-                              {currentWeather.plantationInfo.size}
-                            </span>
-                          </div>
+                          <div style={{ fontWeight: '600', color: '#2e7d32', fontSize: '0.9rem', marginBottom: '3px' }}>{currentWeather.plantationInfo.name}</div>
+                          <span className="rs-badge" style={{
+                            background: currentWeather.plantationInfo.type === 'large' ? '#e8f5e9' : currentWeather.plantationInfo.type === 'medium' ? '#fff8e1' : '#fce4ec',
+                            color: currentWeather.plantationInfo.type === 'large' ? '#2e7d32' : currentWeather.plantationInfo.type === 'medium' ? '#f57f17' : '#c62828'
+                          }}>
+                            {currentWeather.plantationInfo.size}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -835,33 +850,32 @@ const Weather = () => {
                     {/* 5-Day Forecast */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                        <span style={{ fontSize: '0.9rem' }}>📅</span>
-                        <span className="section-title" style={{ fontSize: '0.95rem' }}>5-Day Forecast</span>
+                        <IconCalendar size={15} color="#3a6b3e" />
+                        <span className="rs-section-label" style={{ fontSize: '0.95rem' }}>5-Day Forecast</span>
                       </div>
                       <div style={{ display: 'flex', gap: '10px' }}>
                         {currentWeather.forecast && currentWeather.forecast.map((day, index) => (
-                          <div key={index} className="forecast-card" style={{ animationDelay: `${index * 0.05}s` }}>
-                            <div style={{ fontSize: '0.72rem', fontWeight: '700', color: '#7a9e7e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
-                              {day.day}
+                          <div key={index} className="rs-forecast-card">
+                            <div className="fc-day" style={{ fontSize: '0.7rem', fontWeight: '700', color: '#7a9e7e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>{day.day}</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                              <WeatherIconFromEmoji icon={day.icon} size={22} color="#2e7d32" />
                             </div>
-                            <div style={{ fontSize: '1.6rem', marginBottom: '6px' }}>{day.icon}</div>
-                            <div style={{ fontFamily: 'Lora, serif', fontSize: '1.2rem', fontWeight: '700', color: '#1b3a1d' }}>
-                              {day.temp}°
+                            <div className="fc-temp" style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.2rem', fontWeight: '700', color: '#1a3d1e' }}>{day.temp}°</div>
+                            <div className="fc-cond" style={{ fontSize: '0.62rem', color: '#7a9e7e', margin: '3px 0', lineHeight: 1.3 }}>{day.condition}</div>
+                            <div className="fc-low" style={{ fontSize: '0.7rem', color: '#aac8ac', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                              <IconArrowDown size={10} color="#aac8ac" />{day.low}°
                             </div>
-                            <div style={{ fontSize: '0.65rem', color: '#7a9e7e', margin: '4px 0', lineHeight: 1.3 }}>{day.condition}</div>
-                            <div style={{ fontSize: '0.72rem', color: '#a5c8a8', fontWeight: '500' }}>↓ {day.low}°</div>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div style={{
-                    padding: '60px 20px', textAlign: 'center',
-                    color: '#7a9e7e', animation: 'fadeIn 0.4s ease'
-                  }}>
-                    <div style={{ fontSize: '3rem', marginBottom: '16px', opacity: 0.5 }}>🌤️</div>
-                    <div style={{ fontFamily: 'Lora, serif', fontSize: '1.1rem', fontWeight: '600', color: '#3a6b3e', marginBottom: '8px' }}>
+                  <div style={{ padding: '60px 20px', textAlign: 'center', color: '#7a9e7e', animation: 'fadeUp 0.4s ease' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px', opacity: 0.4 }}>
+                      <IconCloudSun size={52} color="#2e7d32" />
+                    </div>
+                    <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.1rem', fontWeight: '600', color: '#3a6b3e', marginBottom: '8px' }}>
                       Loading Weather Data...
                     </div>
                     <div style={{ fontSize: '0.875rem' }}>
@@ -873,80 +887,53 @@ const Weather = () => {
             </div>
 
             {/* Right: Plantations Sidebar */}
-            <div style={{
-              background: '#ffffff',
-              border: '1px solid #e8f5e9',
-              borderRadius: '20px',
-              overflow: 'hidden',
-              boxShadow: '0 2px 12px rgba(46,125,50,0.06)',
-              animation: 'fadeIn 0.5s ease 0.15s both'
-            }}>
-              <div style={{
-                padding: '18px 20px',
-                borderBottom: '1px solid #f0f7f0',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-              }}>
+            <div className="rs-sidebar">
+              <div className="rs-sidebar-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '1rem' }}>🏭</span>
-                  <span className="section-title">Rubber Plantations</span>
+                  <IconFactory size={16} color="#2e7d32" />
+                  <span className="rs-section-label">Rubber Plantations</span>
                 </div>
-                <span style={{
-                  background: '#e8f5e9', color: '#2e7d32',
-                  fontSize: '0.75rem', fontWeight: '700',
-                  padding: '3px 10px', borderRadius: '20px'
-                }}>
+                <span style={{ background: '#e8f5e9', color: '#2e7d32', fontSize: '0.72rem', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', border: '1px solid #c8e6c9' }}>
                   {filteredPlantations.length}
                 </span>
               </div>
 
-              <div style={{ padding: '14px', maxHeight: '620px', overflowY: 'auto' }}>
+              <div style={{ padding: '12px', maxHeight: '620px', overflowY: 'auto' }}>
                 {filteredPlantations.map((plantation) => {
                   const isSelected = selectedPlantation?.id === plantation.id;
                   const isLoading = plantationLoading[plantation.id];
                   return (
                     <div
                       key={plantation.id}
-                      className={`plantation-item ${isSelected ? 'selected' : ''}`}
+                      className={`rs-plantation-item ${isSelected ? 'selected' : ''}`}
                       onClick={() => loadPlantationWeather(plantation)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                         <div style={{
-                          width: '32px', height: '32px',
-                          borderRadius: '8px',
-                          background: plantation.type === 'large' ? '#e8f5e9' :
-                                     plantation.type === 'medium' ? '#fff8e1' : '#fce4ec',
+                          width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
+                          background: plantation.type === 'large' ? '#e8f5e9' : plantation.type === 'medium' ? '#fff8e1' : '#fce4ec',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '1rem', flexShrink: 0
+                          border: `1px solid ${plantation.type === 'large' ? '#c8e6c9' : plantation.type === 'medium' ? '#ffe082' : '#f48fb1'}`
                         }}>
                           {getPlantationTypeIcon(plantation.type)}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{
-                            fontSize: '0.82rem', fontWeight: '600', color: '#1b3a1d',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                          }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: '600', color: '#1a3d1e', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '3px' }}>
                             {plantation.name}
                           </div>
-                          <span className="badge" style={{
-                            background: plantation.type === 'large' ? '#e8f5e9' :
-                                       plantation.type === 'medium' ? '#fff8e1' : '#fce4ec',
-                            color: plantation.type === 'large' ? '#2e7d32' :
-                                   plantation.type === 'medium' ? '#f57f17' : '#c62828'
+                          <span className="rs-badge" style={{
+                            background: plantation.type === 'large' ? '#e8f5e9' : plantation.type === 'medium' ? '#fff8e1' : '#fce4ec',
+                            color: plantation.type === 'large' ? '#2e7d32' : plantation.type === 'medium' ? '#f57f17' : '#c62828'
                           }}>
                             {plantation.size}
                           </span>
                         </div>
                       </div>
                       <div style={{ flexShrink: 0, marginLeft: '8px' }}>
-                        {isLoading ? (
-                          <div className="loading-indicator" style={{ width: '16px', height: '16px' }} />
-                        ) : (
-                          <span style={{
-                            color: isSelected ? '#2e7d32' : '#b0c4b1',
-                            fontSize: '1rem', fontWeight: '700',
-                            transition: 'color 0.2s'
-                          }}>→</span>
-                        )}
+                        {isLoading
+                          ? <div className="rs-spinner" style={{ width: '15px', height: '15px' }} />
+                          : <IconArrowRight size={14} color={isSelected ? '#2e7d32' : '#c8d8c8'} />
+                        }
                       </div>
                     </div>
                   );

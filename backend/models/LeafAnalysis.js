@@ -15,6 +15,16 @@ const leafAnalysisSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Image public ID is required']
   },
+  treeProfileId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tree',
+    default: null,
+    index: true
+  },
+  treeSnapshot: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   diseaseDetected: {
     type: String,
     required: [true, 'Disease detected is required'],
@@ -56,6 +66,10 @@ const leafAnalysisSchema = new mongoose.Schema({
   preventionStrategies: [{
     type: String
   }],
+  aiInsights: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   fullAnalysis: {
     type: mongoose.Schema.Types.Mixed,
     default: {}

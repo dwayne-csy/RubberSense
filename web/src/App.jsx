@@ -23,6 +23,7 @@ import UserProfile from './Components/User/UserProfile.jsx';
 import Message from './Components/User/Message.jsx';
 import UserList from './Components/Admin/UserList.jsx';
 import Weather from './Components/User/Weather.jsx';
+import Market from './Components/User/Market.jsx';
 import UserReport from './Components/Admin/UserReport.jsx';
 import Notifications from './Components/User/Notifications.jsx';
 import LatexDetection from './Components/User/LatexDetection.jsx';
@@ -73,6 +74,7 @@ function App() {
         <Route path="/messages/:userId" element={<Message />} />
         <Route path="/admin/users" element={<UserList />} />
         <Route path="/weather" element={<Weather />} />
+        <Route path="/market" element={<Market />} />
         <Route path="/admin/user-reports" element={<UserReport />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/latex-detection" element={<LatexDetection />} />

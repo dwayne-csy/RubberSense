@@ -138,6 +138,8 @@ const notificationRoutes = require('./routes/Notification');
 const latexDetectionRoutes = require('./routes/latexDetectionRoutes');
 const leafRoutes = require('./routes/LeafDetectionRoutes');
 const trunksDetectionRoutes = require('./routes/TrunksDetectionRoutes');
+const treeRoutes = require('./routes/TreesRoutes');
+const marketRoutes = require('./routes/MarketRoutes');
 const groqChatbotRoutes = require('./routes/groqchatbotroute');
 const adminAnalysisRoutes = require('./routes/AdminAnalysisHistoryRoute');
 
@@ -156,6 +158,11 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/latex', latexDetectionRoutes);
 app.use('/api/v1/leaf', leafRoutes);
 app.use('/api/v1/trunks', trunksDetectionRoutes);
+app.use('/api/v1/trees', treeRoutes);
+app.use('/api/v1/market', marketRoutes);
+// Mobile compatibility path
+app.use('/api/trees', treeRoutes);
+app.use('/api/market', marketRoutes);
 app.use('/api/v1/groqchatbot', groqChatbotRoutes);
 app.use('/api/v1/admin', adminAnalysisRoutes);
 

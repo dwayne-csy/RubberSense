@@ -5,6 +5,7 @@ const fs = require('fs');
 const latexService = require('../services/LatexService');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinary');
 const LatexAnalysis = require('../models/LatexAnalysis'); // You'll need to create this model
+const MarketData = require('../models/MarketData');
 
 // Use memory storage instead of disk storage since we're uploading to Cloudinary
 const latexUpload = multer({
@@ -102,6 +103,225 @@ const extractRecommendations = (analysis) => {
   return recommendations;
 };
 
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(String(value ?? '').replace(/,/g, '').trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const round2 = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const mapQualityGrade = (qualityClass, score) => {
+  const quality = String(qualityClass || '').toLowerCase();
+  const numericScore = toNumber(score, 0);
+
+  if (quality === 'high') {
+    return numericScore >= 85 ? 'A' : 'B';
+  }
+  if (quality === 'medium') {
+    return numericScore >= 55 ? 'C' : 'D';
+  }
+  if (quality === 'low') return 'F';
+  return 'F';
+};
+
+const normalizeTextList = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  if (typeof value === 'object') return Object.values(value).map((item) => String(item || '').trim()).filter(Boolean);
+  return String(value)
+    .split(/\n|;\s+|\|\s*/)
+    .map((item) => item.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean);
+};
+
+const applyUserLatexInputs = (analysis, body = {}) => {
+  if (!analysis || typeof analysis !== 'object') return {
+    volumeInput: 0,
+    dryWeightInput: 0,
+    batchID: '',
+    notes: ''
+  };
+
+  const volumeInput = toNumber(body.volume, 0);
+  const dryWeightInput = toNumber(body.dryWeight, 0);
+  const batchID = String(body.batchID || '').trim();
+  const notes = String(body.notes || '').trim();
+
+  if (!analysis.latex_analysis || typeof analysis.latex_analysis !== 'object') {
+    analysis.latex_analysis = {};
+  }
+
+  if (!analysis.latex_analysis.quantity_estimation || typeof analysis.latex_analysis.quantity_estimation !== 'object') {
+    analysis.latex_analysis.quantity_estimation = {};
+  }
+
+  const existingMlVolumeLiters = toNumber(analysis.latex_analysis.quantity_estimation.estimated_volume_ml, 0) / 1000;
+  const resolvedVolumeLiters = volumeInput > 0 ? volumeInput : existingMlVolumeLiters;
+
+  if (volumeInput > 0) {
+    analysis.latex_analysis.quantity_estimation = {
+      ...analysis.latex_analysis.quantity_estimation,
+      estimated_volume_ml: round2(volumeInput * 1000),
+      confidence: 100,
+      source: 'user_input'
+    };
+  }
+
+  const existingDrc = toNumber(analysis.latex_analysis.dry_rubber_content, 0);
+  const resolvedDrc = clamp(dryWeightInput > 0 ? dryWeightInput : existingDrc, 0, 100);
+
+  if (dryWeightInput > 0) {
+    analysis.latex_analysis.dry_rubber_content = round2(resolvedDrc);
+  }
+
+  const dryYieldKg = round2(resolvedVolumeLiters * (resolvedDrc / 100));
+  analysis.latex_analysis.estimated_yield = {
+    wet_weight_kg: round2(resolvedVolumeLiters),
+    dry_weight_kg: dryYieldKg,
+    dry_yield_percentage: round2(resolvedDrc)
+  };
+
+  analysis.quantityEstimation = {
+    volume: round2(resolvedVolumeLiters),
+    weight: round2(resolvedVolumeLiters),
+    confidence: volumeInput > 0 ? 100 : toNumber(analysis.latex_analysis.quantity_estimation.confidence, 0)
+  };
+
+  analysis.productYieldEstimation = {
+    dryRubberContent: round2(resolvedDrc),
+    estimatedYield: dryYieldKg,
+    confidence: dryWeightInput > 0 ? 100 : toNumber(analysis.latex_analysis.primary_classification?.confidence, 0),
+    productType:
+      analysis.product_recommendations?.recommended_products?.[0]?.name ||
+      analysis.productYieldEstimation?.productType ||
+      'General latex products'
+  };
+
+  const qualityClass = mapQualityClass(analysis);
+  const qualityScore = toNumber(
+    analysis.latex_analysis?.quality_score ||
+    analysis.latex_analysis?.primary_classification?.confidence,
+    0
+  );
+  const qualityGrade = mapQualityGrade(qualityClass, qualityScore);
+
+  analysis.qualityClassification = {
+    grade: qualityGrade,
+    confidence: qualityScore,
+    description: analysis.latex_analysis?.primary_classification?.class || `${qualityClass} quality latex`
+  };
+
+  analysis.colorAnalysis = {
+    primaryColor: analysis.latex_analysis?.color_analysis?.name || 'Unknown',
+    hex: analysis.latex_analysis?.color_analysis?.hex || ''
+  };
+
+  analysis.contaminationDetection = {
+    hasContamination: Boolean(analysis.latex_analysis?.contamination?.detected),
+    hasWater: String(analysis.latex_analysis?.contamination?.type || '').toLowerCase().includes('water'),
+    contaminationLevel: analysis.latex_analysis?.contamination?.detected ? 'detected' : 'none',
+    contaminantTypes: normalizeTextList(analysis.latex_analysis?.impurities?.type),
+    details: analysis.latex_analysis?.impurities?.description || ''
+  };
+
+  const productNames = Array.isArray(analysis.product_recommendations?.recommended_products)
+    ? analysis.product_recommendations.recommended_products.map((item) => item?.name || item).filter(Boolean)
+    : [];
+  const suggestedApplications = normalizeTextList(analysis.product_recommendations?.suggested_applications);
+
+  analysis.productRecommendation = {
+    recommendedProduct: productNames[0] || analysis.productYieldEstimation.productType,
+    reason: suggestedApplications[0] || productNames[0] || 'No recommendation available',
+    expectedQuality: `Grade ${qualityGrade}`,
+    recommendedUses: [...new Set([...productNames, ...suggestedApplications])].slice(0, 8),
+    marketValueInsight: analysis.market_analysis?.market_trend || 'No market trend available',
+    preservation: analysis.latex_analysis?.contamination?.detected
+      ? 'Purify/filter before processing to improve quality.'
+      : 'Store properly and avoid contamination during handling.'
+  };
+
+  analysis.marketPriceEstimation = {
+    pricePerKg: toNumber(analysis.market_analysis?.price_per_kg, 0),
+    totalEstimatedValue: round2(toNumber(analysis.market_analysis?.price_per_kg, 0) * round2(resolvedVolumeLiters)),
+    currency: analysis.market_analysis?.currency || 'PHP',
+    region: analysis.market_analysis?.region || body.region || 'global_avg'
+  };
+
+  const contaminationTypes = [...new Set(normalizeTextList(analysis.latex_analysis?.impurities?.type))];
+  const hasContamination = Boolean(analysis.latex_analysis?.contamination?.detected);
+  const overallReport = `Latex quality is ${qualityClass} (${qualityScore.toFixed(1)}% confidence) with DRC ${resolvedDrc.toFixed(1)}% and estimated dry yield ${dryYieldKg.toFixed(2)} kg.`;
+  const diagnosis = hasContamination
+    ? `Contamination detected${contaminationTypes.length ? ` (${contaminationTypes.join(', ')})` : ''}.`
+    : 'No major contamination detected from current scan.';
+  const treatmentPlan = hasContamination
+    ? [
+        'Filter latex using clean mesh before storage.',
+        'Remove bark/debris contamination before processing.',
+        'Use sealed containers to prevent additional impurities.'
+      ]
+    : [
+        'Maintain clean collection cups and tools.',
+        'Store latex in cool, shaded conditions.',
+        'Preserve collection timing consistency for stable quality.'
+      ];
+  const preventionPlan = [
+    'Avoid rainwater mixing during tapping.',
+    'Clean tapping cuts and collection points regularly.',
+    'Record batch quality and compare trends weekly.'
+  ];
+  const promptRecommendations = [
+    'How can I increase dry rubber content in my next harvest?',
+    'What contamination controls should I prioritize for this batch?',
+    `Is ${analysis.productRecommendation.recommendedProduct} the best product for this latex grade?`
+  ];
+  const suggestionPool = [
+    ...suggestedApplications.slice(0, 4),
+    analysis.productRecommendation.preservation,
+    diagnosis,
+    `Market trend: ${analysis.marketPriceEstimation.region} / ${analysis.productRecommendation.marketValueInsight}`
+  ].filter(Boolean);
+
+  if (!analysis.aiInsights || typeof analysis.aiInsights !== 'object') {
+    analysis.aiInsights = {};
+  }
+
+  analysis.aiInsights = {
+    ...analysis.aiInsights,
+    overallReport: analysis.aiInsights.overallReport || overallReport,
+    diagnosis: analysis.aiInsights.diagnosis || diagnosis,
+    treatmentPlan: Array.isArray(analysis.aiInsights.treatmentPlan) && analysis.aiInsights.treatmentPlan.length
+      ? analysis.aiInsights.treatmentPlan
+      : treatmentPlan,
+    preventionPlan: Array.isArray(analysis.aiInsights.preventionPlan) && analysis.aiInsights.preventionPlan.length
+      ? analysis.aiInsights.preventionPlan
+      : preventionPlan,
+    promptRecommendations: Array.isArray(analysis.aiInsights.promptRecommendations) && analysis.aiInsights.promptRecommendations.length
+      ? analysis.aiInsights.promptRecommendations
+      : promptRecommendations,
+    suggestions: Array.isArray(analysis.aiInsights.suggestions) && analysis.aiInsights.suggestions.length
+      ? analysis.aiInsights.suggestions
+      : [...new Set(suggestionPool)].slice(0, 10),
+    analysisTimestamp: analysis.aiInsights.analysisTimestamp || new Date().toISOString(),
+    version: analysis.aiInsights.version || 2
+  };
+
+  if (analysis.visualization) {
+    analysis.processedImageURL = `data:image/jpeg;base64,${analysis.visualization}`;
+  }
+
+  analysis.batchID = batchID || analysis.batchID || null;
+  analysis.notes = notes || analysis.notes || '';
+
+  return {
+    volumeInput,
+    dryWeightInput,
+    batchID,
+    notes
+  };
+};
+
 // ============================================
 // CONTROLLER ROUTES
 // ============================================
@@ -151,12 +371,15 @@ exports.analyzeLatex = async (req, res) => {
       cloudinaryResult = await uploadToCloudinary(tempFilePath, 'rubbersense/latex');
       console.log(`✅ Uploaded to Cloudinary: ${cloudinaryResult.url}`);
       
-      // Get region from request body (default to global_avg)
+      // Get request metadata (mobile-compatible inputs)
       const region = req.body.region || 'global_avg';
+      const requestBatchID = String(req.body.batchID || '').trim();
+      const requestNotes = String(req.body.notes || '').trim();
       
       // Check model availability first
       const modelAvailable = latexService.checkModelAvailability();
       const modelInfo = latexService.getModelInfo();
+      const activeModelName = modelInfo?.modelFile || latexService.getActiveModelName();
       
       if (!modelAvailable) {
         console.warn('⚠️ Warning: Trained model not found at expected path');
@@ -175,6 +398,49 @@ exports.analyzeLatex = async (req, res) => {
         region: region,
         returnVisualization: true
       });
+
+      const inputOverrides = applyUserLatexInputs(analysis, req.body);
+      analysis.scanType = analysis.scanType || 'latex';
+      analysis.batchID = requestBatchID || inputOverrides.batchID || null;
+      analysis.notes = requestNotes || inputOverrides.notes || '';
+
+      // Align latex scan result pricing with latest market page snapshot when available.
+      try {
+        const latestMarket = await MarketData.findOne({ source: 'stooq' }).sort({ timestamp: -1 }).lean();
+        const livePricePerKg = Number(latestMarket?.price);
+        if (Number.isFinite(livePricePerKg) && livePricePerKg > 0) {
+          const dryYieldKg = toNumber(
+            analysis.productYieldEstimation?.estimatedYield ||
+            analysis.latex_analysis?.estimated_yield?.dry_weight_kg,
+            0
+          );
+          const fallbackWeightKg = toNumber(analysis.quantityEstimation?.weight || analysis.quantityEstimation?.volume, 0);
+          const effectiveWeightKg = dryYieldKg > 0 ? dryYieldKg : fallbackWeightKg;
+          const estimatedTotalValue = round2(livePricePerKg * effectiveWeightKg);
+
+          analysis.market_analysis = {
+            ...(analysis.market_analysis || {}),
+            price_per_kg: round2(livePricePerKg),
+            currency: latestMarket?.currency || 'PHP',
+            region: 'live_rss3',
+            market_trend: String(latestMarket?.trend || analysis.market_analysis?.market_trend || 'neutral').toLowerCase(),
+            trend_strength: round2(Math.abs(toNumber(latestMarket?.priceChange, 0)) / 100),
+            estimated_total_value: estimatedTotalValue,
+            source: latestMarket?.source || 'stooq',
+            source_symbol: latestMarket?.sourceSymbol || ''
+          };
+
+          analysis.marketPriceEstimation = {
+            ...(analysis.marketPriceEstimation || {}),
+            pricePerKg: round2(livePricePerKg),
+            totalEstimatedValue: estimatedTotalValue,
+            currency: latestMarket?.currency || 'PHP',
+            region: 'live_rss3'
+          };
+        }
+      } catch (marketSyncError) {
+        console.warn('Could not sync live market snapshot into latex analysis:', marketSyncError.message);
+      }
       
       // Add Cloudinary image info to analysis
       analysis.image = {
@@ -200,6 +466,10 @@ exports.analyzeLatex = async (req, res) => {
       // Save analysis to database
       const latexAnalysis = new LatexAnalysis({
         userId: req.user.id,
+        batchID: analysis.batchID || null,
+        notes: analysis.notes || '',
+        inputVolume: inputOverrides.volumeInput || 0,
+        inputDryWeight: inputOverrides.dryWeightInput || 0,
         imageUrl: cloudinaryResult.url,
         imagePublicId: cloudinaryResult.public_id,
         region: region,
@@ -211,7 +481,7 @@ exports.analyzeLatex = async (req, res) => {
         colorScore: analysis.latex_analysis?.color_score,
         consistencyScore: analysis.latex_analysis?.consistency_score,
         impuritiesDetected: impuritiesDetected,
-        quantityEstimate: analysis.latex_analysis?.quantity_estimation?.estimated_volume_ml,
+        quantityEstimate: analysis.quantityEstimation?.volume || (analysis.latex_analysis?.quantity_estimation?.estimated_volume_ml / 1000),
         recommendations: recommendations,
         marketPrice: {
           amount: analysis.market_analysis?.price_per_kg,
@@ -241,10 +511,16 @@ exports.analyzeLatex = async (req, res) => {
         },
         meta: {
           modelUsed: analysis.ml_model_used,
-          modelPath: modelAvailable ? '../ML-Models/Latex.pt' : null,
+          modelPath: modelAvailable ? `../ML-models/${activeModelName}` : null,
+          modelFile: modelAvailable ? activeModelName : null,
           fallbackUsed: !analysis.ml_model_used,
           processingTime: analysis.processingTime || 'unknown',
-          region: region
+          region: region,
+          userInputs: {
+            batchID: analysis.batchID || null,
+            volume: inputOverrides.volumeInput || 0,
+            dryWeight: inputOverrides.dryWeightInput || 0
+          }
         }
       };
       
@@ -269,9 +545,21 @@ exports.analyzeLatex = async (req, res) => {
         }
       }
       
-      res.status(500).json({
+      const statusCode = (() => {
+        const message = String(analysisError?.message || '').toLowerCase();
+        if (message.includes('non-latex') || message.includes('not latex')) return 400;
+        if (message.includes('detected part')) return 400;
+        if (message.includes('not found')) return 404;
+        if (message.includes('timeout')) return 504;
+        return 500;
+      })();
+      const userMessage = statusCode === 400
+        ? analysisError.message
+        : 'Error analyzing latex image';
+
+      res.status(statusCode).json({
         success: false,
-        message: 'Error analyzing latex image',
+        message: userMessage,
         error: analysisError.message,
         timestamp: new Date().toISOString()
       });
@@ -534,6 +822,7 @@ exports.getLatexInfo = async (req, res) => {
     // Check model availability
     const modelAvailable = latexService.checkModelAvailability();
     const modelInfo = latexService.getModelInfo();
+    const activeModelName = modelInfo?.modelFile || latexService.getActiveModelName();
     
     // Check Python availability
     const pythonAvailable = await latexService.checkPythonAvailability();
@@ -580,11 +869,11 @@ exports.getLatexInfo = async (req, res) => {
           imageStorage: 'Cloudinary (Cloud-based)'
         },
         mlModel: {
-          name: 'Latex.pt',
+          name: activeModelName,
           type: 'YOLO (PyTorch)',
           architecture: 'YOLOv8',
           status: modelAvailable ? 'Active' : 'Not Found',
-          path: modelAvailable ? '../ML-Models/Latex.pt' : null,
+          path: modelAvailable ? `../ML-models/${activeModelName}` : null,
           details: {
             ...modelInfo,
             ...modelDetails
@@ -594,7 +883,7 @@ exports.getLatexInfo = async (req, res) => {
           pythonAvailable: pythonAvailable,
           pythonVersion: pythonAvailable ? await latexService.getPythonVersion() : null,
           packagesAvailable: packagesAvailable,
-          requiredPackages: ['torch', 'torchvision', 'ultralytics', 'PIL', 'numpy', 'opencv-python'],
+          requiredPackages: ['ultralytics', 'torch', 'numpy', 'opencv-python'],
           mlReady: mlReady,
           usingFallback: !mlReady,
           fallbackReason: !mlReady ? latexService.getFallbackReason() : null,

@@ -26,7 +26,12 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Fab
+  Fab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableRow
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -261,6 +266,15 @@ const LeafDetection = () => {
   const modelInfo = analysisResult?.modelInfo || {};
   const imageMetadata = analysisResult?.imageMetadata || {};
   const isHealthy = diseaseInfo?.healthStatus?.toLowerCase() === 'healthy';
+  const detections = Array.isArray(analysisResult?.detections) ? analysisResult.detections : [];
+  const hasDetectionBoxes = detections.some((d) => Array.isArray(d?.bbox) && d.bbox.length === 4);
+  const visualizationValue = analysisResult?.visualization;
+  const visualizationSrc =
+    typeof visualizationValue === 'string' && visualizationValue.length > 0
+      ? (visualizationValue.startsWith('data:image') || visualizationValue.startsWith('http')
+          ? visualizationValue
+          : `data:image/jpeg;base64,${visualizationValue}`)
+      : null;
 
   return (
     <>
@@ -423,7 +437,7 @@ const LeafDetection = () => {
                     <Typography variant="body2">
                       {modelInfo.fallback
                         ? '⚠️ Fallback analysis: ML model unavailable'
-                        : '✅ Analyzed using ML model: Leaf.pt'}
+                        : `✅ Analyzed using ML model: ${modelInfo.model_file || modelInfo.modelUsed || 'Leaf.pt'}`}
                     </Typography>
                   </Alert>
                 )}
@@ -787,19 +801,48 @@ const LeafDetection = () => {
                   </motion.div>
                 )}
 
-                {/* ── Visualization ── */}
-                {analysisResult.visualization && (
+                {/* Detection Visualization */}
+                {(visualizationSrc || hasDetectionBoxes) && (
                   <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.46 }}>
                     <Paper elevation={2} sx={{ borderRadius: 3, border: '1px solid #c8e6c9', p: 3, mb: 3, bgcolor: 'white' }}>
-                      <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700, mb: 2 }}>Analysis Visualization</Typography>
-                      <Box sx={{ textAlign: 'center' }}>
-                        <motion.img
-                          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                          src={`data:image/jpeg;base64,${analysisResult.visualization}`}
-                          alt="Analysis visualization"
-                          style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', border: '2px solid #c8e6c9' }}
-                        />
-                      </Box>
+                      <Typography variant='h6' sx={{ color: '#1b5e20', fontWeight: 700, mb: 2 }}>Detection Visualization</Typography>
+                      {visualizationSrc && (
+                        <Box sx={{ textAlign: 'center', mb: hasDetectionBoxes ? 2 : 0 }}>
+                          <motion.img
+                            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                            src={visualizationSrc}
+                            alt='Analysis visualization'
+                            style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', border: '2px solid #c8e6c9' }}
+                          />
+                        </Box>
+                      )}
+
+                      {hasDetectionBoxes && (
+                        <TableContainer component={Paper} variant='outlined' sx={{ borderRadius: 2 }}>
+                          <Table size='small'>
+                            <TableBody>
+                              {detections
+                                .filter((d) => Array.isArray(d?.bbox) && d.bbox.length === 4)
+                                .map((det, idx) => {
+                                  const [x1, y1, x2, y2] = det.bbox.map((v) => Number(v).toFixed(1));
+                                  return (
+                                    <TableRow key={`leaf-box-${idx}`}>
+                                      <TableCell sx={{ fontWeight: 700, color: '#1b5e20', width: '34%' }}>
+                                        {det.class || det.display_name || det.original_class || `Detection ${idx + 1}`}
+                                      </TableCell>
+                                      <TableCell sx={{ color: '#2e7d32', width: '22%' }}>
+                                        {Number(det.confidence || 0).toFixed(2)}%
+                                      </TableCell>
+                                      <TableCell sx={{ color: '#616161' }}>
+                                        [{x1}, {y1}] to [{x2}, {y2}]
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
                     </Paper>
                   </motion.div>
                 )}

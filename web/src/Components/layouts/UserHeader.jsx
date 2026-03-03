@@ -7,6 +7,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MailIcon from '@mui/icons-material/Mail';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import MessageIcon from '@mui/icons-material/Message';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -268,6 +269,13 @@ const UserHeader = () => {
       },
       badgeCount: unreadCounts.mail,
       showBadgeDot: unreadCounts.mail > 0
+    },
+    {
+      label: 'Market Page',
+      icon: TrendingUpIcon,
+      action: () => navigate('/market'),
+      badgeCount: 0,
+      showBadgeDot: false
     },
     { 
       label: 'Messages', 

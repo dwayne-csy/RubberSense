@@ -7,6 +7,26 @@ const latexAnalysisSchema = new mongoose.Schema({
     required: [true, 'User ID is required'],
     index: true
   },
+  batchID: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  notes: {
+    type: String,
+    default: ''
+  },
+  inputVolume: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  inputDryWeight: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
   imageUrl: {
     type: String,
     required: [true, 'Image URL is required']

@@ -4,8 +4,430 @@ const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
 const trunksService = require('../services/TrunksService');
+const trunkGroqAdvisor = require('../services/TrunkGroqAdvisor');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinary');
 const TrunkAnalysis = require('../models/TrunksAnalysis');
+const Tree = require('../models/Tree');
+
+const clampScore = (value, min = 0, max = 100) => Math.min(max, Math.max(min, value));
+const parseNumeric = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const titleCaseWord = (value) => {
+  const text = String(value || '').trim();
+  if (!text) return 'Unknown';
+  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+};
+
+const isTrunkDetected = (analysis) => {
+  const detections = analysis?.all_detections || analysis?.detections || [];
+  if (Array.isArray(detections) && detections.length > 0) {
+    return true;
+  }
+
+  const primary = analysis?.primary_detection || analysis?.primaryDetection || {};
+  const primaryClass = String(primary.class_name || primary.class || '').trim().toLowerCase();
+  const primaryConfidence = parseNumeric(primary.confidence, 0);
+
+  if (!primaryClass && primaryConfidence <= 0) {
+    return false;
+  }
+
+  if (
+    ['no_detection', 'no detection', 'unknown', 'none'].includes(primaryClass) &&
+    primaryConfidence <= 0
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
+const buildTapabilityAssessment = (analysis) => {
+  const healthScore = parseNumeric(analysis?.health_score ?? analysis?.healthScore, 0);
+  const diseaseDetected = Boolean(analysis?.disease?.detected);
+  const severity = String(
+    analysis?.disease?.severity ||
+    analysis?.primary_detection?.severity ||
+    'none'
+  ).trim().toLowerCase();
+  const maturityClass = String(analysis?.maturity?.class || 'unknown').trim().toLowerCase();
+
+  const severityPenaltyMap = {
+    none: 0,
+    low: 10,
+    medium: 20,
+    high: 35,
+    critical: 50
+  };
+
+  const severityPenalty = severityPenaltyMap[severity] ?? (diseaseDetected ? 25 : 0);
+  let score = clampScore(Math.round(healthScore - severityPenalty));
+
+  if (maturityClass === 'immature') {
+    score = Math.min(score, 45);
+  }
+
+  let status = 'Not Recommended';
+  let recommendation = 'Avoid tapping and focus on recovery actions first.';
+  if (score >= 80) {
+    status = 'Highly Tappable';
+    recommendation = 'Suitable for regular tapping.';
+  } else if (score >= 60) {
+    status = 'Tappable With Caution';
+    recommendation = 'Can be tapped with careful monitoring.';
+  } else if (score >= 40) {
+    status = 'Limited Tapping';
+    recommendation = 'Limit tapping frequency and monitor tree condition.';
+  }
+
+  return {
+    score,
+    tapability_score: score,
+    max_score: 100,
+    status,
+    recommendation,
+    isTappable: score >= 60 && maturityClass !== 'immature',
+    reason: recommendation
+  };
+};
+
+const applyLegacyTrunkCompatibility = (analysis) => {
+  if (!analysis || typeof analysis !== 'object') return;
+
+  analysis.species = analysis.species || analysis.tree_species || 'Hevea brasiliensis';
+  analysis.tree_species = analysis.tree_species || analysis.species;
+
+  const maturity = analysis.maturity && typeof analysis.maturity === 'object' ? analysis.maturity : {};
+  let maturityClass = String(maturity.class || 'unknown').trim().toLowerCase() || 'unknown';
+  if (maturityClass === 'unknown') {
+    const estimatedYears = parseNumeric(
+      analysis.age_estimation?.estimated_years ??
+      analysis.age_estimate,
+      NaN
+    );
+    if (Number.isFinite(estimatedYears) && estimatedYears > 0) {
+      maturityClass = estimatedYears >= 6 ? 'mature' : 'immature';
+    }
+  }
+  analysis.maturity = {
+    ...maturity,
+    class: maturityClass,
+    confidence: parseNumeric(maturity.confidence, 0)
+  };
+  analysis.maturity_class = maturityClass;
+  analysis.maturity_label = titleCaseWord(maturityClass);
+  analysis.maturityClass = analysis.maturity_label;
+
+  const colorAnalysis = analysis.color_analysis || analysis.visual_analysis?.color || {};
+  const textureAnalysis = analysis.texture_analysis || analysis.visual_analysis?.texture || {};
+  const barkCondition = analysis.visual_analysis?.bark_condition || {};
+
+  let barkColor = String(colorAnalysis.name || colorAnalysis.primaryColor || 'Unknown');
+  let barkTexture = String(textureAnalysis.type || textureAnalysis.texture || 'Unknown');
+
+  if (maturityClass === 'unknown') {
+    const textureHint = barkTexture.toLowerCase();
+    if (textureHint.includes('smooth')) {
+      maturityClass = 'immature';
+    } else if (textureHint.includes('rough') || textureHint.includes('crack')) {
+      maturityClass = 'mature';
+    } else {
+      maturityClass = 'mature';
+    }
+    analysis.maturity.class = maturityClass;
+    analysis.maturity_class = maturityClass;
+    analysis.maturity_label = titleCaseWord(maturityClass);
+    analysis.maturityClass = analysis.maturity_label;
+  }
+
+  if (barkColor.toLowerCase() === 'unknown') {
+    barkColor = 'Brown';
+  }
+  if (barkTexture.toLowerCase() === 'unknown') {
+    barkTexture = maturityClass === 'immature' ? 'Smooth' : 'Moderately Rough';
+  }
+
+  analysis.color_analysis = colorAnalysis;
+  analysis.texture_analysis = textureAnalysis;
+  analysis.bark_color = barkColor;
+  analysis.barkColor = barkColor;
+  analysis.bark_color_hex = colorAnalysis.hex || null;
+  analysis.bark_texture = barkTexture;
+  analysis.barkTexture = barkTexture;
+  analysis.bark_condition = barkCondition.condition || colorAnalysis.barkCondition || 'Unknown';
+  analysis.barkCondition = analysis.bark_condition;
+
+  const tapabilityAssessment = buildTapabilityAssessment(analysis);
+  analysis.tapability_assessment = tapabilityAssessment;
+  analysis.tappability_assessment = tapabilityAssessment;
+  analysis.tapabilityAssessment = tapabilityAssessment;
+  analysis.tapability_score = tapabilityAssessment.score;
+  analysis.tappability_score = tapabilityAssessment.score;
+  analysis.scanType = analysis.scanType || 'tree';
+  analysis.scanSubType = analysis.scanSubType || 'trunk';
+
+  // Mobile-app compatible camelCase shape (ScanDetailScreen expects these keys).
+  const existingTreeIdentification = analysis.treeIdentification && typeof analysis.treeIdentification === 'object'
+    ? analysis.treeIdentification
+    : {};
+  const existingTrunkAnalysis = analysis.trunkAnalysis && typeof analysis.trunkAnalysis === 'object'
+    ? analysis.trunkAnalysis
+    : {};
+  const existingTappability = analysis.tappabilityAssessment && typeof analysis.tappabilityAssessment === 'object'
+    ? analysis.tappabilityAssessment
+    : {};
+
+  const primaryDetection = analysis.primary_detection || analysis.primaryDetection || {};
+  const primaryConfidence = parseNumeric(
+    primaryDetection.confidence ??
+    analysis.disease?.confidence ??
+    analysis.maturity?.confidence,
+    0
+  );
+  const detectedPart = String(
+    existingTreeIdentification.detectedPart ||
+    analysis.detectedPart ||
+    'trunk'
+  ).toLowerCase();
+  const healthStatus = analysis.disease?.detected ? 'diseased' : 'healthy';
+
+  analysis.treeIdentification = {
+    ...existingTreeIdentification,
+    isRubberTree: existingTreeIdentification.isRubberTree ?? true,
+    detectedPart,
+    maturity: maturityClass,
+    confidence: primaryConfidence,
+    species: analysis.species
+  };
+
+  analysis.trunkAnalysis = {
+    ...existingTrunkAnalysis,
+    texture: barkTexture,
+    color: barkColor,
+    barkCondition: analysis.bark_condition,
+    maturity: maturityClass,
+    healthStatus,
+    species: analysis.species
+  };
+
+  analysis.tappabilityAssessment = {
+    ...existingTappability,
+    score: parseNumeric(existingTappability.score, tapabilityAssessment.score),
+    isTappable: existingTappability.isTappable ?? tapabilityAssessment.isTappable,
+    reason: existingTappability.reason || tapabilityAssessment.reason,
+    status: existingTappability.status || tapabilityAssessment.status
+  };
+  analysis.tapabilityAssessment = analysis.tappabilityAssessment;
+
+  const detections = Array.isArray(analysis.all_detections)
+    ? analysis.all_detections
+    : (Array.isArray(analysis.detections) ? analysis.detections : []);
+  const fallbackDetection = {
+    name: analysis.disease?.name || primaryDetection.display_name || 'Unknown',
+    confidence: parseNumeric(analysis.disease?.confidence ?? primaryDetection.confidence, 0),
+    severity: analysis.disease?.severity || primaryDetection.severity || 'unknown',
+    recommendation: analysis.disease?.treatment || analysis.tappabilityAssessment.reason || 'Monitor tree condition.'
+  };
+  const normalizedDiseaseDetection = detections.length > 0
+    ? detections.slice(0, 10).map((det) => ({
+        name: det.display_name || det.class_name || det.class || analysis.disease?.name || 'Unknown',
+        confidence: parseNumeric(det.confidence, 0),
+        severity: String(det.severity || analysis.disease?.severity || 'unknown').toLowerCase(),
+        recommendation: analysis.disease?.treatment || analysis.tappabilityAssessment.reason || 'Monitor tree condition.'
+      }))
+    : (fallbackDetection.confidence > 0 ? [fallbackDetection] : []);
+  analysis.diseaseDetection = normalizedDiseaseDetection;
+
+  const existingTree = analysis.tree && typeof analysis.tree === 'object' ? analysis.tree : {};
+  const existingTreeID = existingTree.treeID || existingTree.treeId || analysis.treeID || analysis.treeId;
+  const fallbackTreeID = analysis.analysisId ? `TR-${String(analysis.analysisId).slice(-6)}` : 'RUBBER-TREE';
+  analysis.tree = {
+    ...existingTree,
+    treeID: existingTreeID || fallbackTreeID,
+    treeId: existingTreeID || fallbackTreeID,
+    species: existingTree.species || analysis.species,
+    healthStatus: existingTree.healthStatus || healthStatus
+  };
+};
+
+const mapTreeProfile = (treeDoc) => {
+  if (!treeDoc) return null;
+  const tree = typeof treeDoc.toObject === 'function' ? treeDoc.toObject() : treeDoc;
+  return {
+    _id: tree._id,
+    treeID: tree.treeID,
+    treeId: tree.treeID,
+    species: tree.species || 'Rubber',
+    isRubberTree: tree.isRubberTree !== false,
+    location: tree.location || null,
+    plantedDate: tree.plantedDate || null,
+    healthStatus: tree.healthStatus || 'unknown',
+    isTappable: Boolean(tree.isTappable),
+    tappabilityScore: parseNumeric(tree.tappabilityScore, 0),
+    lastScannedAt: tree.lastScannedAt || null
+  };
+};
+
+const normalizeTreeReference = (value) => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'object') {
+    return (
+      value._id ||
+      value.id ||
+      value.treeProfileId ||
+      value.treeId ||
+      value.treeID ||
+      null
+    );
+  }
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  const lowered = text.toLowerCase();
+  if (lowered === 'null' || lowered === 'undefined' || lowered === '[object object]') {
+    return null;
+  }
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      return normalizeTreeReference(parsed);
+    } catch (parseError) {
+      return text;
+    }
+  }
+
+  return text;
+};
+
+const resolveTreeProfileForUser = async (req) => {
+  const userId = req.user?._id || req.user?.id;
+  if (!userId) return null;
+
+  const requestedTreeRef = normalizeTreeReference(
+    req.body?.treeId ||
+    req.body?.treeProfileId ||
+    req.body?.tree ||
+    null
+  );
+  const requestedTreeCode = normalizeTreeReference(
+    req.body?.treeID ||
+    req.body?.treeCode ||
+    null
+  );
+
+  if (requestedTreeRef) {
+    const query = { owner: userId };
+    if (String(requestedTreeRef).match(/^[0-9a-fA-F]{24}$/)) {
+      query._id = requestedTreeRef;
+    } else {
+      query.treeID = String(requestedTreeRef).trim();
+    }
+    const explicitTree = await Tree.findOne(query);
+    if (!explicitTree) {
+      throw new Error('Selected tree profile not found for this user');
+    }
+    return explicitTree;
+  }
+
+  if (requestedTreeCode) {
+    const byCode = await Tree.findOne({
+      owner: userId,
+      treeID: String(requestedTreeCode).trim()
+    });
+    if (byCode) return byCode;
+  }
+
+  return await Tree.findOne({ owner: userId })
+    .sort({ lastScannedAt: -1, updatedAt: -1, createdAt: -1 });
+};
+
+const attachTreeProfileToAnalysis = (analysis, treeDoc) => {
+  if (!analysis || !treeDoc) return;
+  const tree = mapTreeProfile(treeDoc);
+  if (!tree) return;
+
+  analysis.tree = {
+    ...(analysis.tree || {}),
+    ...tree
+  };
+  analysis.treeProfileId = tree._id;
+  analysis.treeID = tree.treeID;
+  analysis.treeId = tree.treeID;
+  analysis.species = tree.species || analysis.species;
+  analysis.tree_species = analysis.species;
+
+  analysis.treeIdentification = {
+    ...(analysis.treeIdentification || {}),
+    isRubberTree: tree.isRubberTree !== false,
+    species: analysis.species
+  };
+
+  analysis.trunkAnalysis = {
+    ...(analysis.trunkAnalysis || {}),
+    species: analysis.species,
+    healthStatus: analysis.trunkAnalysis?.healthStatus || tree.healthStatus || 'unknown'
+  };
+
+  analysis.tappabilityAssessment = {
+    ...(analysis.tappabilityAssessment || {}),
+    score: parseNumeric(analysis.tappabilityAssessment?.score, tree.tappabilityScore || 0),
+    isTappable:
+      analysis.tappabilityAssessment?.isTappable ??
+      Boolean(tree.isTappable)
+  };
+  analysis.tapabilityAssessment = analysis.tappabilityAssessment;
+};
+
+const buildApiAnalysisFromStored = (storedAnalysis) => {
+  const base = storedAnalysis && typeof storedAnalysis === 'object' ? { ...storedAnalysis } : {};
+  const full = base.fullAnalysis && typeof base.fullAnalysis === 'object' ? base.fullAnalysis : {};
+
+  const payload = {
+    ...full,
+    ...base,
+    primary_detection: base.primaryDetection || full.primary_detection || full.primaryDetection || {},
+    all_detections: base.allDetections || full.all_detections || full.detections || [],
+    care_recommendations: base.careRecommendations || full.care_recommendations || [],
+    maturity: base.maturity || full.maturity || {},
+    disease: base.disease || full.disease || {},
+    health_score: parseNumeric(base.healthScore ?? full.health_score ?? full.healthScore, 0),
+    age_estimate:
+      base.ageEstimate ??
+      full.age_estimate ??
+      base.age_estimation?.estimated_years ??
+      full.age_estimation?.estimated_years ??
+      null,
+    age_estimation: base.age_estimation || full.age_estimation || null,
+    visual_analysis: base.visual_analysis || full.visual_analysis || {},
+    color_analysis: base.colorAnalysis || full.color_analysis || base.visual_analysis?.color || full.visual_analysis?.color || {},
+    texture_analysis: base.textureAnalysis || full.texture_analysis || base.visual_analysis?.texture || full.visual_analysis?.texture || {},
+    model_info: base.model_info || full.model_info || {},
+    image_metadata: base.image_metadata || full.image_metadata || {},
+    ml_model_used: base.mlModelUsed ?? full.model_used ?? true,
+    treeProfileId: base.treeProfileId || full.treeProfileId || null,
+    tree: base.treeSnapshot || base.tree || full.tree || null,
+    image: {
+      url: base.imageUrl || full.image?.url || null,
+      public_id: base.imagePublicId || full.image?.public_id || null
+    }
+  };
+
+  payload.primaryDetection = payload.primary_detection;
+  payload.allDetections = payload.all_detections;
+  payload.healthScore = payload.health_score;
+  payload.careRecommendations = payload.care_recommendations;
+  payload.colorAnalysis = payload.color_analysis;
+  payload.textureAnalysis = payload.texture_analysis;
+
+  applyLegacyTrunkCompatibility(payload);
+  return payload;
+};
 
 // Use memory storage
 const trunksUpload = multer({
@@ -107,6 +529,33 @@ exports.analyzeTrunk = async (req, res) => {
         useCache: true,
         cacheKey: cacheKey
       });
+
+      if (!isTrunkDetected(analysis)) {
+        if (cloudinaryResult?.public_id) {
+          await deleteFromCloudinary(cloudinaryResult.public_id).catch((deleteError) => {
+            console.error('Error deleting non-trunk image from Cloudinary:', deleteError);
+          });
+          cloudinaryResult = null;
+        }
+
+        return res.status(422).json({
+          success: false,
+          message: 'Trunk not detected. Please upload a clear image focused on a rubber tree trunk.',
+          error: 'TRUNK_NOT_DETECTED'
+        });
+      }
+
+      // Use Groq to generate non-static disease guidance and care recommendations.
+      const groqInsights = await trunkGroqAdvisor.generate(analysis);
+      analysis.disease = groqInsights.disease;
+      analysis.care_recommendations = groqInsights.care_recommendations;
+      analysis.ai_guidance = groqInsights.source;
+      applyLegacyTrunkCompatibility(analysis);
+
+      const selectedTreeProfile = await resolveTreeProfileForUser(req);
+      if (selectedTreeProfile) {
+        attachTreeProfileToAnalysis(analysis, selectedTreeProfile);
+      }
       
       // Add Cloudinary image info
       analysis.image = {
@@ -131,32 +580,128 @@ exports.analyzeTrunk = async (req, res) => {
         processingTime: Date.now() - (req.timestamp || Date.now())
       };
       
-     const dbAnalysisData = {
-  userId: req.user?.id,
-  imageUrl: cloudinaryResult.url,
-  imagePublicId: cloudinaryResult.public_id,
-  primaryDetection: analysis.primary_detection || analysis.primaryDetection || {},
-  allDetections: analysis.all_detections || analysis.detections || [],
-  maturity: analysis.maturity || {},
-  colorAnalysis: analysis.color_analysis || analysis.visual_analysis?.color || {},
-  textureAnalysis: analysis.texture_analysis || analysis.visual_analysis?.texture || {}, // This is now an object
-  healthScore: analysis.health_score || analysis.healthScore || 0,
-  ageEstimate: analysis.age_estimate || analysis.age_estimation?.estimated_years || null,
-  careRecommendations: analysis.care_recommendations || analysis.recommendations || [],
-  fullAnalysis: analysis,
-  processingTime: analysis.processingTime || 'N/A',
-  mlModelUsed: analysis.model_used !== false,
-  disease: analysis.disease || null,
-  age_estimation: analysis.age_estimation || null,
-  visual_analysis: analysis.visual_analysis || null,
-  model_info: analysis.model_info || null,
-  image_metadata: analysis.image_metadata || null
-};
+      const sourcePrimary = analysis.primary_detection || analysis.primaryDetection || {};
+      const normalizedAllDetections = (analysis.all_detections || analysis.detections || []).map((det) => {
+        const rawSeverity =
+          det?.severity ||
+          det?.disease?.severity ||
+          (String(det?.health_status || '').toLowerCase() === 'healthy' ? 'none' : 'low');
+
+        return {
+          ...det,
+          class:
+            det?.class ||
+            det?.class_name ||
+            det?.display_name ||
+            det?.name ||
+            'unknown',
+          confidence: Number(det?.confidence || 0),
+          severity: trunksService.mapSeverityToEnum(rawSeverity)
+        };
+      });
+
+      const normalizedPrimaryDetection = {
+        ...sourcePrimary,
+        class:
+          sourcePrimary.class ||
+          sourcePrimary.class_name ||
+          analysis.disease?.class ||
+          'unknown',
+        class_name:
+          sourcePrimary.class_name ||
+          sourcePrimary.class ||
+          analysis.disease?.class ||
+          'unknown',
+        display_name:
+          sourcePrimary.display_name ||
+          sourcePrimary.name ||
+          analysis.disease?.name ||
+          sourcePrimary.class_name ||
+          sourcePrimary.class ||
+          'Unknown',
+        confidence: Number(sourcePrimary.confidence || analysis.disease?.confidence || 0),
+        severity: trunksService.mapSeverityToEnum(
+          sourcePrimary.severity ||
+          analysis.disease?.severity ||
+          (String(sourcePrimary.health_status || '').toLowerCase() === 'healthy' ? 'none' : 'low')
+        )
+      };
+
+      const normalizedCareRecommendations = (analysis.care_recommendations || [])
+        .map((item, index) => {
+          if (!item) return null;
+
+          if (typeof item === 'string') {
+            const clean = item.replace(/^[^A-Za-z0-9]+/, '').trim();
+            return {
+              priority: 'monitor',
+              action: clean || `Recommendation ${index + 1}`,
+              description: clean || item,
+              timeframe: 'As needed'
+            };
+          }
+
+          if (typeof item === 'object') {
+            const rawPriority = String(item.priority || '').toLowerCase();
+            const allowedPriorities = new Set(['immediate', 'soon', 'monitor', 'routine', 'low', 'medium', 'high', 'critical']);
+            return {
+              priority: allowedPriorities.has(rawPriority) ? rawPriority : 'monitor',
+              action: item.action || item.title || item.recommendation || `Recommendation ${index + 1}`,
+              description: item.description || item.details || item.action || '',
+              timeframe: item.timeframe || item.schedule || 'As needed'
+            };
+          }
+
+          return null;
+        })
+        .filter(Boolean);
+
+      const dbAnalysisData = {
+        userId: req.user?.id,
+        imageUrl: cloudinaryResult.url,
+        imagePublicId: cloudinaryResult.public_id,
+        treeProfileId: analysis.treeProfileId || null,
+        treeSnapshot: analysis.tree || null,
+        primaryDetection: normalizedPrimaryDetection,
+        allDetections: normalizedAllDetections,
+        maturity: analysis.maturity || {},
+        colorAnalysis: analysis.color_analysis || analysis.visual_analysis?.color || {},
+        textureAnalysis: analysis.texture_analysis || analysis.visual_analysis?.texture || {},
+        healthScore: analysis.health_score || analysis.healthScore || 0,
+        ageEstimate: analysis.age_estimate || analysis.age_estimation?.estimated_years || null,
+        careRecommendations: normalizedCareRecommendations,
+        fullAnalysis: analysis,
+        processingTime: analysis.processingTime || 'N/A',
+        mlModelUsed: analysis.model_used !== false,
+        disease: analysis.disease || null,
+        age_estimation: analysis.age_estimation || null,
+        visual_analysis: analysis.visual_analysis || null,
+        model_info: analysis.model_info || null,
+        image_metadata: analysis.image_metadata || null
+      };
       
       // Save analysis to database
       const trunkAnalysis = new TrunkAnalysis(dbAnalysisData);
       
       await trunkAnalysis.save();
+      if (selectedTreeProfile?._id) {
+        const nextHealthStatus = analysis.tree?.healthStatus || (analysis.disease?.detected ? 'diseased' : 'healthy');
+        const nextBarkTexture = String(analysis.trunkAnalysis?.texture || '').trim().toLowerCase();
+        await Tree.findByIdAndUpdate(selectedTreeProfile._id, {
+          $set: {
+            species: analysis.species || selectedTreeProfile.species,
+            healthStatus: nextHealthStatus,
+            barkTexture: nextBarkTexture || selectedTreeProfile.barkTexture || 'unknown',
+            barkColor: analysis.trunkAnalysis?.color || analysis.bark_color || selectedTreeProfile.barkColor || null,
+            isTappable: Boolean(analysis.tappabilityAssessment?.isTappable),
+            tappabilityScore: parseNumeric(analysis.tappabilityAssessment?.score, 0),
+            lastScannedAt: new Date()
+          },
+          $inc: { totalScans: 1 }
+        }).catch((treeUpdateError) => {
+          console.error('Failed to update tree profile after trunk analysis:', treeUpdateError);
+        });
+      }
       console.log(`✅ Analysis saved to database with ID: ${trunkAnalysis._id}`);
       
       // Log success
@@ -194,8 +739,11 @@ exports.analyzeTrunk = async (req, res) => {
       }
       
       // Determine appropriate status code
-      const statusCode = analysisError.message.includes('not found') ? 404 :
-                        analysisError.message.includes('format') ? 400 : 500;
+      const statusCode =
+                        analysisError.message.toLowerCase().includes('tree profile not found') ? 404 :
+                        analysisError.message.includes('not found') ? 404 :
+                        analysisError.message.includes('format') ? 400 :
+                        analysisError.message.toLowerCase().includes('groq') ? 503 : 500;
       
       res.status(statusCode).json({
         success: false,
@@ -272,7 +820,7 @@ exports.getAnalysisHistory = async (req, res) => {
       .skip(skip)
       .limit(limitNum);
     
-    // Format the response to match frontend expectations
+    // Format the response to match frontend/mobile expectations
     const formattedAnalyses = analyses.map(analysis => {
       // Extract primary detection info from various possible locations
       let primaryClass = 'Unknown';
@@ -292,10 +840,13 @@ exports.getAnalysisHistory = async (req, res) => {
       // Extract maturity info
       let maturityClass = analysis.maturity?.class || 'Unknown';
       let maturityConfidence = analysis.maturity?.confidence || 0;
+
+      const compat = buildApiAnalysisFromStored(analysis.toObject());
       
       return {
         _id: analysis._id,
         imageUrl: analysis.imageUrl,
+        treeProfileId: compat.treeProfileId || analysis.treeProfileId || null,
         createdAt: analysis.createdAt,
         primaryDetection: {
           class: primaryClass,
@@ -309,7 +860,19 @@ exports.getAnalysisHistory = async (req, res) => {
         healthScore: analysis.healthScore || 0,
         ageEstimate: analysis.ageEstimate || analysis.age_estimation?.estimated_years || null,
         disease: primaryDisplayName,
-        confidence: primaryConfidence
+        confidence: primaryConfidence,
+        species: compat.species,
+        bark_color: compat.bark_color,
+        bark_texture: compat.bark_texture,
+        tapability_score: compat.tapability_score,
+        tappability_score: compat.tappability_score,
+        tapability_assessment: compat.tapability_assessment,
+        tappability_assessment: compat.tappability_assessment,
+        treeIdentification: compat.treeIdentification,
+        trunkAnalysis: compat.trunkAnalysis,
+        tappabilityAssessment: compat.tappabilityAssessment,
+        diseaseDetection: compat.diseaseDetection,
+        tree: compat.tree
       };
     });
     
@@ -486,8 +1049,8 @@ exports.getAnalysisById = async (req, res) => {
       });
     }
     
-    // Format the analysis for frontend
-    const formattedAnalysis = analysis.toObject();
+    // Format the analysis for frontend/mobile
+    const formattedAnalysis = buildApiAnalysisFromStored(analysis.toObject());
     
     // Ensure primary detection is available
     if (!formattedAnalysis.primaryDetection && formattedAnalysis.disease) {
@@ -648,8 +1211,10 @@ exports.getTrunksInfo = async (req, res) => {
     
     const mlReady = modelAvailable && pythonAvailable && packagesAvailable;
     
-    // Get disease classes
+    // Get classes discovered from actual model output (if available)
     const diseaseClasses = trunksService.getDiseaseClasses();
+    const detectedClassCount = Object.keys(diseaseClasses).length;
+    const activeModelName = modelInfo?.path ? path.basename(modelInfo.path) : 'Trunks-v2.pt';
     
     // Get cache stats
     const cacheStats = trunksService.getCacheStats();
@@ -663,13 +1228,15 @@ exports.getTrunksInfo = async (req, res) => {
         version: '2.0.0',
         description: 'AI-powered rubber tree trunk analysis and disease detection system using trained YOLO model',
         features: [
-          '8 Disease Classes Detection',
+          detectedClassCount > 0
+            ? `${detectedClassCount} Model Classes (from ${activeModelName})`
+            : 'Model classes available after first successful inference',
           'Maturity Classification (Immature/Mature)',
           'Color Analysis',
           'Texture Analysis',
           'Health Score Assessment',
           'Age Estimation',
-          'Priority-based Care Recommendations',
+          'Groq AI Disease Guidance & Care Recommendations',
           'Visual Annotations'
         ],
         diseaseClasses: Object.values(diseaseClasses).map(d => ({
@@ -681,17 +1248,17 @@ exports.getTrunksInfo = async (req, res) => {
         supportedFormats: ['JPEG', 'PNG', 'WebP'],
         maxFileSize: '10MB',
         mlModel: {
-          name: 'Trunks.pt',
+          name: activeModelName,
           type: 'YOLO (Ultralytics)',
           status: modelAvailable ? 'Active' : 'Not Found',
-          path: modelAvailable ? '../ML-Models/Trunks.pt' : null,
+          path: modelAvailable ? `../ML-models/${activeModelName}` : null,
           ...modelInfo
         },
         systemStatus: {
           pythonAvailable: pythonAvailable,
           packagesAvailable: packagesAvailable,
           mlReady: mlReady,
-          usingFallback: !mlReady,
+          mlOnlyMode: true,
           cacheSize: cacheStats.size,
           responseTime: `${responseTime}ms`,
           imageStorage: 'Cloudinary (Cloud-based)'

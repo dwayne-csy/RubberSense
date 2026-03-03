@@ -24,7 +24,6 @@ const getUserIdFromRequest = (req) => {
   return null;
 };
 
-
 // @route   GET /api/v1/community/posts
 // @access  Public
 exports.getPosts = async (req, res, next) => {
@@ -121,7 +120,6 @@ exports.getPosts = async (req, res, next) => {
     });
   }
 };
-
 
 // @route   GET /api/v1/community/posts/:id
 // @access  Public
@@ -792,28 +790,20 @@ exports.reportContent = async (req, res, next) => {
       });
     }
 
-    // ✅ SEND NOTIFICATION TO CONTENT OWNER
-    // Only send if the reporter is not the content owner
+    // Send notification to content owner
     if (contentOwnerId && contentOwnerId.toString() !== userId.toString()) {
       try {
-        // Import the notification function
         const { triggerContentReportedNotification } = require('./Notification');
-        
-        // Send specific notification based on content type
-        const notificationMessage = await triggerContentReportedNotification(
+        await triggerContentReportedNotification(
           itemType,
           itemId,
           userId,
           reason,
           description || ''
         );
-        
-        if (notificationMessage) {
-          console.log(`✅ ${itemType === 'post' ? 'Post' : 'Comment'} reported notification sent to user ${contentOwnerId}`);
-        }
+        console.log(`✅ ${itemType === 'post' ? 'Post' : 'Comment'} reported notification sent to user ${contentOwnerId}`);
       } catch (notificationError) {
         console.error('Error sending report notification:', notificationError);
-        // Don't fail the whole request if notification fails
       }
     }
 
@@ -1065,45 +1055,60 @@ exports.search = async (req, res, next) => {
         { title: { $regex: searchQuery, $options: 'i' } },
         { content: { $regex: searchQuery, $options: 'i' } },
         { tags: { $regex: searchQuery, $options: 'i' } },
-        // Add user ID search - this will find posts by users whose names match
         { user: { $in: userIds } }
       ]
     })
     .populate({
       path: 'user',
-      select: 'name email profilePicture avatar bio contact address',
-      options: { virtuals: false }
+      select: 'name email profilePicture avatar bio contact address'
     })
     .select('-__v')
     .lean()
+    .sort('-createdAt')
     .limit(20);
+
+    // Get current user ID to check if they liked each post
+    const currentUserId = getUserIdFromRequest(req);
+
+    // Add liked status to each post
+    const postsWithLikedStatus = posts.map(post => {
+      // Ensure likes array exists
+      const likes = post.likes || [];
+      const userLiked = currentUserId ? 
+        likes.some(like => like.user && like.user.toString() === currentUserId.toString()) : 
+        false;
+      
+      return {
+        ...post,
+        userLiked,
+        likesCount: likes.length || 0,
+        commentsCount: post.comments ? post.comments.length : 0
+      };
+    });
 
     // Search in comments
     const comments = await CommunityComment.find({
       isDeleted: false,
       isHidden: false,
-      $or: [
-        { content: { $regex: searchQuery, $options: 'i' } }
-      ]
+      content: { $regex: searchQuery, $options: 'i' }
     })
     .populate({
       path: 'user',
-      select: 'name email profilePicture avatar bio',
-      options: { virtuals: false }
+      select: 'name email profilePicture avatar bio'
     })
     .populate({
       path: 'post',
-      select: 'title',
-      options: { virtuals: false }
+      select: 'title _id'
     })
     .select('-__v')
     .lean()
+    .sort('-createdAt')
     .limit(10);
 
     res.status(200).json({
       success: true,
       data: {
-        posts,
+        posts: postsWithLikedStatus,
         comments,
         users
       }
@@ -1112,7 +1117,7 @@ exports.search = async (req, res, next) => {
     console.error('Search error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error: ' + error.message
     });
   }
 };

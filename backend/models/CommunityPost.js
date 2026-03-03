@@ -20,6 +20,13 @@ const CommunityPostSchema = new mongoose.Schema({
       type: String,
       required: true
     },
+    secure_url: {
+      type: String
+    },
+    public_id: {
+      type: String,
+      required: true
+    },
     mimetype: {
       type: String,
       required: true
@@ -35,6 +42,18 @@ const CommunityPostSchema = new mongoose.Schema({
     originalname: {
       type: String,
       required: true
+    },
+    format: {
+      type: String
+    },
+    width: {
+      type: Number
+    },
+    height: {
+      type: Number
+    },
+    duration: {
+      type: Number
     }
   }],
   tags: [{

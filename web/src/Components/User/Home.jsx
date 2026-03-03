@@ -5,6 +5,234 @@ import UserHeader from '../layouts/UserHeader';
 import UserFooter from '../layouts/UserFooter';
 import ChatbotWidget from './ChatbotWidget'; // Import the chatbot widget
 
+// ── SVG Icon Components ──────────────────────────────────────────────────────
+
+const IconFlask = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 3h6M9 3v8l-4 9h14l-4-9V3"/>
+    <line x1="9" y1="9" x2="15" y2="9"/>
+  </svg>
+);
+
+const IconTree = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22v-7"/>
+    <path d="M12 15L4 8h16z"/>
+    <path d="M12 10L6 4h12z"/>
+  </svg>
+);
+
+const IconRobot = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="10" rx="2"/>
+    <circle cx="12" cy="5" r="2"/>
+    <line x1="12" y1="7" x2="12" y2="11"/>
+    <line x1="8" y1="15" x2="8" y2="15" strokeWidth="3"/>
+    <line x1="16" y1="15" x2="16" y2="15" strokeWidth="3"/>
+    <line x1="9" y1="19" x2="15" y2="19"/>
+  </svg>
+);
+
+const IconCloud = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+  </svg>
+);
+
+const IconLeaf = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/>
+    <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+  </svg>
+);
+
+const IconFileText = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <polyline points="10 9 9 9 8 9"/>
+  </svg>
+);
+
+const IconMap = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+    <line x1="8" y1="2" x2="8" y2="18"/>
+    <line x1="16" y1="6" x2="16" y2="22"/>
+  </svg>
+);
+
+const IconSun = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+    <line x1="12" y1="1" x2="12" y2="3"/>
+    <line x1="12" y1="21" x2="12" y2="23"/>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+    <line x1="1" y1="12" x2="3" y2="12"/>
+    <line x1="21" y1="12" x2="23" y2="12"/>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+);
+
+const IconCloudSun = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41"/>
+    <path d="M17 12a5 5 0 1 0-9.9-1H6a3 3 0 0 0 0 6h11a3 3 0 0 0 0-6z"/>
+  </svg>
+);
+
+const IconCloudRain = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="16" y1="13" x2="16" y2="21"/>
+    <line x1="8" y1="13" x2="8" y2="21"/>
+    <line x1="12" y1="15" x2="12" y2="23"/>
+    <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/>
+  </svg>
+);
+
+const IconSnowflake = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="2" y1="12" x2="22" y2="12"/>
+    <line x1="12" y1="2" x2="12" y2="22"/>
+    <path d="M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/>
+  </svg>
+);
+
+const IconZap = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
+
+const IconWind = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
+  </svg>
+);
+
+const IconDroplets = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 6.75 7 5.3c-.29 1.45-1.14 2.84-2.29 3.76S3 11.1 3 12.25c0 2.22 1.8 4.05 4 4.05z"/>
+    <path d="M12.56 6.6A10.97 10.97 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/>
+  </svg>
+);
+
+const IconCalendar = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+
+const IconClock = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const IconPin = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+    <circle cx="12" cy="10" r="3"/>
+  </svg>
+);
+
+const IconRefresh = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+);
+
+const IconArrowUpRight = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="7" y1="17" x2="17" y2="7"/>
+    <polyline points="7 7 17 7 17 17"/>
+  </svg>
+);
+
+const IconArrowRight = ({ size = 12, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="5" y1="12" x2="19" y2="12"/>
+    <polyline points="12 5 19 12 12 19"/>
+  </svg>
+);
+
+const IconAlertTriangle = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
+const IconX = ({ size = 18, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const IconTarget = ({ size = 20, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <circle cx="12" cy="12" r="6"/>
+    <circle cx="12" cy="12" r="2"/>
+  </svg>
+);
+
+const IconSpin = ({ size = 80, color = '#2d6a4f' }) => (
+  <svg width={size} height={size} viewBox="0 0 80 80" fill="none">
+    <circle cx="40" cy="40" r="36" stroke="#d1e8d1" strokeWidth="4"/>
+    <path d="M40 4a36 36 0 0 1 36 36" stroke={color} strokeWidth="4" strokeLinecap="round">
+      <animateTransform attributeName="transform" type="rotate" from="0 40 40" to="360 40 40" dur="1s" repeatCount="indefinite"/>
+    </path>
+  </svg>
+);
+
+// Map weather codes to icon components
+const getWeatherIcon = (code, size = 40) => {
+  if (code === 0) return <IconSun size={size} color="#f59e0b" />;
+  if (code <= 2) return <IconCloudSun size={size} color="#f59e0b" />;
+  if (code === 3) return <IconCloud size={size} color="#9ca3af" />;
+  if (code <= 48) return <IconCloud size={size} color="#9ca3af" />;
+  if (code <= 67) return <IconCloudRain size={size} color="#60a5fa" />;
+  if (code <= 77) return <IconSnowflake size={size} color="#93c5fd" />;
+  if (code <= 82) return <IconCloudRain size={size} color="#60a5fa" />;
+  if (code <= 86) return <IconSnowflake size={size} color="#93c5fd" />;
+  return <IconZap size={size} color="#fbbf24" />;
+};
+
+const weatherIconMap = {
+  '☀️': <IconSun size={40} color="#f59e0b" />,
+  '🌤️': <IconCloudSun size={40} color="#f59e0b" />,
+  '⛅': <IconCloudSun size={40} color="#9ca3af" />,
+  '☁️': <IconCloud size={40} color="#9ca3af" />,
+  '🌫️': <IconCloud size={40} color="#d1d5db" />,
+  '🌧️': <IconCloudRain size={40} color="#60a5fa" />,
+  '🌨️': <IconSnowflake size={40} color="#93c5fd" />,
+  '⛈️': <IconZap size={40} color="#fbbf24" />,
+};
+
+const weatherIconSmallMap = {
+  '☀️': <IconSun size={22} color="#f59e0b" />,
+  '🌤️': <IconCloudSun size={22} color="#f59e0b" />,
+  '⛅': <IconCloudSun size={22} color="#9ca3af" />,
+  '☁️': <IconCloud size={22} color="#9ca3af" />,
+  '🌫️': <IconCloud size={22} color="#d1d5db" />,
+  '🌧️': <IconCloudRain size={22} color="#60a5fa" />,
+  '🌨️': <IconSnowflake size={22} color="#93c5fd" />,
+  '⛈️': <IconZap size={22} color="#fbbf24" />,
+};
+
 const Home = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -392,7 +620,7 @@ const Home = () => {
         iframe.src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - bboxSize},${lat - bboxSize},${lng + bboxSize},${lat + bboxSize}&layer=mapnik&marker=${lat},${lng}&center=${lat},${lng}`;
       }
       const toast = document.createElement('div');
-      toast.textContent = '📍 Map centered on your location';
+      toast.textContent = 'Map centered on your location';
       toast.style.cssText = `
         position: fixed; bottom: 100px; right: 20px; background: #2d6a4f; color: white;
         padding: 10px 15px; border-radius: 8px; z-index: 10000; font-size: 14px;
@@ -440,8 +668,7 @@ const Home = () => {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f0f7f0' }}>
         <div style={{ position: 'relative', width: '80px', height: '80px' }}>
-          <div style={{ width: '80px', height: '80px', border: '4px solid #d1e8d1', borderTop: '4px solid #2d6a4f', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-          <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '28px' }}></span>
+          <IconSpin size={80} color="#2d6a4f" />
         </div>
         <p style={{ textAlign: 'center', color: '#2d6a4f', fontSize: '18px', marginTop: '20px', fontFamily: "'Playfair Display', Georgia, serif", letterSpacing: '1px' }}>Growing your experience...</p>
       </div>
@@ -540,18 +767,18 @@ const Home = () => {
                       transition: 'all 0.3s ease',
                       letterSpacing: '0.5px',
                       boxShadow: '0 8px 24px rgba(74,181,74,0.35)',
-                      fontFamily: "'DM Sans', sans-serif"
+                      fontFamily: "'DM Sans', sans-serif",
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(74,181,74,0.5)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(74,181,74,0.35)'; }}
                   >
-                    Learn More →
+                    Learn More <IconArrowRight size={14} color="white" />
                   </button>
-
                 </div>
               </div>
-
-
             </div>
           ))}
 
@@ -650,19 +877,19 @@ const Home = () => {
                 {/* Feature grid - clickable navigation */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                   {[
-                    { icon: '🧪', label: 'Latex Detection', path: '/latex-detection', clickable: true },
-                    { icon: '🌳', label: 'Trunk Analysis', path: '/trunks-detection', clickable: true },
-                    { icon: '🤖', label: 'AI Assistant', path: null, clickable: false, action: () => setIsChatOpen(true) }, // Modified to open chat
-                    { icon: '🌤️', label: 'Weather Monitoring', path: '/weather', clickable: true },
-                    { icon: '🍃', label: 'Leaf Detection', path: '/leaf-detection', clickable: true },
-                    { icon: '📝', label: 'Community Blogspot', path: '/community-blogspot', clickable: true },
-                    { icon: '🗺️', label: 'Plantation Mapping', path: '/maps', clickable: true }
+                    { icon: <IconFlask size={18} />, label: 'Latex Detection', path: '/latex-detection', clickable: true },
+                    { icon: <IconTree size={18} />, label: 'Trunk Analysis', path: '/trunks-detection', clickable: true },
+                    { icon: <IconRobot size={18} />, label: 'AI Assistant', path: null, clickable: false, action: () => setIsChatOpen(true) },
+                    { icon: <IconCloud size={18} />, label: 'Weather Monitoring', path: '/weather', clickable: true },
+                    { icon: <IconLeaf size={18} />, label: 'Leaf Detection', path: '/leaf-detection', clickable: true },
+                    { icon: <IconFileText size={18} />, label: 'Community Blogspot', path: '/community-blogspot', clickable: true },
+                    { icon: <IconMap size={18} />, label: 'Plantation Mapping', path: '/maps', clickable: true }
                   ].map((feature, idx) => (
                     <div
                       key={idx}
                       onClick={() => {
                         if (feature.action) {
-                          feature.action(); // Call custom action if exists
+                          feature.action();
                         } else if (feature.clickable && feature.path) {
                           navigate(feature.path);
                         }
@@ -704,11 +931,11 @@ const Home = () => {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '1.1rem' }}>{feature.icon}</span>
+                        <span style={{ display: 'flex', alignItems: 'center' }}>{feature.icon}</span>
                         <span>{feature.label}</span>
                       </div>
                       {(feature.clickable || feature.action) && (
-                        <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>→</span>
+                        <IconArrowRight size={12} color="currentColor" />
                       )}
                     </div>
                   ))}
@@ -769,11 +996,7 @@ const Home = () => {
           </div>
 
           {/* Attractive Green Line Divider */}
-          <div style={{
-            maxWidth: '1280px',
-            margin: '0 auto',
-            padding: '0 40px'
-          }}>
+          <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 40px' }}>
             <div style={{
               position: 'relative',
               height: '2px',
@@ -796,13 +1019,12 @@ const Home = () => {
                 alignItems: 'center',
                 gap: '8px'
               }}>
-                <span style={{ fontSize: '1.5rem', color: '#2d6a4f', animation: 'pulse 2s ease-in-out infinite' }}></span>
-                <span style={{ fontSize: '1rem', color: '#4a6455', fontWeight: '300', letterSpacing: '2px' }}></span>
-                <span style={{ fontSize: '1.5rem', color: '#2d6a4f', animation: 'pulse 2s ease-in-out infinite' }}></span>
+                <IconLeaf size={22} color="#2d6a4f" />
+                <IconLeaf size={22} color="#2d6a4f" />
               </div>
             </div>
 
-            {/* Double line effect for extra visual appeal */}
+            {/* Double line effect */}
             <div style={{
               height: '1px',
               background: 'linear-gradient(90deg, transparent, rgba(74,181,74,0.3), rgba(45,106,79,0.5), rgba(74,181,74,0.3), transparent)',
@@ -843,7 +1065,7 @@ const Home = () => {
                 {/* Card header strip */}
                 <div style={{ background: 'linear-gradient(135deg, #1b4332, #2d6a4f)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '1.4rem' }}>🌤️</span>
+                    <IconCloudSun size={22} color="white" />
                     <span style={{ color: 'white', fontSize: '1.1rem', fontWeight: '600', fontFamily: "'Playfair Display', serif" }}>Current Weather</span>
                     {weatherLoading && (
                       <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', padding: '3px 10px', borderRadius: '20px' }}>Loading...</span>
@@ -852,19 +1074,27 @@ const Home = () => {
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button
                       onClick={(e) => { e.stopPropagation(); refreshLocation(); }}
-                      style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s' }}
+                      style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif", transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.28)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; }}
-                    >🔄 Refresh</button>
-                    <div style={{ background: 'rgba(74,181,74,0.3)', color: '#a8e6a3', padding: '5px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', border: '1px solid rgba(74,181,74,0.4)' }}>↗ Full View</div>
+                    >
+                      <IconRefresh size={13} color="white" /> Refresh
+                    </button>
+                    <div style={{ background: 'rgba(74,181,74,0.3)', color: '#a8e6a3', padding: '5px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', border: '1px solid rgba(74,181,74,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <IconArrowUpRight size={12} color="#a8e6a3" /> Full View
+                    </div>
                   </div>
                 </div>
 
                 <div style={{ padding: '24px' }}>
                   {/* Date/time */}
                   <div style={{ background: '#f5f9f5', padding: '14px 18px', borderRadius: '10px', border: '1px solid #d8eed8', marginBottom: '22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ color: '#4a6455', fontSize: '0.9rem' }}>📅 {currentDate}</div>
-                    <div style={{ color: '#2d6a4f', fontSize: '1rem', fontWeight: '700', fontFamily: 'monospace' }}>🕒 {currentTime}</div>
+                    <div style={{ color: '#4a6455', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <IconCalendar size={15} color="#4a6455" /> {currentDate}
+                    </div>
+                    <div style={{ color: '#2d6a4f', fontSize: '1rem', fontWeight: '700', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <IconClock size={15} color="#2d6a4f" /> {currentTime}
+                    </div>
                   </div>
 
                   {weather && (
@@ -876,18 +1106,22 @@ const Home = () => {
                             <span style={{ fontWeight: '500' }}>{weather.condition}</span>
                             <span style={{ fontSize: '0.8rem', color: '#666', background: 'white', padding: '2px 8px', borderRadius: '20px', border: '1px solid #d8eed8' }}>Feels {weather.feels_like}°C</span>
                           </div>
-                          <div style={{ color: '#2d6a4f', fontSize: '0.85rem', marginTop: '6px', fontWeight: '500' }}>📍 {weather.location}</div>
+                          <div style={{ color: '#2d6a4f', fontSize: '0.85rem', marginTop: '6px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <IconPin size={13} color="#2d6a4f" /> {weather.location}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '4rem', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))', animation: 'float 3s ease-in-out infinite' }}>{weather.icon}</div>
+                        <div style={{ animation: 'float 3s ease-in-out infinite' }}>
+                          {weatherIconMap[weather.icon] || <IconCloudSun size={40} color="#f59e0b" />}
+                        </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
                         {[
-                          { label: 'Humidity', value: `${weather.humidity}%`, icon: '💧' },
-                          { label: 'Wind Speed', value: `${weather.wind} km/h`, icon: '🌬️' }
+                          { label: 'Humidity', value: `${weather.humidity}%`, iconEl: <IconDroplets size={22} color="#60a5fa" /> },
+                          { label: 'Wind Speed', value: `${weather.wind} km/h`, iconEl: <IconWind size={22} color="#34d399" /> }
                         ].map((item, i) => (
                           <div key={i} style={{ background: '#f5f9f5', padding: '16px', borderRadius: '10px', textAlign: 'center', border: '1px solid #d8eed8' }}>
-                            <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>{item.icon}</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>{item.iconEl}</div>
                             <div style={{ color: '#4a6455', fontSize: '0.8rem', marginBottom: '4px' }}>{item.label}</div>
                             <div style={{ color: '#1b4332', fontSize: '1.5rem', fontWeight: '700', fontFamily: "'Playfair Display', serif" }}>{item.value}</div>
                           </div>
@@ -896,7 +1130,7 @@ const Home = () => {
 
                       <div>
                         <h3 style={{ color: '#0d2818', marginBottom: '14px', fontSize: '1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>📅</span> 5-Day Forecast
+                          <IconCalendar size={16} color="#0d2818" /> 5-Day Forecast
                         </h3>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           {forecast.map((day, index) => (
@@ -906,7 +1140,9 @@ const Home = () => {
                               onMouseLeave={(e) => { e.currentTarget.style.background = '#f5f9f5'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
                             >
                               <div style={{ color: '#4a6455', fontSize: '0.8rem', fontWeight: '600', marginBottom: '6px' }}>{day.day}</div>
-                              <div style={{ fontSize: '1.5rem', marginBottom: '6px' }}>{day.icon}</div>
+                              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}>
+                                {weatherIconSmallMap[day.icon] || <IconCloudSun size={22} color="#f59e0b" />}
+                              </div>
                               <div style={{ color: '#1b4332', fontWeight: '700', fontSize: '1.1rem' }}>{day.temp}°</div>
                               <div style={{ color: '#999', fontSize: '0.7rem', marginTop: '2px' }}>{day.low}°</div>
                             </div>
@@ -937,24 +1173,28 @@ const Home = () => {
                 {/* Card header strip */}
                 <div style={{ background: 'linear-gradient(135deg, #1b4332, #2d6a4f)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '1.4rem' }}>🗺️</span>
+                    <IconMap size={22} color="white" />
                     <span style={{ color: 'white', fontSize: '1.1rem', fontWeight: '600', fontFamily: "'Playfair Display', serif" }}>Your Location</span>
                     {mapLoading && (
                       <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', padding: '3px 10px', borderRadius: '20px' }}>Detecting...</span>
                     )}
                   </div>
-                  <div style={{ background: 'rgba(74,181,74,0.3)', color: '#a8e6a3', padding: '5px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', border: '1px solid rgba(74,181,74,0.4)' }}>↗ Full Map</div>
+                  <div style={{ background: 'rgba(74,181,74,0.3)', color: '#a8e6a3', padding: '5px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', border: '1px solid rgba(74,181,74,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <IconArrowUpRight size={12} color="#a8e6a3" /> Full Map
+                  </div>
                 </div>
 
                 <div style={{ padding: '24px' }}>
                   {locationError && (
                     <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e', padding: '12px 15px', borderRadius: '10px', marginBottom: '18px', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                      <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>⚠️</span>
+                      <span style={{ flexShrink: 0, marginTop: '1px' }}><IconAlertTriangle size={18} color="#f59e0b" /></span>
                       <div style={{ flex: 1 }}>
                         <strong>Location Issue:</strong> {locationError}
                         <div style={{ fontSize: '0.8rem', marginTop: '3px', opacity: 0.8 }}>Enable location access in your browser settings</div>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); setLocationError(null); }} style={{ background: 'none', border: 'none', color: '#92400e', fontSize: '1.3rem', cursor: 'pointer', padding: 0 }}>×</button>
+                      <button onClick={(e) => { e.stopPropagation(); setLocationError(null); }} style={{ background: 'none', border: 'none', color: '#92400e', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}>
+                        <IconX size={18} color="#92400e" />
+                      </button>
                     </div>
                   )}
 
@@ -970,7 +1210,9 @@ const Home = () => {
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                         <div style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '3rem', marginBottom: '14px' }}>📍</div>
+                          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+                            <IconPin size={48} color="#2d6a4f" />
+                          </div>
                           <div style={{ fontSize: '1.05rem', color: '#2d6a4f', fontWeight: '600', marginBottom: '8px' }}>Location Access Required</div>
                           <div style={{ fontSize: '0.85rem', color: '#4a6455' }}>Allow location for mapping & weather</div>
                         </div>
@@ -986,20 +1228,24 @@ const Home = () => {
                           border: '2px solid #2d6a4f',
                           width: '44px', height: '44px', borderRadius: '50%',
                           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '18px', zIndex: 10,
+                          zIndex: 10,
                           boxShadow: '0 4px 12px rgba(45,106,79,0.3)',
                           transition: 'all 0.2s'
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = '#2d6a4f'; e.currentTarget.style.color = 'white'; e.currentTarget.style.transform = 'scale(1.1)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; e.currentTarget.style.color = '#2d6a4f'; e.currentTarget.style.transform = 'scale(1)'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#2d6a4f'; e.currentTarget.style.transform = 'scale(1.1)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'scale(1)'; }}
                         title="Center on my location"
-                      >↗</button>
+                      >
+                        <IconTarget size={20} color="inherit" />
+                      </button>
                     )}
                   </div>
 
                   {locationAddress && (
                     <div style={{ background: '#f5f9f5', padding: '14px 16px', borderRadius: '10px', border: '1px solid #d8eed8', marginBottom: '14px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                      <div style={{ background: '#2d6a4f', color: 'white', width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>📍</div>
+                      <div style={{ background: '#2d6a4f', color: 'white', width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <IconPin size={18} color="white" />
+                      </div>
                       <div>
                         <div style={{ fontSize: '0.75rem', color: '#4a6455', marginBottom: '3px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Full Address</div>
                         <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#0d2818', lineHeight: '1.4' }}>{locationAddress}</div>
@@ -1011,7 +1257,7 @@ const Home = () => {
                   <div style={{ marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                       <h3 style={{ color: '#0d2818', fontSize: '0.95rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}>
-                        <span>🌳</span> Philippines Plantations
+                        <IconTree size={16} color="#2d6a4f" /> Philippines Plantations
                       </h3>
                       <span style={{ fontSize: '0.7rem', color: '#4a6455', background: '#f5f9f5', padding: '2px 8px', borderRadius: '12px' }}>
                         {plantations.length} locations
@@ -1028,7 +1274,7 @@ const Home = () => {
                       {plantations.map((plantation, index) => (
                         <div
                           key={index}
-                          onClick={(e) => e.stopPropagation()} // Prevent navigation to full map when clicking on plantation
+                          onClick={(e) => e.stopPropagation()}
                           style={{
                             padding: '10px 12px',
                             borderBottom: index < plantations.length - 1 ? '1px solid #e8f5e9' : 'none',
@@ -1039,16 +1285,12 @@ const Home = () => {
                             transition: 'all 0.2s ease',
                             background: 'white'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f0f9f0';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'white';
-                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#f0f9f0'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <span style={{ fontSize: '1rem' }}>
-                              {plantation.type === 'large' ? '' : plantation.type === 'medium' ? '' : ''}
+                            <span style={{ display: 'flex', alignItems: 'center' }}>
+                              <IconTree size={14} color={plantation.type === 'Large' ? '#2d6a4f' : plantation.type === 'Medium' ? '#4a6455' : '#6b8e6b'} />
                             </span>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: '0.9rem', fontWeight: '500', color: '#0d2818' }}>
@@ -1056,7 +1298,7 @@ const Home = () => {
                               </div>
                               <div style={{ fontSize: '0.7rem', color: '#4a6455', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 <span style={{ 
-                                  background: plantation.type === 'large' ? '#2d6a4f' : plantation.type === 'medium' ? '#4a6455' : '#6b8e6b',
+                                  background: plantation.type === 'Large' ? '#2d6a4f' : plantation.type === 'Medium' ? '#4a6455' : '#6b8e6b',
                                   color: 'white',
                                   padding: '1px 6px',
                                   borderRadius: '10px',
@@ -1069,7 +1311,7 @@ const Home = () => {
                               </div>
                             </div>
                           </div>
-                          <span style={{ fontSize: '0.8rem', color: '#4a6455', opacity: 0.6 }}>→</span>
+                          <IconArrowRight size={12} color="#4a6455" />
                         </div>
                       ))}
                     </div>
@@ -1079,7 +1321,7 @@ const Home = () => {
                   </div>
 
                   <div style={{ textAlign: 'center', padding: '12px', background: '#f5f9f5', borderRadius: '8px', border: '1px solid #d8eed8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '1rem', color: '#4ab54a' }}>📍</span>
+                    <IconPin size={16} color="#4ab54a" />
                     <span style={{ color: '#2d6a4f', fontSize: '0.82rem', fontWeight: '600' }}>Click anywhere to open the full interactive map</span>
                   </div>
                 </div>

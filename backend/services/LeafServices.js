@@ -6,15 +6,40 @@ const execPromise = util.promisify(exec);
 
 /**
  * Service for rubber tree leaf disease detection
- * Uses trained YOLO model (Leaf.pt) for accurate classification
+ * Uses trained YOLO model (leaf-v2.pt) for accurate classification
  */
 class LeafService {
   constructor() {
-    this.modelPath = path.join(__dirname, '../ML-Models/Leaf.pt');
-    this.pythonScriptPath = path.join(__dirname, '../ML-Models/leaf_inference.py');
+    this.modelPath = this.resolveModelPath();
+    this.pythonScriptPath = path.join(__dirname, '../ML-models/leaf_inference.py');
     this.tempDir = path.join(__dirname, '../temp');
     this.diseaseDatabase = this.initializeDiseaseDatabase();
+    this.lastModelInfo = null;
     this.initTempDir();
+  }
+
+  resolveModelPath() {
+    const fsSync = require('fs');
+    const candidates = [
+      'leaf-v2.pt',
+      'Leaf-v2.pt',
+      'Leaf-obb.pt',
+      'Leaf-detect.pt',
+      'leaf.pt',
+      'Leaf.pt'
+    ];
+    for (const file of candidates) {
+      const fullPath = path.join(__dirname, '../ML-models', file);
+      if (fsSync.existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+    return path.join(__dirname, '../ML-models/leaf-v2.pt');
+  }
+
+  getActiveModelName() {
+    this.modelPath = this.resolveModelPath();
+    return path.basename(this.modelPath || 'leaf-v2.pt');
   }
 
   /**
@@ -232,16 +257,17 @@ class LeafService {
     };
   }
 
-  /**
+    /**
    * Check if the trained model file exists
    */
   async checkModelAvailability() {
     try {
+      this.modelPath = this.resolveModelPath();
       await fs.access(this.modelPath);
-      console.log('✅ Leaf model found at:', this.modelPath);
+      console.log('Leaf model found at:', this.modelPath);
       return true;
     } catch (error) {
-      console.warn('❌ Leaf model not found at:', this.modelPath);
+      console.warn('Leaf model not found at:', this.modelPath);
       return false;
     }
   }
@@ -252,12 +278,15 @@ class LeafService {
   getModelInfo() {
     try {
       const fs = require('fs');
+      this.modelPath = this.resolveModelPath();
       if (fs.existsSync(this.modelPath)) {
         const stats = fs.statSync(this.modelPath);
         return {
           fileSize: stats.size,
           lastModified: stats.mtime,
-          type: 'YOLO Classification Model'
+          modelFile: path.basename(this.modelPath),
+          type: this.lastModelInfo?.type || 'YOLO Model',
+          task: this.lastModelInfo?.task || 'unknown'
         };
       }
       return null;
@@ -397,53 +426,63 @@ class LeafService {
       // Check if Python script exists
       try {
         await fs.access(this.pythonScriptPath);
-        console.log('✅ Python script found at:', this.pythonScriptPath);
+        console.log('Python script found at:', this.pythonScriptPath);
       } catch (error) {
-        console.error('❌ Python script not found at:', this.pythonScriptPath);
-        return this.fallbackAnalysis(imagePath, 'Python script not found');
+        console.error('Python script not found at:', this.pythonScriptPath);
+        throw new Error('Leaf ML analysis unavailable: Python script not found');
       }
 
       // Check if model exists
       try {
+        this.modelPath = this.resolveModelPath();
         await fs.access(this.modelPath);
-        console.log('✅ Model found at:', this.modelPath);
+        console.log('Model found at:', this.modelPath);
       } catch (error) {
-        console.error('❌ Model not found at:', this.modelPath);
-        return this.fallbackAnalysis(imagePath, 'Model file not found');
+        console.error('Model not found at:', this.modelPath);
+        throw new Error('Leaf ML analysis unavailable: Model file not found');
       }
 
       // Check if image exists
       try {
         await fs.access(imagePath);
-        console.log('✅ Image found at:', imagePath);
+        console.log('Image found at:', imagePath);
       } catch (error) {
-        console.error('❌ Image not found at:', imagePath);
-        return this.fallbackAnalysis(imagePath, 'Image file not found');
+        console.error('Image not found at:', imagePath);
+        throw new Error('Leaf ML analysis unavailable: Image file not found');
       }
 
-      console.log('🔬 Running leaf analysis with trained model...');
-      
+      const pythonAvailable = await this.checkPythonAvailability();
+      if (!pythonAvailable) {
+        throw new Error('Leaf ML analysis unavailable: Python not available');
+      }
+
+      const packagesAvailable = await this.checkPythonPackages();
+      if (!packagesAvailable) {
+        throw new Error('Leaf ML analysis unavailable: Required Python packages missing');
+      }
+
+      console.log('Running leaf analysis with trained model...');
+
       // Try different python commands
-      let stdout, stderr;
+      let stdout;
+      let stderr;
       let pythonCommand = 'python3';
-      
+
       try {
-        // Try python3 first
-        console.log(`Executing: ${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`);
+        console.log(`Executing: ${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json "${this.modelPath}"`);
         const result = await execPromise(
-          `${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`
+          `${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json "${this.modelPath}"`
         );
         stdout = result.stdout;
         stderr = result.stderr;
       } catch (error) {
-        // If python3 fails, try python
         pythonCommand = 'python';
         console.log('Python3 failed, trying python...');
-        console.log(`Executing: ${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`);
-        
+        console.log(`Executing: ${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json "${this.modelPath}"`);
+
         try {
           const result = await execPromise(
-            `${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json`
+            `${pythonCommand} "${this.pythonScriptPath}" "${imagePath}" json "${this.modelPath}"`
           );
           stdout = result.stdout;
           stderr = result.stderr;
@@ -460,39 +499,58 @@ class LeafService {
       console.log('Python stdout:', stdout.substring(0, 200) + '...');
 
       // Parse JSON output
-      let result;
-      try {
-        result = JSON.parse(stdout);
-        console.log('✅ Successfully parsed Python output');
-      } catch (parseError) {
-        console.error('Failed to parse Python output:', stdout);
-        return this.fallbackAnalysis(imagePath, 'Invalid Python output: ' + parseError.message);
+      let result = null;
+      const linesOut = stdout.trim().split('\n').filter(Boolean);
+      for (let i = linesOut.length - 1; i >= 0; i--) {
+        const line = linesOut[i].trim();
+        if (!line.startsWith('{') && !line.startsWith('[')) continue;
+        try {
+          result = JSON.parse(line);
+          break;
+        } catch (parseError) {
+          // keep scanning
+        }
       }
-      
+      if (!result) {
+        console.error('Failed to parse Python output:', stdout);
+        throw new Error(`Invalid JSON output from ${path.basename(this.modelPath)} inference`);
+      }
+      console.log('Successfully parsed Python output');
+
       if (!result.success) {
         throw new Error(result.error || 'Inference failed');
       }
 
+      const returnedFallback =
+        result.is_heuristic === true ||
+        result.ml_model_used === false ||
+        result.model_used === false ||
+        result.fallback === true ||
+        result.fallback_reason;
+      const mlModelUsed = !returnedFallback;
+
       // Format the result with disease database information
       const formattedResult = this.formatAnalysisResult(result, imagePath);
-      
+      formattedResult.ml_model_used = mlModelUsed;
+
       // Add model info
       formattedResult.modelInfo = {
-        modelUsed: 'Leaf.pt',
+        modelUsed: path.basename(this.modelPath),
         modelPath: this.modelPath,
-        mlModelUsed: true,
+        mlModelUsed,
+        fallback: returnedFallback ? true : false,
+        fallbackReason: returnedFallback ? (result.fallback_reason || 'non_ml_fallback_output') : null,
         ...result.model_info
       };
-      
+      this.lastModelInfo = formattedResult.modelInfo;
+
       return formattedResult;
 
     } catch (error) {
-      console.error('❌ Analysis execution error:', error);
+      console.error('Analysis execution error:', error);
       console.error('Error stack:', error.stack);
-      
-      // Fallback to heuristic analysis if ML fails
-      console.warn('⚠️ Falling back to heuristic analysis');
-      return this.fallbackAnalysis(imagePath, error.message);
+
+      throw new Error(`${path.basename(this.modelPath || 'leaf-v2.pt')} inference failed: ${error.message}`);
     }
   }
 
@@ -502,6 +560,14 @@ class LeafService {
   formatAnalysisResult(rawResult, imagePath) {
     const detection = rawResult.disease_detection || {};
     const visual = rawResult.visual_analysis || {};
+    const detectionRows = Array.isArray(detection.detections) ? detection.detections : [];
+    const topPredictions = Array.isArray(detection.all_predictions) && detection.all_predictions.length > 0
+      ? detection.all_predictions
+      : detectionRows.map((d) => ({
+          class: d.class || d.display_name || d.original_class || 'Unknown',
+          original_class: d.original_class || d.class || 'unknown',
+          confidence: Number(d.confidence || 0)
+        })).slice(0, 5);
 
     // Get detailed disease information
     const diseaseName = detection.primary_disease || 'Unknown';
@@ -526,13 +592,15 @@ class LeafService {
         healthStatus: detection.health_status || 'unknown',
         severity: detection.severity || diseaseInfo.severity || 'unknown',
         isConfident: detection.is_confident || false,
-        allPredictions: detection.all_predictions || [],
+        allPredictions: topPredictions,
         description: diseaseInfo.description
       },
       // Add these fields for controller compatibility
       disease_detected: diseaseName,
       confidence: detection.confidence || 0,
       severity: detection.severity || diseaseInfo.severity || 'unknown',
+      detections: detectionRows,
+      detection_count: detection.detection_count || detectionRows.length,
       spots_count: visual.spot_count || 0,
       color_analysis: {
         primaryColor: visual.dominant_color || 'unknown',
@@ -660,7 +728,7 @@ class LeafService {
       },
       treatment_recommendations: [
         'Please install Python dependencies: numpy, ultralytics, opencv-python',
-        'Ensure Leaf.pt model file exists in ML-Models directory'
+        'Ensure leaf-v2.pt (or Leaf-v2.pt) model file exists in ML-models directory'
       ],
       prevention_strategies: [
         'Check system configuration',
@@ -674,7 +742,7 @@ class LeafService {
         dominantColor: 'unknown',
         colorDistribution: {},
         texture: 'unknown',
-        leafCoverage: 100,
+        leafCoverage: 0,
         hasSpots: false
       },
       symptoms: ['Unable to detect symptoms without ML model'],
@@ -683,7 +751,7 @@ class LeafService {
       impact: 'Unknown',
       recommendations: [
         '⚠️ ML model unavailable - using basic analysis',
-        'Check if Leaf.pt exists in ML-Models directory',
+        'Check if leaf-v2.pt (or Leaf-v2.pt) exists in ML-models directory',
         'Verify Python and required packages are installed',
         'Run: pip install numpy ultralytics opencv-python'
       ],
@@ -774,3 +842,7 @@ class LeafService {
 }
 
 module.exports = new LeafService();
+
+
+
+

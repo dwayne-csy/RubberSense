@@ -1379,36 +1379,107 @@ const CommunityBlogspot = () => {
     return null;
   };
 
-  const renderPostMedia = (media) => {
-    if (!media || media.length === 0) return null;
-    return (
-      <div className="cb-media-grid">
-        {media.map((item, index) => (
-          <div key={index}>
-            {item.mimetype?.startsWith('image/') ? (
-              <img src={`${API_BASE_URL}${item.url}`} alt={`Post media ${index + 1}`}
-                onClick={() => window.open(`${API_BASE_URL}${item.url}`, '_blank')}
-                onError={(e) => { e.target.style.display = 'none'; }} />
-            ) : item.mimetype?.startsWith('video/') ? (
-              <video src={`${API_BASE_URL}${item.url}`} controls
-                onError={(e) => { e.target.style.display = 'none'; }} />
-            ) : null}
+// Update the renderPostMedia function to handle both local and Cloudinary URLs
+const renderPostMedia = (media) => {
+  if (!media || media.length === 0) return null;
+  
+  return (
+    <div className="cb-media-grid">
+      {media.map((item, index) => {
+        // Handle both string URLs and object formats
+        let mediaUrl = item;
+        let mediaType = null;
+        
+        if (typeof item === 'object') {
+          mediaUrl = item.url || item;
+          mediaType = item.mimetype || item.resource_type;
+        }
+        
+        // Determine if it's a video based on URL or mimetype
+        const isVideo = mediaType?.startsWith('video/') || 
+                       mediaType === 'video' ||
+                       (typeof mediaUrl === 'string' && 
+                        (mediaUrl.includes('.mp4') || mediaUrl.includes('.webm') || 
+                         mediaUrl.includes('.mov') || mediaUrl.includes('.avi') ||
+                         mediaUrl.includes('/video/')));
+        
+        return (
+          <div key={index} style={{ position: 'relative' }}>
+            {isVideo ? (
+              <video 
+                src={mediaUrl} 
+                controls 
+                style={{ maxWidth: '100%', maxHeight: '280px', borderRadius: '10px' }}
+                onError={(e) => { 
+                  console.error('Video failed to load:', mediaUrl);
+                  e.target.style.display = 'none'; 
+                }} 
+              />
+            ) : (
+              <img 
+                src={mediaUrl} 
+                alt={`Post media ${index + 1}`}
+                onClick={() => window.open(mediaUrl, '_blank')}
+                style={{ maxWidth: '100%', maxHeight: '280px', borderRadius: '10px', cursor: 'pointer' }}
+                onError={(e) => { 
+                  console.error('Image failed to load:', mediaUrl);
+                  e.target.style.display = 'none'; 
+                }} 
+              />
+            )}
           </div>
-        ))}
-      </div>
-    );
-  };
+        );
+      })}
+    </div>
+  );
+};
 
-  const renderCommentMedia = (media) => {
-    if (!media) return null;
-    return media.mimetype?.startsWith('image/') ? (
-      <img src={`${API_BASE_URL}${media.url}`} alt="Comment attachment"
+// Update renderCommentMedia similarly
+const renderCommentMedia = (media) => {
+  if (!media) return null;
+  
+  let mediaUrl = media;
+  let isVideo = false;
+  
+  if (typeof media === 'object') {
+    mediaUrl = media.url || media;
+    isVideo = media.mimetype?.startsWith('video/') || 
+              media.resource_type === 'video';
+  } else {
+    isVideo = typeof mediaUrl === 'string' && 
+              (mediaUrl.includes('.mp4') || mediaUrl.includes('.webm') || 
+               mediaUrl.includes('.mov') || mediaUrl.includes('.avi') ||
+               mediaUrl.includes('/video/'));
+  }
+  
+  if (isVideo) {
+    return (
+      <video 
+        src={mediaUrl} 
+        controls 
         className="cb-comment-img"
-        onClick={() => window.open(`${API_BASE_URL}${media.url}`, '_blank')}
-        onError={(e) => { e.target.style.display = 'none'; }} />
-    ) : null;
-  };
-
+        style={{ maxWidth: '200px', maxHeight: '200px' }}
+        onError={(e) => { 
+          console.error('Video failed to load:', mediaUrl);
+          e.target.style.display = 'none'; 
+        }} 
+      />
+    );
+  }
+  
+  return (
+    <img 
+      src={mediaUrl} 
+      alt="Comment attachment"
+      className="cb-comment-img"
+      onClick={() => window.open(mediaUrl, '_blank')}
+      onError={(e) => { 
+        console.error('Image failed to load:', mediaUrl);
+        e.target.style.display = 'none'; 
+      }} 
+    />
+  );
+};
   // MODIFIED: showToast with warning type support
   const showToast = (message, type = 'info') => {
     const toast = document.createElement('div');

@@ -43,6 +43,9 @@ import {
   FormControlLabel,
   FormControl,
   FormLabel,
+  InputLabel,
+  Select,
+  MenuItem,
   Stepper,
   Step,
   StepLabel,
@@ -116,6 +119,9 @@ const TrunksDetection = () => {
   // History states
   const [recentAnalyses, setRecentAnalyses] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [treeProfiles, setTreeProfiles] = useState([]);
+  const [selectedTreeId, setSelectedTreeId] = useState('');
+  const [loadingTrees, setLoadingTrees] = useState(false);
 
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
@@ -143,6 +149,33 @@ const TrunksDetection = () => {
     }
   ];
 
+  const fetchUserTrees = async () => {
+    setLoadingTrees(true);
+    try {
+      let response;
+      try {
+        response = await axios.get(`${API_BASE_URL}/api/v1/trees`);
+      } catch (primaryRouteError) {
+        response = await axios.get(`${API_BASE_URL}/api/trees`);
+      }
+
+      const trees = Array.isArray(response.data?.data) ? response.data.data : [];
+      setTreeProfiles(trees);
+      setSelectedTreeId((prevSelectedTreeId) => {
+        if (prevSelectedTreeId && trees.some((tree) => tree?._id === prevSelectedTreeId)) {
+          return prevSelectedTreeId;
+        }
+        return trees[0]?._id || '';
+      });
+    } catch (err) {
+      console.error('Error fetching tree profiles:', err);
+      setTreeProfiles([]);
+      setSelectedTreeId('');
+    } finally {
+      setLoadingTrees(false);
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
@@ -153,6 +186,7 @@ const TrunksDetection = () => {
         if (response.data.success) {
           setUser(response.data.user);
           fetchRecentAnalyses(response.data.user.id);
+          fetchUserTrees();
         } else {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
@@ -305,6 +339,11 @@ const TrunksDetection = () => {
       return;
     }
 
+    if (treeProfiles.length > 0 && !selectedTreeId) {
+      setError('Please select a tree profile before analyzing.');
+      return;
+    }
+
     setAnalyzing(true);
     setError(null);
     setSuccessMessage(null);
@@ -312,6 +351,13 @@ const TrunksDetection = () => {
     try {
       const formData = new FormData();
       formData.append('image', selectedImage);
+      if (selectedTreeId) {
+        formData.append('treeId', selectedTreeId);
+        const selectedTree = treeProfiles.find((tree) => tree?._id === selectedTreeId);
+        if (selectedTree?.treeID) {
+          formData.append('treeID', selectedTree.treeID);
+        }
+      }
 
       const response = await axios.post(
         `${API_BASE_URL}/api/v1/trunks/analyze`,
@@ -520,10 +566,41 @@ const TrunksDetection = () => {
   const maturity = analysisResult?.maturity || {};
   const visualAnalysis = analysisResult?.visual_analysis || {};
   const disease = analysisResult?.disease || {};
-  const ageEstimation = analysisResult?.age_estimation || {};
   const modelInfo = analysisResult?.model_info || {};
+  const detections = analysisResult?.all_detections || analysisResult?.detections || [];
+  const detectionCount = Array.isArray(detections) ? detections.length : 0;
+  const meanDetectionConfidence = detectionCount > 0
+    ? Math.round(detections.reduce((sum, item) => sum + Number(item?.confidence || 0), 0) / detectionCount)
+    : 0;
+  const hasColorAnalysis = Boolean(visualAnalysis?.color && Object.keys(visualAnalysis.color).length > 0);
+  const hasTextureAnalysis = Boolean(visualAnalysis?.texture && Object.keys(visualAnalysis.texture).length > 0);
+  const hasLesionAnalysis = Boolean(visualAnalysis?.lesions && visualAnalysis?.source === 'model_detection');
+  const hasMlOutputSignals =
+    Boolean(modelInfo?.type || modelInfo?.model_file || modelInfo?.classes) ||
+    detectionCount > 0 ||
+    Boolean(primaryDetection?.class_name || primaryDetection?.class || primaryDetection?.display_name);
+  const isMlUsed = (
+    analysisResult?.model_used ??
+    analysisResult?.ml_model_used ??
+    modelInfo?.model_used ??
+    hasMlOutputSignals
+  ) !== false;
+  const fallbackReason = analysisResult?.fallback_reason || modelInfo?.reason || 'ML model unavailable';
+  const showModelBanner =
+    analysisResult?.model_used !== undefined ||
+    analysisResult?.ml_model_used !== undefined ||
+    modelInfo?.model_used !== undefined ||
+    Boolean(analysisResult?.fallback_reason || modelInfo?.reason || modelInfo?.model_file);
   const imageMetadata = analysisResult?.image_metadata || {};
   const isHealthy = !disease?.detected;
+  const visualizationValue = analysisResult?.visualization;
+  const visualizationSrc =
+    typeof visualizationValue === 'string' && visualizationValue.length > 0
+      ? (visualizationValue.startsWith('data:image') || visualizationValue.startsWith('http')
+          ? visualizationValue
+          : `data:image/jpeg;base64,${visualizationValue}`)
+      : null;
+  const hasBoxCoordinates = detectionCount > 0 && detections.some((det) => Array.isArray(det?.bbox) && det.bbox.length === 4);
 
   return (
     <>
@@ -613,7 +690,7 @@ const TrunksDetection = () => {
 
               <Box sx={{ position: 'relative', zIndex: 2 }}>
                 <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>
-                  🌳 Rubber Tree Trunk Analysis
+                  Rubber Tree Trunk Analysis
                 </Typography>
                 <Typography variant="h6" sx={{ opacity: 0.85, mb: 2.5 }}>
                   AI-Powered Maturity Detection & Disease Classification System
@@ -822,6 +899,30 @@ const TrunksDetection = () => {
                 style={{ display: 'none' }} 
               />
 
+              <Box sx={{ mt: 3 }}>
+                <FormControl fullWidth sx={{ maxWidth: 460 }}>
+                  <InputLabel id="trunk-tree-profile-select-label">Target Tree Profile</InputLabel>
+                  <Select
+                    labelId="trunk-tree-profile-select-label"
+                    value={selectedTreeId}
+                    label="Target Tree Profile"
+                    onChange={(event) => setSelectedTreeId(event.target.value)}
+                    disabled={loadingTrees || treeProfiles.length === 0}
+                  >
+                    {treeProfiles.map((tree) => (
+                      <MenuItem key={tree._id} value={tree._id}>
+                        {(tree.treeID || tree.treeId || 'Unknown Tree')} - {(tree.species || 'Rubber')}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {!loadingTrees && treeProfiles.length === 0 && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    No tree profiles found. You can still analyze, but it will use the latest available tree context.
+                  </Typography>
+                )}
+              </Box>
+
               <Box sx={{ 
                 display: 'flex', 
                 gap: 2, 
@@ -892,7 +993,7 @@ const TrunksDetection = () => {
                       sx={{ mb: 3, borderRadius: 2 }}
                     >
                       <Typography variant="body2">
-                        ✅ Image stored securely in cloud. Analysis ID: {analysisResult.analysisId}
+                        Image stored securely in cloud. Analysis ID: {analysisResult.analysisId}
                       </Typography>
                     </Alert>
                   </Fade>
@@ -917,19 +1018,78 @@ const TrunksDetection = () => {
                   </Box>
                 )}
 
+                {/* Detection Box Visualization */}
+                {(visualizationSrc || hasBoxCoordinates) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.04 }}
+                  >
+                    <Paper elevation={2} sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: 'white' }}>
+                      <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 700, mb: 2 }}>
+                        Detection Box Result
+                      </Typography>
+
+                      {visualizationSrc && (
+                        <Box sx={{ textAlign: 'center', mb: hasBoxCoordinates ? 2 : 0 }}>
+                          <img
+                            src={visualizationSrc}
+                            alt="Detected bounding boxes"
+                            style={{
+                              width: '100%',
+                              maxHeight: '460px',
+                              objectFit: 'contain',
+                              borderRadius: 12,
+                              border: '2px solid #8B4513',
+                              background: '#faf7f2'
+                            }}
+                          />
+                        </Box>
+                      )}
+
+                      {hasBoxCoordinates && (
+                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+                          <Table size="small">
+                            <TableBody>
+                              {detections
+                                .filter((det) => Array.isArray(det?.bbox) && det.bbox.length === 4)
+                                .map((det, idx) => {
+                                  const [x1, y1, x2, y2] = det.bbox.map((v) => Number(v).toFixed(1));
+                                  return (
+                                    <TableRow key={`box-${idx}`}>
+                                      <TableCell sx={{ fontWeight: 700, color: '#3E2723', width: '32%' }}>
+                                        {det.display_name || det.class_name || det.class || `Detection ${idx + 1}`}
+                                      </TableCell>
+                                      <TableCell sx={{ color: '#5D3A1A', width: '20%' }}>
+                                        {Number(det.confidence || 0).toFixed(2)}%
+                                      </TableCell>
+                                      <TableCell sx={{ color: '#616161' }}>
+                                        [{x1}, {y1}] to [{x2}, {y2}]
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Paper>
+                  </motion.div>
+                )}
+
                 {/* ML Model Info Banner */}
-                {modelInfo && (
+                {showModelBanner && (
                   <Fade in={true}>
                     <Alert 
-                      severity={modelInfo.model_used ? "info" : "warning"} 
-                      icon={modelInfo.model_used ? <ScienceIcon /> : <WarningIcon />}
+                      severity={isMlUsed ? "info" : "warning"} 
+                      icon={isMlUsed ? <ScienceIcon /> : <WarningIcon />}
                       sx={{ mb: 3, borderRadius: 2 }}
                     >
                       <Box>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {modelInfo.model_used 
-                            ? `✅ Analyzed using ML model: ${modelInfo.model_file || 'Trunks.pt'}`
-                            : `⚠️ Fallback analysis: ${modelInfo.reason || 'ML model unavailable'}`}
+                          {isMlUsed 
+                            ? `Analyzed using ML model: ${modelInfo.model_file || 'Trunks-v2.pt'}`
+                            : `Fallback analysis: ${fallbackReason}`}
                         </Typography>
                         {primaryDetection && (
                           <Typography variant="caption" color="text.secondary">
@@ -1182,17 +1342,17 @@ const TrunksDetection = () => {
                                 fontSize: '0.75rem' 
                               }}
                             >
-                              Estimated Age
+                              Model Detections
                             </Typography>
                           </Box>
                           <Typography variant="h2" sx={{ color: '#3E2723', fontWeight: 900, lineHeight: 1 }}>
-                            {ageEstimation.estimated_years ?? '—'}
+                            {detectionCount}
                           </Typography>
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            years {ageEstimation.range ? `(${ageEstimation.range})` : ''}
+                            detected object{detectionCount === 1 ? '' : 's'}
                           </Typography>
                           <Typography variant="caption" color="text.disabled">
-                            Confidence: {ageEstimation.confidence}%
+                            Average confidence: {meanDetectionConfidence}%
                           </Typography>
                         </CardContent>
                       </Card>
@@ -1201,6 +1361,7 @@ const TrunksDetection = () => {
                 </Grid>
 
                 {/* Color Analysis Section */}
+                {hasColorAnalysis && (
                 <motion.div
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1381,8 +1542,10 @@ const TrunksDetection = () => {
                     </AccordionDetails>
                   </Accordion>
                 </motion.div>
+                )}
 
                 {/* Texture Analysis Section */}
+                {hasTextureAnalysis && (
                 <motion.div
                   initial={{ opacity: 0, y: 14 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1513,9 +1676,10 @@ const TrunksDetection = () => {
                     </AccordionDetails>
                   </Accordion>
                 </motion.div>
+                )}
 
                 {/* Lesion Detection */}
-                {visualAnalysis?.lesions && (
+                {hasLesionAnalysis && (
                   <motion.div
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -2177,3 +2341,4 @@ const TrunksDetection = () => {
 };
 
 export default TrunksDetection;
+
