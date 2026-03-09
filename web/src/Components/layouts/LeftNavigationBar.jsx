@@ -11,7 +11,18 @@ import {
   FileTextOutlined,
 } from '@ant-design/icons';
 
+// Try different import approaches
+// Option 1: Direct import (your original)
 import Logo from '../logo/LOGO.png';
+
+// Option 2: If Option 1 doesn't work, uncomment this and comment out Option 1
+// import Logo from '../../Components/logo/LOGO.png';
+
+// Option 3: If you have the logo in public folder
+// const Logo = '/logo/LOGO.png';
+
+// Option 4: Using require
+// const Logo = require('../logo/LOGO.png');
 
 const LeftNavigationBar = () => {
   const navigate = useNavigate();
@@ -32,6 +43,7 @@ const LeftNavigationBar = () => {
 
   const [currentMenu, setCurrentMenu] = useState(getCurrentMenuKey());
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     setCurrentMenu(getCurrentMenuKey());
@@ -42,8 +54,8 @@ const LeftNavigationBar = () => {
     { key: 'report-inbox',        label: 'Report Inbox',        path: '/admin/user-reports',        icon: <InboxOutlined /> },
     { key: 'users',               label: 'Users',               path: '/admin/users',               icon: <UserOutlined /> },
     { key: 'analysis-logs',       label: 'Analysis Logs',       path: '/admin/analysis-logs',       icon: <FileTextOutlined /> },
-    { key: 'ml-detection',         label: 'ML Detection',        path: '/admin/ml-detection',        icon: <DashboardOutlined /> }, // New ML Detection button
-    { key: 'market-price',        label: 'Market Price',        path: '/admin/market-price',        icon: <span style={{ fontSize: '16px', fontWeight: 'bold' }}>₱</span> }, // Changed to peso sign
+    { key: 'ml-detection',         label: 'ML Detection',        path: '/admin/ml-detection',        icon: <DashboardOutlined /> },
+    { key: 'market-price',        label: 'Market Price',        path: '/admin/market-price',        icon: <span style={{ fontSize: '16px', fontWeight: 'bold' }}>₱</span> },
     { key: 'announcement',        label: 'Announcement',        path: '/admin/announcements',       icon: <NotificationOutlined /> },
     { key: 'contact-inquiry',     label: 'Contact Inquiry',     path: '/admin/contact-messages',    icon: <MessageOutlined /> },
   ];
@@ -56,7 +68,12 @@ const LeftNavigationBar = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    navigate('/login');
+    navigate('/landinghome');
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
+    console.log('Logo failed to load');
   };
 
   return (
@@ -71,11 +88,21 @@ const LeftNavigationBar = () => {
         {/* ── Logo ─────────────────────────────── */}
         <div className="rs-logo" onClick={() => navigate('/admin/dashboard')}>
           <div className="rs-logo-badge">
-            <img src={Logo} alt="RubberSense" className="rs-logo-img" />
+            {!imageError ? (
+              <img 
+                src={Logo} 
+                alt="RubberSense" 
+                className="rs-logo-img"
+                onError={handleImageError}
+              />
+            ) : (
+              // Fallback if image doesn't load
+              <span style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>RS</span>
+            )}
           </div>
           <div className="rs-logo-text">
             <span className="rs-logo-name">RubberSense</span>
-            <span className="rs-logo-role">Admin Portal</span>
+            <span className="rs-logo-role">ADMIN PORTAL</span>
           </div>
         </div>
 
@@ -83,7 +110,7 @@ const LeftNavigationBar = () => {
         <div className="rs-sep" />
 
         {/* ── Section label ────────────────────── */}
-        <p className="rs-section-label">Navigation</p>
+        <p className="rs-section-label">NAVIGATION</p>
 
         {/* ── Menu ─────────────────────────────── */}
         <nav className="rs-nav">
@@ -186,9 +213,11 @@ const css = `
   }
 
   .rs-logo-img {
-    width: 26px; height: 26px;
+    width: 32px;
+    height: 32px;
     object-fit: contain;
-    filter: brightness(0) invert(1);
+    /* Remove or comment out the filter to show original logo colors */
+    /* filter: brightness(0) invert(1); */
   }
 
   .rs-logo-text {

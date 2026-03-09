@@ -247,7 +247,7 @@ const UserHeader = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    navigate('/login');
+    navigate('/landinghome');
   };
 
   // Profile menu items with badge indicators

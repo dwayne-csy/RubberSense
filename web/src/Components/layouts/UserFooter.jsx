@@ -9,16 +9,19 @@ const UserFooter = () => {
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:wght@700&display=swap');
+
         .user-footer {
           background: linear-gradient(135deg, #1a472a 0%, #2d6a4f 100%);
           color: white;
           margin-top: auto;
+          font-family: 'DM Sans', sans-serif;
         }
 
         .footer-container {
           max-width: 1400px;
           margin: 0 auto;
-          padding: 2rem;
+          padding: 2.5rem 2rem;
         }
 
         .footer-content {
@@ -52,6 +55,7 @@ const UserFooter = () => {
           overflow: hidden;
           background: rgba(255, 255, 255, 0.1);
           border: 1px solid rgba(255, 255, 255, 0.2);
+          animation: logoGlow 3s ease-in-out infinite;
         }
 
         .footer-logo-img {
@@ -62,27 +66,43 @@ const UserFooter = () => {
         }
 
         .footer-logo-text {
+          font-family: 'Playfair Display', serif;
           font-size: 1.5rem;
           font-weight: 700;
+        }
+
+        .footer-nav {
           display: flex;
-          align-items: baseline;
-          gap: 0.5rem;
+          align-items: center;
+          gap: 0.25rem;
+          flex-wrap: wrap;
+          justify-content: center;
         }
 
-        .ai-badge {
+        .footer-nav-link {
+          background: none;
+          border: none;
+          color: rgba(255, 255, 255, 0.75);
+          font-family: 'DM Sans', sans-serif;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          padding: 0.35rem 0.75rem;
+          border-radius: 6px;
+          transition: color 0.2s, background 0.2s;
+          letter-spacing: 0.2px;
+          white-space: nowrap;
+        }
+
+        .footer-nav-link:hover {
+          color: white;
           background: rgba(255, 255, 255, 0.1);
-          padding: 0.25rem 0.75rem;
-          border-radius: 20px;
-          font-size: 0.875rem;
-          font-weight: 600;
-          backdrop-filter: blur(10px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .copyright {
-          color: rgba(255, 255, 255, 0.7);
-          font-size: 0.875rem;
-          margin-top: 0.5rem;
+        .footer-nav-sep {
+          color: rgba(255, 255, 255, 0.25);
+          font-size: 0.85rem;
+          user-select: none;
         }
 
         .footer-divider {
@@ -90,7 +110,11 @@ const UserFooter = () => {
           width: 100%;
           max-width: 400px;
           background: rgba(255, 255, 255, 0.1);
-          margin: 0.5rem 0;
+        }
+
+        .copyright {
+          color: rgba(255, 255, 255, 0.7);
+          font-size: 0.875rem;
         }
 
         .version {
@@ -99,45 +123,51 @@ const UserFooter = () => {
           letter-spacing: 0.5px;
         }
 
-        /* Animation for logo */
         @keyframes logoGlow {
-          0%, 100% { 
+          0%, 100% {
             box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
             background: rgba(255, 255, 255, 0.1);
           }
-          50% { 
+          50% {
             box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
             background: rgba(255, 255, 255, 0.15);
           }
-        }
-
-        .footer-logo {
-          animation: logoGlow 3s ease-in-out infinite;
         }
       `}</style>
 
       <footer className="user-footer">
         <div className="footer-container">
           <div className="footer-content">
+
             <div className="logo-area" onClick={() => navigate('/home')}>
               <div className="footer-logo">
                 <img src={LogoImage} alt="RubberSense Logo" className="footer-logo-img" />
               </div>
-              <div className="footer-logo-text">
-                RubberSense
-               
-              </div>
+              <div className="footer-logo-text">RubberSense</div>
             </div>
-            
+
+            <nav className="footer-nav">
+              <button className="footer-nav-link" onClick={() => navigate('/about')}>About Us</button>
+              <span className="footer-nav-sep">·</span>
+              <button className="footer-nav-link" onClick={() => navigate('/contact-us')}>Contact Us</button>
+              <span className="footer-nav-sep">·</span>
+              <button className="footer-nav-link" onClick={() => navigate('/about-rubber')}>About Rubber</button>
+              <span className="footer-nav-sep">·</span>
+              <button className="footer-nav-link" onClick={() => navigate('/market')}>Market Page</button>
+              <span className="footer-nav-sep">·</span>
+              <button className="footer-nav-link" onClick={() => navigate('/analysis/history')}>Recent Analysis</button>
+            </nav>
+
             <div className="footer-divider" />
-            
+
             <div className="copyright">
               © {currentYear} RubberSense AI. All rights reserved.
             </div>
-            
+
             <div className="version">
               Version 1.0.0 • Powering Sustainable Rubber Production
             </div>
+
           </div>
         </div>
       </footer>
