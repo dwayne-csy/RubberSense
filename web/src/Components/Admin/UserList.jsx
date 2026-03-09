@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import LeftNavigationBar from '../layouts/LeftNavigationBar';
+import { exportRowsToPdf } from '../../utils/pdfExport';
 
 // ── SVG Icons ──────────────────────────────────────────────────────────────────
 const UserIcon = ({ size = 20 }) => (
@@ -47,6 +48,13 @@ const SearchIcon = ({ size = 16 }) => (
 const RefreshIcon = ({ size = 15 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+  </svg>
+);
+const DownloadIcon = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
   </svg>
 );
 const CloseIcon = ({ size = 16 }) => (
@@ -485,6 +493,7 @@ const UserList = () => {
   const [userOnlineStatus, setUserOnlineStatus] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  const [exportingPdf, setExportingPdf] = useState(false);
   
   // Deactivation modal states
   const [showDeactivationModal, setShowDeactivationModal] = useState(false);
@@ -728,6 +737,44 @@ const UserList = () => {
 
   const resetFilters = () => { setVerificationFilter('all'); setStatusFilter('all'); setSearchText(''); };
 
+  const handleExportPdf = () => {
+    if (!filteredUsers.length) {
+      showNotification('No users available to export', 'error');
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+      const now = new Date();
+      exportRowsToPdf({
+        title: 'RubberSense - Users',
+        subtitleLines: [
+          `Generated: ${now.toLocaleString()}`,
+          `Verification: ${verificationFilter} | Status: ${statusFilter} | Search: ${searchText || 'None'}`,
+          `Total users: ${filteredUsers.length}`,
+        ],
+        headers: ['Name', 'Email', 'Status', 'Verified', 'Online', 'Last Login', 'Joined', 'Provider'],
+        rows: filteredUsers.map((user) => [
+          user.name || 'N/A',
+          user.email || 'N/A',
+          user.isActive ? 'Active' : 'Inactive',
+          user.isVerified ? 'Yes' : 'No',
+          userOnlineStatus[user._id] ? 'Online' : 'Offline',
+          formatDate(user.lastLogin),
+          formatDate(user.createdAt),
+          user.authProvider || 'local',
+        ]),
+        fileName: `users-${now.toISOString().slice(0, 10)}.pdf`,
+      });
+      showNotification('User list exported to PDF');
+    } catch (error) {
+      console.error('PDF export error:', error);
+      showNotification('Failed to export PDF', 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const pagedUsers = filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
@@ -805,7 +852,7 @@ const UserList = () => {
           </div>
 
           {/* Toolbar */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24, gap: 10, flexWrap: 'wrap' }}>
             <button
               className="ul-btn ul-btn-refresh"
               style={{
@@ -817,6 +864,18 @@ const UserList = () => {
               disabled={loading}
             >
               <RefreshIcon size={15} /> {loading ? 'Refreshing…' : 'Refresh'}
+            </button>
+            <button
+              className="ul-btn ul-btn-reset"
+              style={{
+                padding: '11px 22px', borderRadius: 10, fontSize: '.92rem', fontWeight: 700,
+                boxShadow: '0 4px 14px rgba(0,0,0,.08)', transition: 'transform .18s, box-shadow .18s',
+                opacity: loading || exportingPdf || filteredUsers.length === 0 ? .6 : 1
+              }}
+              onClick={handleExportPdf}
+              disabled={loading || exportingPdf || filteredUsers.length === 0}
+            >
+              <DownloadIcon size={15} /> {exportingPdf ? 'Exporting...' : 'Export PDF'}
             </button>
           </div>
 

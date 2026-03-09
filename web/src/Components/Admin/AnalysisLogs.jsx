@@ -56,6 +56,7 @@ import { format } from 'date-fns';
 import axios from 'axios';
 import { useSnackbar } from 'notistack';
 import LeftNavigationBar from '../layouts/LeftNavigationBar';
+import { exportRowsToPdf } from '../../utils/pdfExport';
 
 const AnalysisLog = () => {
   const theme = useTheme();
@@ -87,6 +88,7 @@ const AnalysisLog = () => {
   });
 
   const [showFilters, setShowFilters] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Check authentication
   useEffect(() => {
@@ -249,6 +251,51 @@ const AnalysisLog = () => {
     }
   };
 
+  const handleExportPdf = () => {
+    if (!analyses.length) {
+      enqueueSnackbar('No analysis records available to export', { variant: 'error' });
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+      const now = new Date();
+      exportRowsToPdf({
+        title: 'RubberSense - Analysis Logs',
+        subtitleLines: [
+          `Generated: ${now.toLocaleString()}`,
+          `Type: ${filters.type || 'all'} | Search: ${filters.search || 'None'} | Sort: ${filters.sortBy} ${filters.order}`,
+          `Page: ${page + 1} | Records in view: ${analyses.length}`,
+        ],
+        headers: ['Type', 'User', 'Email', 'Date', 'Result', 'Detail', 'Confidence'],
+        rows: analyses.map((analysis) => {
+          const resultLabel = analysis.analysisType === 'latex'
+            ? analysis.resultSummary?.qualityClass || 'Unknown'
+            : analysis.analysisType === 'leaf'
+              ? analysis.resultSummary?.severityLevel || 'Unknown'
+              : `Health: ${analysis.resultSummary?.healthScore || 0}%`;
+
+          return [
+            analysis.displayName || analysis.analysisType?.toUpperCase() || 'N/A',
+            analysis.userId?.name || 'Unknown',
+            analysis.userId?.email || 'N/A',
+            analysis.createdAt ? format(new Date(analysis.createdAt), 'MMM dd, yyyy hh:mm a') : 'N/A',
+            resultLabel,
+            getDetailValue(analysis),
+            analysis.confidence ? `${Math.round(analysis.confidence)}%` : 'N/A',
+          ];
+        }),
+        fileName: `analysis-logs-${now.toISOString().slice(0, 10)}.pdf`,
+      });
+      enqueueSnackbar('Analysis logs exported to PDF', { variant: 'success' });
+    } catch (error) {
+      console.error('PDF export error:', error);
+      enqueueSnackbar('Failed to export PDF: ' + (error.message || 'Unknown error'), { variant: 'error' });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   // Helper functions
   const getAnalysisIcon = (type) => {
     switch (type) {
@@ -348,6 +395,15 @@ const AnalysisLog = () => {
                 sx={{ mr: 1 }}
               >
                 Export CSV
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={handleExportPdf}
+                disabled={loading || exportingPdf || analyses.length === 0}
+                sx={{ mr: 1 }}
+              >
+                {exportingPdf ? 'Exporting PDF...' : 'Export PDF'}
               </Button>
               <Button
                 variant="contained"

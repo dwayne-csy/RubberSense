@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import LeftNavigationBar from '../layouts/LeftNavigationBar';
+import { exportRowsToPdf } from '../../utils/pdfExport';
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const MegaphoneIcon = ({ size = 22 }) => (
@@ -14,6 +15,13 @@ const MegaphoneIcon = ({ size = 22 }) => (
 const PlusIcon = ({ size = 18 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+);
+const DownloadIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
   </svg>
 );
 const EditIcon = ({ size = 15 }) => (
@@ -354,6 +362,7 @@ const Announcement = () => {
   const [pagination, setPagination] = useState({ total: 0, pages: 1, currentPage: 1 });
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const [saving, setSaving] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const navigate = useNavigate();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
@@ -463,6 +472,43 @@ const Announcement = () => {
     return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  const handleExportPdf = () => {
+    if (!announcements.length) {
+      showNotification('No announcements to export', 'error');
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+      const now = new Date();
+      exportRowsToPdf({
+        title: 'RubberSense - Announcements',
+        subtitleLines: [
+          `Generated: ${now.toLocaleString()}`,
+          `Type: ${filters.type} | Status: ${filters.isPublished} | Search: ${filters.search || 'None'} | Page: ${filters.page}`,
+          `Records on page: ${announcements.length}`,
+        ],
+        headers: ['Title', 'Type', 'Published', 'Important', 'Views', 'Date', 'Content'],
+        rows: announcements.map((announcement) => [
+          announcement.title || 'N/A',
+          announcement.type || 'announcement',
+          announcement.isPublished ? 'Yes' : 'No',
+          announcement.isImportant ? 'Yes' : 'No',
+          announcement.views || 0,
+          formatDate(announcement.createdAt),
+          announcement.content || 'N/A',
+        ]),
+        fileName: `announcements-${now.toISOString().slice(0, 10)}.pdf`,
+      });
+      showNotification('Announcements exported to PDF');
+    } catch (error) {
+      console.error('PDF export error:', error);
+      showNotification('Failed to export PDF', 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
@@ -559,7 +605,30 @@ const Announcement = () => {
           </div>
 
           {/* Toolbar — Create button sits here, outside the hero */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24, gap: 10, flexWrap: 'wrap' }}>
+            <button
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                background: '#ffffff', color: 'var(--green-mid)',
+                border: '1px solid var(--green-mid)', borderRadius: 10, padding: '12px 22px',
+                fontFamily: "'DM Sans', sans-serif", fontSize: '.92rem',
+                fontWeight: 700, cursor: loading || exportingPdf || announcements.length === 0 ? 'not-allowed' : 'pointer',
+                opacity: loading || exportingPdf || announcements.length === 0 ? 0.6 : 1,
+                boxShadow: '0 4px 14px rgba(0,0,0,.08)',
+                transition: 'transform .18s, box-shadow .18s'
+              }}
+              onMouseOver={e => {
+                if (!loading && !exportingPdf && announcements.length > 0) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 20px rgba(46,125,50,.18)';
+                }
+              }}
+              onMouseOut={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,.08)'; }}
+              onClick={handleExportPdf}
+              disabled={loading || exportingPdf || announcements.length === 0}
+            >
+              <DownloadIcon size={16} /> {exportingPdf ? 'Exporting...' : 'Export PDF'}
+            </button>
             <button
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,

@@ -1536,21 +1536,34 @@ const renderCommentMedia = (media) => {
   };
 
   /* ── Avatar helpers ── */
-  const AvatarLg = ({ user: u, onClick }) => (
-    <div className="cb-avatar" onClick={onClick}>
-      {u?.profilePicture ? <img src={`${API_BASE_URL}${u.profilePicture}`} alt={u?.name || 'User'} /> : (u?.name?.charAt(0)?.toUpperCase() || 'U')}
-    </div>
-  );
-  const AvatarMd = ({ user: u, onClick }) => (
-    <div className="cb-avatar-sm" onClick={onClick}>
-      {u?.profilePicture ? <img src={`${API_BASE_URL}${u.profilePicture}`} alt={u?.name || 'User'} /> : (u?.name?.charAt(0)?.toUpperCase() || 'U')}
-    </div>
-  );
-  const AvatarSm = ({ user: u, onClick }) => (
-    <div className="cb-avatar-xs" onClick={onClick}>
-      {u?.profilePicture ? <img src={`${API_BASE_URL}${u.profilePicture}`} alt={u?.name || 'User'} /> : (u?.name?.charAt(0)?.toUpperCase() || 'U')}
-    </div>
-  );
+  const getUserAvatarSrc = (u) => {
+    const raw = u?.avatar?.url || u?.profilePicture || u?.photoURL || u?.avatarUrl || null;
+    if (!raw || typeof raw !== 'string') return null;
+    if (
+      raw.startsWith('http://') ||
+      raw.startsWith('https://') ||
+      raw.startsWith('data:') ||
+      raw.startsWith('blob:')
+    ) return raw;
+    return raw.startsWith('/') ? `${API_BASE_URL}${raw}` : `${API_BASE_URL}/${raw}`;
+  };
+
+  const AvatarBase = ({ user: u, onClick, className }) => {
+    const [hasImageError, setHasImageError] = useState(false);
+    const avatarSrc = getUserAvatarSrc(u);
+
+    return (
+      <div className={className} onClick={onClick}>
+        {avatarSrc && !hasImageError
+          ? <img src={avatarSrc} alt={u?.name || 'User'} onError={() => setHasImageError(true)} />
+          : (u?.name?.charAt(0)?.toUpperCase() || 'U')}
+      </div>
+    );
+  };
+
+  const AvatarLg = ({ user: u, onClick }) => <AvatarBase user={u} onClick={onClick} className="cb-avatar" />;
+  const AvatarMd = ({ user: u, onClick }) => <AvatarBase user={u} onClick={onClick} className="cb-avatar-sm" />;
+  const AvatarSm = ({ user: u, onClick }) => <AvatarBase user={u} onClick={onClick} className="cb-avatar-xs" />;
 
   /* ─────────────────── LOADING ─────────────────── */
   if (loading && !authChecked) {

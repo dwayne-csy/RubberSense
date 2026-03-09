@@ -20,6 +20,8 @@ import {
   BarChart as BarChartIcon,
   Timeline as TimelineIcon,
 } from '@mui/icons-material';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Lucide icons matching Notifications page
 import {
@@ -71,6 +73,7 @@ const AnalysisHistory = () => {
   const [tabValue, setTabValue]   = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
+  const [exportingPdf, setExportingPdf] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => { fetchAllHistory(); }, []);
@@ -129,6 +132,67 @@ const AnalysisHistory = () => {
       : new Date(a.createdAt) - new Date(b.createdAt)
     );
   }, [history, tabValue, searchTerm, sortOrder]);
+
+  const getSummaryText = (analysis) =>
+    analysis.result?.recommendation ||
+    analysis.result?.primaryDiagnose ||
+    analysis.result?.qualityClass ||
+    'Standard analysis recorded.';
+
+  const handleExportPdf = () => {
+    if (!filteredHistory.length || exportingPdf) return;
+
+    setExportingPdf(true);
+    try {
+      const filterName = tabValue === 1 ? 'Latex' : tabValue === 2 ? 'Leaf' : tabValue === 3 ? 'Trunks' : 'All';
+      const generatedAt = new Date();
+      const fileDate = generatedAt.toISOString().slice(0, 10);
+
+      const doc = new jsPDF({ orientation: 'landscape' });
+      doc.setFontSize(16);
+      doc.text('RubberSense Recent Analysis Report', 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Generated: ${generatedAt.toLocaleString()}`, 14, 23);
+      doc.text(
+        `Filter: ${filterName}  |  Search: ${searchTerm || 'None'}  |  Sort: ${sortOrder}  |  Records: ${filteredHistory.length}`,
+        14,
+        29
+      );
+
+      const rows = filteredHistory.map((analysis, index) => [
+        index + 1,
+        analysis.type || 'N/A',
+        fmtFull(analysis.createdAt),
+        analysis.status || 'Completed',
+        analysis.quality || analysis.result?.qualityClass || 'N/A',
+        analysis.confidence ? `${Math.round(analysis.confidence)}%` : 'N/A',
+        (analysis.analysisId || analysis._id || analysis.id || 'N/A').toString().substring(0, 18),
+        getSummaryText(analysis),
+      ]);
+
+      autoTable(doc, {
+        startY: 36,
+        head: [['#', 'Type', 'Date', 'Status', 'Quality', 'Confidence', 'Analysis ID', 'Insight']],
+        body: rows,
+        styles: { fontSize: 8, cellPadding: 2, valign: 'top' },
+        headStyles: { fillColor: [45, 106, 79], textColor: [255, 255, 255] },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 38 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 24 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 36 },
+          7: { cellWidth: 'auto' },
+        },
+      });
+
+      doc.save(`analysis-history-${filterName.toLowerCase()}-${fileDate}.pdf`);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   /* stats for hero */
   const totalScans   = history.length;
@@ -239,6 +303,34 @@ const AnalysisHistory = () => {
                 >
                   <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
                   {loading ? 'Loading…' : 'Refresh'}
+                </button>
+
+                <button
+                  onClick={handleExportPdf}
+                  disabled={loading || exportingPdf || filteredHistory.length === 0}
+                  style={{
+                    padding: '10px 18px',
+                    backgroundColor: 'rgba(116,198,157,0.22)',
+                    color: 'white', border: '1.5px solid rgba(116,198,157,0.4)',
+                    borderRadius: '10px',
+                    cursor: loading || exportingPdf || filteredHistory.length === 0 ? 'not-allowed' : 'pointer',
+                    fontSize: '13px', fontWeight: '600',
+                    display: 'flex', alignItems: 'center', gap: '7px',
+                    fontFamily: "'DM Sans', sans-serif",
+                    opacity: loading || exportingPdf || filteredHistory.length === 0 ? 0.6 : 1,
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => {
+                    if (!loading && !exportingPdf && filteredHistory.length > 0) {
+                      e.currentTarget.style.backgroundColor = 'rgba(116,198,157,0.32)';
+                    }
+                  }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(116,198,157,0.22)'; }}
+                >
+                  {exportingPdf
+                    ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                    : <FileText size={13} />}
+                  {exportingPdf ? 'Exporting PDF…' : 'Export PDF'}
                 </button>
               </div>
             </div>
@@ -490,7 +582,7 @@ const AnalysisHistory = () => {
                                     {/* insight quote */}
                                     <Box sx={{ flex: 1, pl: 1.5, borderLeft: `2px solid ${c.primary}40` }}>
                                       <Typography sx={{ color: '#6b705c', fontSize: '0.82rem', fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5 }}>
-                                        {analysis.result?.recommendation || analysis.result?.primaryDiagnose || analysis.result?.qualityClass || 'Standard analysis recorded.'}
+                                        {getSummaryText(analysis)}
                                       </Typography>
                                     </Box>
 
@@ -525,3 +617,4 @@ const AnalysisHistory = () => {
 };
 
 export default AnalysisHistory;
+

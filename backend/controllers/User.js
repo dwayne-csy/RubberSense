@@ -1,8 +1,82 @@
 const User = require('../models/User');
 const crypto = require('crypto');
+const os = require('os');
 const { uploadToCloudinary, deleteFromCloudinary } = require('../utils/Cloudinary');
 const Mailer = require('../utils/Mailer');
 const admin = require('../utils/firebaseAdmin');
+
+const APP_NAME = process.env.APP_NAME || 'RubberSense';
+const FRONTEND_DEFAULT_PORT = process.env.FRONTEND_PORT || '5173';
+
+const trimTrailingSlash = (value) => String(value || '').replace(/\/+$/, '');
+
+const isLocalAddress = (value = '') =>
+  value.includes('localhost') || value.includes('127.0.0.1') || value.includes('[::1]');
+
+const getLanIPv4 = () => {
+  const interfaces = os.networkInterfaces();
+  for (const entries of Object.values(interfaces)) {
+    for (const entry of entries || []) {
+      if (entry.family === 'IPv4' && !entry.internal) {
+        return entry.address;
+      }
+    }
+  }
+  return null;
+};
+
+const normalizeBaseUrl = (rawUrl, fallbackPort = null) => {
+  if (!rawUrl) return null;
+  try {
+    const withProtocol = /^https?:\/\//i.test(rawUrl) ? rawUrl : `http://${rawUrl}`;
+    const parsed = new URL(withProtocol);
+
+    if (isLocalAddress(parsed.hostname)) {
+      const lanIp = getLanIPv4();
+      if (!lanIp) return null;
+      const protocol = parsed.protocol || 'http:';
+      const port = parsed.port || fallbackPort || '';
+      return trimTrailingSlash(`${protocol}//${lanIp}${port ? `:${port}` : ''}`);
+    }
+
+    return trimTrailingSlash(parsed.origin);
+  } catch (error) {
+    return null;
+  }
+};
+
+const getServerBaseUrlFromRequest = (req) => {
+  const forwardedProto = req.headers['x-forwarded-proto']?.split(',')[0]?.trim();
+  const forwardedHost = req.headers['x-forwarded-host']?.split(',')[0]?.trim();
+  const protocol = forwardedProto || req.protocol || 'http';
+  const host = forwardedHost || req.get('host');
+  if (!host) return null;
+  return normalizeBaseUrl(`${protocol}://${host}`, process.env.PORT || '4001');
+};
+
+const getFrontendBaseUrlFromRequest = (req) => {
+  const configured =
+    normalizeBaseUrl(process.env.FRONTEND_URL, FRONTEND_DEFAULT_PORT) ||
+    normalizeBaseUrl(process.env.PUBLIC_FRONTEND_URL, FRONTEND_DEFAULT_PORT);
+  if (configured) return configured;
+
+  const fromOrigin = normalizeBaseUrl(req.headers.origin, FRONTEND_DEFAULT_PORT);
+  if (fromOrigin) return fromOrigin;
+
+  if (req.headers.referer) {
+    try {
+      const refererOrigin = new URL(req.headers.referer).origin;
+      const fromReferer = normalizeBaseUrl(refererOrigin, FRONTEND_DEFAULT_PORT);
+      if (fromReferer) return fromReferer;
+    } catch (error) {
+      // ignore malformed referer
+    }
+  }
+
+  const lanIp = getLanIPv4();
+  if (lanIp) return `http://${lanIp}:${FRONTEND_DEFAULT_PORT}`;
+  return null;
+};
 
 // ========== REGISTER USER ========== 
 exports.registerUser = async (req, res) => {
@@ -41,10 +115,22 @@ exports.registerUser = async (req, res) => {
     const verificationToken = user.getEmailVerificationToken();
     await user.save({ validateBeforeSave: false });
 
-    const verificationUrl = `${req.protocol}://${req.get('host')}/api/v1/users/verify-email/${verificationToken}`;
+    const backendBaseUrl =
+      normalizeBaseUrl(process.env.BACKEND_URL, process.env.PORT || '4001') ||
+      normalizeBaseUrl(process.env.PUBLIC_BACKEND_URL, process.env.PORT || '4001') ||
+      getServerBaseUrlFromRequest(req);
+
+    if (!backendBaseUrl) {
+      return res.status(500).json({
+        success: false,
+        message: 'Server URL is not configured. Set BACKEND_URL in backend/config/.env'
+      });
+    }
+
+    const verificationUrl = `${backendBaseUrl}/api/v1/users/verify-email/${verificationToken}`;
 
     const message = `
-      <h2>Welcome to ${process.env.APP_NAME}</h2>
+      <h2>Welcome to ${APP_NAME}</h2>
       <p>Click the link below to verify your email and activate your account:</p>
       <a href="${verificationUrl}" target="_blank" style="padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Your Email</a>
       <br><br>
@@ -55,7 +141,7 @@ exports.registerUser = async (req, res) => {
     console.log('📨 Sending verification email to local user:', user.email);
     await Mailer({
       email: user.email,
-      subject: 'Verify your email - ' + process.env.APP_NAME,
+      subject: 'Verify your email - ' + APP_NAME,
       message
     });
 
@@ -420,8 +506,14 @@ exports.forgotPassword = async (req, res) => {
     const resetToken = user.getResetPasswordToken();
     await user.save({ validateBeforeSave: false });
 
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetUrl = `${FRONTEND_URL}/reset-password/${resetToken}`;
+    const frontendBaseUrl = getFrontendBaseUrlFromRequest(req);
+    if (!frontendBaseUrl) {
+      return res.status(500).json({
+        success: false,
+        message: 'Frontend URL is not configured. Set FRONTEND_URL in backend/config/.env'
+      });
+    }
+    const resetUrl = `${frontendBaseUrl}/reset-password/${resetToken}`;
 
     const message = `
       <h2>Password Reset Request</h2>
@@ -432,7 +524,7 @@ exports.forgotPassword = async (req, res) => {
       <p><small>Or copy this link: ${resetUrl}</small></p>
     `;
 
-    await Mailer({ email: user.email, subject: 'Password Recovery - ' + process.env.APP_NAME, message });
+    await Mailer({ email: user.email, subject: 'Password Recovery - ' + APP_NAME, message });
 
     res.status(200).json({ success: true, message: `Password reset email sent to: ${user.email}` });
 
@@ -513,7 +605,12 @@ exports.changePassword = async (req, res) => {
 exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
-    if (!token) return res.status(400).send('Verification token missing');
+    if (!token) {
+      return res.status(400).send(`
+        <h2>Email verification failed</h2>
+        <p>Verification token is missing.</p>
+      `);
+    }
 
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
@@ -522,15 +619,40 @@ exports.verifyEmail = async (req, res) => {
       emailVerificationExpire: { $gt: Date.now() },
     });
 
-    if (!user) return res.status(400).send('Invalid or expired verification token');
+    if (!user) {
+      return res.status(400).send(`
+        <h2>Email verification failed</h2>
+        <p>The verification link is invalid or expired.</p>
+      `);
+    }
 
     user.isVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpire = undefined;
     await user.save({ validateBeforeSave: false });
 
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-    return res.redirect(`${FRONTEND_URL}/email-verified`);
+    const frontendBaseUrl = getFrontendBaseUrlFromRequest(req);
+    const frontendLoginUrl = frontendBaseUrl
+      ? `${frontendBaseUrl}/login?emailVerified=true`
+      : null;
+
+    return res.status(200).send(`
+      <html>
+        <head>
+          <title>Email Verified</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+        </head>
+        <body style="font-family: Arial, sans-serif; background:#f4f9f4; color:#1b4332; padding: 24px;">
+          <div style="max-width:560px; margin: 40px auto; background:#ffffff; border:1px solid #dceadf; border-radius:12px; padding:24px;">
+            <h2 style="margin-top:0;">Email verified successfully</h2>
+            <p>Your account is now active. You can log in using your registered email and password.</p>
+            ${frontendLoginUrl
+              ? `<p><a href="${frontendLoginUrl}" style="display:inline-block; padding:10px 16px; background:#2d6a4f; color:#fff; text-decoration:none; border-radius:8px;">Go to Login</a></p>`
+              : ''}
+          </div>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error('❌ EMAIL VERIFICATION ERROR:', error);
     return res.status(500).send('Server error');

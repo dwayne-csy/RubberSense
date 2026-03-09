@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import LeftNavigationBar from '../layouts/LeftNavigationBar';
+import { exportRowsToPdf } from '../../utils/pdfExport';
 
 // ── SVG Icons (no MUI dependency for layout) ─────────────────────────────────
 const FlagIcon = ({ size = 22 }) => (
@@ -27,6 +28,13 @@ const SearchIcon = ({ size = 16 }) => (
 const RefreshIcon = ({ size = 16 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+  </svg>
+);
+const DownloadIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
   </svg>
 );
 const EyeIcon = ({ size = 15 }) => (
@@ -479,6 +487,7 @@ const UserReport = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [stats, setStats] = useState({ total: 0, pending: 0, resolved: 0 });
   const [contentLoading, setContentLoading] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
   const navigate = useNavigate();
@@ -723,6 +732,44 @@ const UserReport = () => {
     return matchesSearch && matchesStatus && matchesType;
   });
 
+  const handleExportPdf = () => {
+    if (!filteredReports.length) {
+      setSnackbar({ open: true, message: 'No reports available to export.', severity: 'error' });
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+      const now = new Date();
+      exportRowsToPdf({
+        title: 'RubberSense - User Reports',
+        subtitleLines: [
+          `Generated: ${now.toLocaleString()}`,
+          `Tab: ${currentTab === 1 ? 'Pending' : currentTab === 2 ? 'Resolved' : 'All Reports'} | Type: ${typeFilter} | Status: ${statusFilter} | Search: ${searchTerm || 'None'}`,
+          `Total records: ${filteredReports.length}`,
+        ],
+        headers: ['Report ID', 'Type', 'Reason', 'Status', 'Reporter', 'Email', 'Date', 'Description'],
+        rows: filteredReports.map((report) => [
+          report._id,
+          typeLabel(report.reportedItemType),
+          getReasonLabel(report.reason),
+          report.status || 'unknown',
+          report.reporter?.name || 'Unknown',
+          report.reporter?.email || 'N/A',
+          formatDate(report.createdAt),
+          report.description || report.reportedItem?.title || report.reportedItem?.content || 'N/A',
+        ]),
+        fileName: `user-reports-${now.toISOString().slice(0, 10)}.pdf`,
+      });
+      setSnackbar({ open: true, message: 'PDF export completed.', severity: 'success' });
+    } catch (error) {
+      console.error('PDF export error:', error);
+      setSnackbar({ open: true, message: 'Failed to export PDF.', severity: 'error' });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const handleTabChange = (newValue) => {
     setCurrentTab(newValue);
     if (newValue === 0) setStatusFilter('all');
@@ -733,11 +780,38 @@ const UserReport = () => {
   const typeIcon = (type) => type === 'post' ? <PostIcon size={13} /> : type === 'comment' ? <CommentIcon size={13} /> : <MessageIcon size={13} />;
   const typeLabel = (type) => type === 'post' ? 'Post' : type === 'comment' ? 'Comment' : 'Message';
 
-  const Avatar = ({ src, name, size = 44 }) => (
-    <div className="ur-card-avatar" style={{ width: size, height: size, minWidth: size, fontSize: size * 0.42, borderRadius: size * 0.27 }}>
-      {src ? <img src={src} alt={name} /> : (name?.charAt(0)?.toUpperCase() || <UserIcon size={size * 0.45} />)}
-    </div>
-  );
+  const getAvatarSrc = (user) => {
+    const raw = user?.avatar?.url || user?.profilePicture || user?.photoURL || null;
+    if (!raw || typeof raw !== 'string') return null;
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:')) return raw;
+    return raw.startsWith('/') ? `${API_BASE_URL}${raw}` : `${API_BASE_URL}/${raw}`;
+  };
+
+  const UserAvatar = ({ user, size = 44, className = 'ur-card-avatar', style = {}, iconSize }) => {
+    const [imageError, setImageError] = useState(false);
+    const src = getAvatarSrc(user);
+    const name = user?.name || 'User';
+
+    return (
+      <div
+        className={className}
+        style={{
+          width: size,
+          height: size,
+          minWidth: size,
+          fontSize: size * 0.42,
+          borderRadius: size * 0.27,
+          ...style,
+        }}
+      >
+        {src && !imageError ? (
+          <img src={src} alt={name} onError={() => setImageError(true)} />
+        ) : (
+          name?.charAt(0)?.toUpperCase() || <UserIcon size={iconSize || size * 0.45} />
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -829,9 +903,14 @@ const UserReport = () => {
                 <button key={i} className={`ur-tab ${currentTab === i ? 'active' : ''}`} onClick={() => handleTabChange(i)}>{label}</button>
               ))}
             </div>
-            <button className="ur-btn ur-btn-refresh" onClick={fetchReports} disabled={loading}>
-              <RefreshIcon size={15} /> Refresh
-            </button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button className="ur-btn ur-btn-refresh" onClick={fetchReports} disabled={loading}>
+                <RefreshIcon size={15} /> Refresh
+              </button>
+              <button className="ur-btn ur-btn-view" onClick={handleExportPdf} disabled={loading || exportingPdf || filteredReports.length === 0}>
+                <DownloadIcon size={15} /> {exportingPdf ? 'Exporting...' : 'Export PDF'}
+              </button>
+            </div>
           </div>
 
           <div className="ur-filter-bar">
@@ -866,7 +945,7 @@ const UserReport = () => {
               <div key={report._id} className={`ur-card ${report.status}`}>
                 <div className="ur-card-header">
                   <div className="ur-card-reporter">
-                    <Avatar src={report.reporter?.profilePicture ? `${API_BASE_URL}${report.reporter.profilePicture}` : null} name={report.reporter?.name} />
+                    <UserAvatar user={report.reporter} />
                     <div>
                       <p className="ur-card-reporter-name">{report.reporter?.name || 'Unknown User'}</p>
                       <p className="ur-card-reporter-email">{report.reporter?.email || 'No email'}</p>
@@ -1015,9 +1094,7 @@ const UserReport = () => {
                         <div className="ur-participants">
                           {[{ label: 'Sender', data: viewingPost.reportedMessage.sender }, { label: 'Recipient', data: viewingPost.reportedMessage.recipient }].map(({ label, data }) => (
                             <div key={label} className="ur-participant">
-                              <div className="ur-participant-avatar" style={{ width: 38, height: 38, minWidth: 38 }}>
-                                {data?.profilePicture ? <img src={`${API_BASE_URL}${data.profilePicture}`} alt={data.name} /> : (data?.name?.charAt(0)?.toUpperCase() || <UserIcon size={18} />)}
-                              </div>
+                              <UserAvatar user={data} size={38} className="ur-participant-avatar" iconSize={18} />
                               <div>
                                 <p className="ur-participant-label">{label}</p>
                                 <p className="ur-participant-name">{data?.name || 'Unknown User'}</p>
@@ -1043,11 +1120,13 @@ const UserReport = () => {
                           </div>
                         )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                          <div className="ur-participant-avatar" style={{ width: 46, height: 46, minWidth: 46, borderRadius: 12 }}>
-                            {viewingPost.reportedComment.user?.profilePicture
-                              ? <img src={`${API_BASE_URL}${viewingPost.reportedComment.user.profilePicture}`} alt="" />
-                              : (viewingPost.reportedComment.user?.name?.charAt(0)?.toUpperCase() || <UserIcon size={20} />)}
-                          </div>
+                          <UserAvatar
+                            user={viewingPost.reportedComment.user}
+                            size={46}
+                            className="ur-participant-avatar"
+                            style={{ borderRadius: 12 }}
+                            iconSize={20}
+                          />
                           <div style={{ flex: 1 }}>
                             <p style={{ fontFamily: "'Playfair Display', serif", fontSize: '1rem', fontWeight: 700, color: 'var(--grey-dark)', margin: '0 0 2px' }}>{viewingPost.reportedComment.user?.name || 'Unknown User'}</p>
                             <p style={{ fontSize: '.78rem', color: 'var(--grey-mid)', margin: 0 }}>{formatDate(viewingPost.reportedComment.createdAt)}</p>
@@ -1064,11 +1143,13 @@ const UserReport = () => {
                     {!viewingPost.isMessageOnly && !viewingPost.isCommentOnly && (
                       <>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                          <div className="ur-participant-avatar" style={{ width: 46, height: 46, minWidth: 46, borderRadius: 12 }}>
-                            {viewingPost.user?.profilePicture
-                              ? <img src={`${API_BASE_URL}${viewingPost.user.profilePicture}`} alt="" />
-                              : (viewingPost.user?.name?.charAt(0)?.toUpperCase() || <UserIcon size={20} />)}
-                          </div>
+                          <UserAvatar
+                            user={viewingPost.user}
+                            size={46}
+                            className="ur-participant-avatar"
+                            style={{ borderRadius: 12 }}
+                            iconSize={20}
+                          />
                           <div style={{ flex: 1 }}>
                             <p style={{ fontFamily: "'Playfair Display', serif", fontSize: '1rem', fontWeight: 700, color: 'var(--grey-dark)', margin: '0 0 2px' }}>{viewingPost.user?.name || 'Unknown User'}</p>
                             <p style={{ fontSize: '.78rem', color: 'var(--grey-mid)', margin: 0 }}>{formatDate(viewingPost.createdAt)}</p>

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import LeftNavigationBar from '../layouts/LeftNavigationBar';
+import { exportRowsToPdf } from '../../utils/pdfExport';
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const Icon = {
@@ -68,6 +69,13 @@ const Icon = {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="22" y1="2" x2="11" y2="13"/>
       <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  ),
+  Download: ({ size = 14 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
     </svg>
   ),
   Clock: ({ size = 13 }) => (
@@ -366,6 +374,7 @@ const AdminContactMessages = () => {
   const [viewingConversation, setViewingConversation] = useState(false);
   const [conversationMessage, setConversationMessage] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  const [exportingPdf, setExportingPdf] = useState(false);
   const navigate = useNavigate();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
@@ -462,6 +471,42 @@ const AdminContactMessages = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('en-MY', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleExportPdf = () => {
+    if (!messages.length) {
+      showNotification('No messages to export', 'error');
+      return;
+    }
+
+    try {
+      setExportingPdf(true);
+      const now = new Date();
+      exportRowsToPdf({
+        title: 'RubberSense - Contact Inquiries',
+        subtitleLines: [
+          `Generated: ${now.toLocaleString()}`,
+          `Filter: ${filter} | Records: ${messages.length}`,
+        ],
+        headers: ['Name', 'Email', 'Status', 'Date', 'Message', 'Admin Reply', 'User Replies'],
+        rows: messages.map((message) => [
+          message.name || 'N/A',
+          message.email || 'N/A',
+          message.status || 'unknown',
+          formatDate(message.createdAt),
+          message.message || 'N/A',
+          message.reply || 'N/A',
+          message.userReplies?.length || 0,
+        ]),
+        fileName: `contact-inquiries-${now.toISOString().slice(0, 10)}.pdf`,
+      });
+      showNotification('Messages exported to PDF');
+    } catch (error) {
+      console.error('PDF export error:', error);
+      showNotification('Failed to export PDF', 'error');
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const allCount    = messages.length;
@@ -624,6 +669,14 @@ const AdminContactMessages = () => {
               <option value="unread">Unread</option>
               <option value="read">Read</option>
             </select>
+            <button
+              className="acm-btn acm-btn-read"
+              style={{ marginLeft: 8, opacity: loading || exportingPdf || messages.length === 0 ? 0.6 : 1 }}
+              onClick={handleExportPdf}
+              disabled={loading || exportingPdf || messages.length === 0}
+            >
+              <Icon.Download size={13} /> {exportingPdf ? 'Exporting...' : 'Export PDF'}
+            </button>
             <span className="acm-filter-count">Showing {messages.length} message{messages.length !== 1 ? 's' : ''}</span>
           </div>
 

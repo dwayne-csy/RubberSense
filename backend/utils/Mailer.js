@@ -1,14 +1,28 @@
 // backend/utils/Mailer.js
 const nodemailer = require("nodemailer");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const smtpEmail = process.env.SMTP_EMAIL || process.env.SMTP_USER;
+const smtpPassword = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpSecure = process.env.SMTP_SECURE
+  ? process.env.SMTP_SECURE === "true"
+  : smtpPort === 465;
+const smtpService = process.env.SMTP_SERVICE || (smtpHost.includes("gmail") ? "gmail" : undefined);
+
+const transporterConfig = smtpService
+  ? {
+      service: smtpService,
+      auth: { user: smtpEmail, pass: smtpPassword },
+    }
+  : {
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: { user: smtpEmail, pass: smtpPassword },
+    };
+
+const transporter = nodemailer.createTransport(transporterConfig);
 
 /**
  * Send an email with optional attachments
@@ -20,8 +34,15 @@ const transporter = nodemailer.createTransport({
  */
 const sendEmail = async (options) => {
   try {
+    if (!smtpEmail || !smtpPassword) {
+      throw new Error("Missing SMTP credentials. Set SMTP_EMAIL and SMTP_PASSWORD in backend/config/.env");
+    }
+
+    const fromName = process.env.FROM_NAME || process.env.SMTP_FROM_NAME || process.env.APP_NAME || "RubberSense";
+    const fromEmail = process.env.FROM_EMAIL || process.env.SMTP_FROM_EMAIL || smtpEmail;
+
     const mailOptions = {
-      from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM_EMAIL}>`,
+      from: `"${fromName}" <${fromEmail}>`,
       to: options.email,
       subject: options.subject,
       html: options.message,
