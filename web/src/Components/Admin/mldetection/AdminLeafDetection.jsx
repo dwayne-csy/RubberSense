@@ -1,40 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import UserHeader from '../layouts/UserHeader';
-import UserFooter from '../layouts/UserFooter';
+
 import {
-  Box,
-  Container,
-  Typography,
-  Button,
-  Paper,
-  CircularProgress,
-  Alert,
-  Grid,
-  Card,
-  CardContent,
-  LinearProgress,
-  Chip,
-  Divider,
-  IconButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Fab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableRow
+  Box, Container, Typography, Button, Paper, CircularProgress,
+  Alert, Grid, Card, CardContent, LinearProgress, Chip,
+  IconButton, List, ListItem, ListItemIcon, ListItemText,
+  Dialog, DialogTitle, DialogContent, DialogActions, Fab,
+  Table, TableBody, TableCell, TableContainer, TableRow
 } from '@mui/material';
 import {
-  CloudUpload as CloudUploadIcon,
   Analytics as AnalyticsIcon,
   RestartAlt as RestartAltIcon,
   CheckCircle as CheckCircleIcon,
@@ -47,7 +22,6 @@ import {
   Healing as HealingIcon,
   Download as DownloadIcon,
   Info as InfoIcon,
-  Grass as GrassIcon,
   BugReport as BugReportIcon,
   Agriculture as AgricultureIcon,
   Opacity as OpacityIcon,
@@ -55,14 +29,12 @@ import {
   PhotoCamera as PhotoCameraIcon,
   Close as CloseIcon,
   FlipCameraAndroid as FlipCameraIcon,
-  AddPhotoAlternate as AddPhotoAlternateIcon,
   Biotech as BiotechIcon,
   LocalHospital as LocalHospitalIcon,
   FileUpload as FileUploadIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// ── Shared label component (mirrors Latex.jsx) ───────────────────────────────
 const SectionLabel = ({ icon, label }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
     <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: '#2e7d32', flexShrink: 0 }} />
@@ -73,8 +45,7 @@ const SectionLabel = ({ icon, label }) => (
   </Box>
 );
 
-const LeafDetection = () => {
-  const [user, setUser] = useState(null);
+const AdminLeafDetection = () => {
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -103,22 +74,28 @@ const LeafDetection = () => {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
-      if (!token) return navigate('/login');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      
+      if (!token || user.role !== 'admin') {
+        navigate('/admin/login');
+        return;
+      }
+      
       try {
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        const res = await axios.get(`${API_BASE_URL}/api/v1/users/me`);
-        if (res.data.success) setUser(res.data.user);
-        else { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }
+        setLoading(false);
       } catch {
-        localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login');
-      } finally { setLoading(false); }
+        navigate('/admin/login');
+      }
     };
+    
     const fetchSystemInfo = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/api/v1/leaf/info`);
+        const res = await axios.get(`${API_BASE_URL}/api/v1/admin/ml/leaf/info`);
         if (res.data.success) setSystemInfo(res.data.data);
       } catch {}
     };
+    
     checkAuth();
     fetchSystemInfo();
   }, [navigate, API_BASE_URL]);
@@ -153,7 +130,7 @@ const LeafDetection = () => {
     c.width = v.videoWidth; c.height = v.videoHeight;
     c.getContext('2d').drawImage(v, 0, 0);
     c.toBlob(blob => {
-      const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const file = new File([blob], `leaf-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
       setSelectedImage(file);
       const reader = new FileReader();
       reader.onload = e => setImagePreview(e.target.result);
@@ -180,7 +157,7 @@ const LeafDetection = () => {
     setAnalyzing(true); setError(null); setSuccessMessage(null); setAiInsights(null);
     try {
       const fd = new FormData(); fd.append('image', selectedImage);
-      const res = await axios.post(`${API_BASE_URL}/api/v1/leaf/analyze`, fd, {
+      const res = await axios.post(`${API_BASE_URL}/api/v1/admin/ml/leaf/analyze`, fd, {
         headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
         timeout: 30000
       });
@@ -195,8 +172,7 @@ const LeafDetection = () => {
       else throw new Error(res.data.message || 'Analysis failed');
     } catch (err) {
       if (err.code === 'ECONNABORTED') setError('Request timeout. The server is taking too long to respond.');
-      else if (err.response?.status === 500) setError('Server error: ' + (err.response?.data?.error || 'Internal server error.'));
-      else if (err.response?.status === 401) { setError('Authentication failed. Please login again.'); localStorage.removeItem('token'); navigate('/login'); }
+      else if (err.response?.status === 401) { setError('Authentication failed. Please login again.'); localStorage.removeItem('token'); navigate('/admin/login'); }
       else setError(err.response?.data?.message || err.message || 'Error analyzing image. Please try again.');
     } finally { setAnalyzing(false); }
   };
@@ -251,29 +227,24 @@ const LeafDetection = () => {
       ...analysisResult,
       aiInsights: aiInsights,
       generatedAt: new Date().toISOString(),
-      generatedBy: user?.email,
-      analysisId: analysisResult.analysisId
+      analysisType: 'admin'
     };
     const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `leaf-report-${Date.now()}.json`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `admin-leaf-report-${Date.now()}.json`; a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Low-confidence threshold
-  const NOT_DETECTED_THRESHOLD = 35;
-
   if (loading) return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#070f1a' }}>
-      <UserHeader />
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#f0f4f0' }}>
       <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}>
-        <CircularProgress size={52} thickness={3} sx={{ color: '#29b6f6' }} />
+        <CircularProgress size={52} thickness={3} sx={{ color: '#2e7d32' }} />
       </motion.div>
-      <Typography variant="body1" sx={{ mt: 3, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Loading Leaf Detection System...</Typography>
+      <Typography variant="body1" sx={{ mt: 3, color: '#2e7d32', fontWeight: 600 }}>Loading Admin Leaf Detection System...</Typography>
     </Box>
   );
 
-  // ── Data extraction ──────────────────────────────────────────────────────────
+  // Data extraction
   const diseaseInfo = analysisResult?.diseaseInfo || {};
   const visualMetrics = analysisResult?.visualMetrics || {};
   const image = analysisResult?.image || {};
@@ -290,51 +261,41 @@ const LeafDetection = () => {
           : `data:image/jpeg;base64,${visualizationValue}`)
       : null;
 
-  // Determine if the leaf is "not detected" based on confidence
-  const leafMainConfidence = analysisResult ? (analysisResult?.diseaseInfo?.confidence ?? analysisResult?.confidence ?? 0) : null;
-  const isLeafNotDetected = leafMainConfidence !== null && leafMainConfidence < NOT_DETECTED_THRESHOLD;
-
-  // Extract tappability data
-  const tappabilityAssessment = analysisResult?.tappabilityAssessment || analysisResult?.tapabilityAssessment || {};
-  const tappabilityScore = tappabilityAssessment?.score ?? 0;
-  const isTappable = tappabilityAssessment?.isTappable ?? false;
-  const tappabilityReason = tappabilityAssessment?.reason || '';
-
   return (
     <>
-      <UserHeader />
 
-      <Box sx={{ minHeight: '100vh', bgcolor: '#f5f9f5', pt: '80px', pb: '90px' }}>
+      <Box sx={{ minHeight: '100vh', bgcolor: '#f0f4f0', pt: '80px', pb: '90px' }}>
         <Container maxWidth="lg">
-
-          {/* ── HERO ── */}
+          {/* HERO */}
           <motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-            <Box sx={{
-              p: { xs: 3, md: '44px 48px' }, mb: 3,
-              background: 'linear-gradient(135deg, #f7fdf9 0%, #e8f5ee 50%, #d8f3dc 100%)',
-              color: '#1b4332', borderRadius: '20px', position: 'relative', overflow: 'hidden',
-              border: '1px solid #95d5b2',
-              boxShadow: '0 8px 32px rgba(13,40,24,0.12)'
+            <Paper elevation={0} sx={{
+              p: { xs: 3, md: 4.5 }, mb: 3,
+              background: 'linear-gradient(135deg, #004d40 0%, #1b5e20 55%, #2e7d32 100%)',
+              color: 'white', borderRadius: 3, position: 'relative', overflow: 'hidden'
             }}>
-              <Box sx={{ position: 'absolute', right: '-40px', top: '-30px', width: '260px', height: '260px', borderRadius: '50%', background: 'rgba(82,183,136,0.08)', pointerEvents: 'none' }} />
-              <Box sx={{ position: 'absolute', right: '80px', bottom: '-60px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(52,143,96,0.08)', pointerEvents: 'none' }} />
-              <Box sx={{ position: 'absolute', left: '-20px', bottom: '-40px', width: '140px', height: '140px', borderRadius: '50%', background: 'rgba(163,209,141,0.06)', pointerEvents: 'none' }} />
+              <Box sx={{ position: 'absolute', top: -30, right: -30, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+              <Box sx={{ position: 'absolute', bottom: -50, left: -40, width: 280, height: 280, borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
               <Box sx={{ position: 'relative', zIndex: 1 }}>
-                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: '#d8f3dc', border: '1px solid #95d5b2', borderRadius: '8px', px: 1.5, py: 0.5, mb: 2 }}>
-                  <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#2d6a4f', boxShadow: '0 0 8px #2d6a4f' }} />
-                  <Typography sx={{ color: '#1b4332', fontWeight: 800, fontSize: '0.72rem', letterSpacing: 1.2, textTransform: 'uppercase' }}>Leaf Analysis</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.8 }}>
+                  <ScienceIcon sx={{ fontSize: 30 }} />
+                  <Typography variant="h4" sx={{ fontWeight: 800, letterSpacing: -0.5 }}>Admin Leaf Analysis</Typography>
                 </Box>
-                <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1, lineHeight: 1, mb: 1, color: '#1b4332' }}>
-                  Rubber Tree <Box component="span" sx={{ color: '#2d6a4f' }}>Leaf</Box> Detection
+                <Typography variant="body1" sx={{ opacity: 0.72, maxWidth: 480 }}>
+                  ML-powered disease detection & classification system
                 </Typography>
-                <Typography sx={{ opacity: 0.85, maxWidth: 460, lineHeight: 1.7, fontSize: '1rem', color: '#40916c' }}>
-                  AI-powered disease detection & classification system for rubber tree leaves.
-                </Typography>
+                {systemInfo?.mlModel?.status === 'Active' && (
+                  <Chip
+                    icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />}
+                    label={`Model: ${systemInfo.mlModel.name}`}
+                    size="small"
+                    sx={{ mt: 1.5, bgcolor: 'rgba(255,255,255,0.15)', color: 'white', fontSize: '0.72rem' }}
+                  />
+                )}
               </Box>
-            </Box>
+            </Paper>
           </motion.div>
 
-          {/* ── ALERTS ───────────────────────────────────────────────────────── */}
+          {/* ALERTS */}
           <AnimatePresence>
             {error && (
               <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
@@ -348,28 +309,41 @@ const LeafDetection = () => {
             )}
           </AnimatePresence>
 
-{/* ── UPLOAD PANEL ── */}
+          {/* UPLOAD PANEL */}
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Box sx={{ p: { xs: 3, md: 4 }, mb: 3, borderRadius: '16px', border: '1px solid #95d5b2', bgcolor: 'white', boxShadow: '0 4px 16px rgba(13,40,24,0.08)' }}>
-
+            <Paper elevation={0} sx={{ p: { xs: 3, md: 4 }, mb: 3, borderRadius: 3, border: '1.5px solid #c8e6c9', bgcolor: 'white' }}>
               {!imagePreview && (
                 <Grid container spacing={2}>
                   {[
-                    { icon: <FileUploadIcon sx={{ color: '#2d6a4f', fontSize: 28 }} />, title: 'Upload Image', sub: 'Select from your device', hint: 'JPEG · PNG · WebP · max 10 MB', onClick: () => fileInputRef.current?.click() },
-                    { icon: <PhotoCameraIcon sx={{ color: '#2d6a4f', fontSize: 28 }} />, title: 'Take a Photo', sub: 'Use your device camera', hint: 'Capture leaf sample live', onClick: () => setCameraOpen(true) },
+                    {
+                      icon: <FileUploadIcon sx={{ color: '#2e7d32', fontSize: 28 }} />,
+                      title: 'Upload Image',
+                      sub: 'Select from your device',
+                      hint: 'JPEG · PNG · WebP · max 10 MB',
+                      onClick: () => fileInputRef.current?.click()
+                    },
+                    {
+                      icon: <PhotoCameraIcon sx={{ color: '#2e7d32', fontSize: 28 }} />,
+                      title: 'Take a Photo',
+                      sub: 'Use your device camera',
+                      hint: 'Capture leaf sample live',
+                      onClick: () => setCameraOpen(true)
+                    },
                   ].map(({ icon, title, sub, hint, onClick }) => (
                     <Grid item xs={12} sm={6} key={title}>
                       <motion.div whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.985 }}>
                         <Box onClick={onClick} sx={{
-                          border: '1px solid #95d5b2', borderRadius: '12px', p: 3.5,
+                          border: '1.5px solid #c8e6c9', borderRadius: 2.5, p: 3.5,
                           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.2,
-                          cursor: 'pointer', bgcolor: '#f7fdf9', transition: 'all 0.18s',
-                          '&:hover': { bgcolor: '#d8f3dc', borderColor: '#52b788', boxShadow: '0 4px 20px rgba(45,106,79,0.15)' },
+                          cursor: 'pointer', bgcolor: '#fafef9', transition: 'all 0.18s',
+                          '&:hover': { bgcolor: '#f1f8e9', borderColor: '#4caf50', boxShadow: '0 2px 16px rgba(46,125,50,0.1)' },
                         }}>
-                          <Box sx={{ width: 58, height: 58, borderRadius: '50%', bgcolor: '#d8f3dc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</Box>
-                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1b4332' }}>{title}</Typography>
-                          <Typography variant="body2" sx={{ color: '#6b705c', textAlign: 'center' }}>{sub}</Typography>
-                          <Typography variant="caption" sx={{ color: '#a3b18a', textAlign: 'center' }}>{hint}</Typography>
+                          <Box sx={{ width: 58, height: 58, borderRadius: '50%', bgcolor: '#e8f5e9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {icon}
+                          </Box>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1b5e20' }}>{title}</Typography>
+                          <Typography variant="body2" sx={{ color: '#546e7a', textAlign: 'center' }}>{sub}</Typography>
+                          <Typography variant="caption" sx={{ color: '#90a4ae', textAlign: 'center' }}>{hint}</Typography>
                         </Box>
                       </motion.div>
                     </Grid>
@@ -404,82 +378,28 @@ const LeafDetection = () => {
                     variant="contained" size="large" onClick={handleAnalyze}
                     disabled={!selectedImage || analyzing}
                     startIcon={analyzing ? <CircularProgress size={18} color="inherit" /> : <AnalyticsIcon />}
-                    sx={{ bgcolor: '#29b6f6', color: '#000', px: 5, py: 1.4, borderRadius: '12px', fontSize: '0.95rem', fontWeight: 800, textTransform: 'none', boxShadow: '0 4px 20px rgba(41,182,246,0.35)', '&:hover': { bgcolor: '#4fc3f7', boxShadow: '0 6px 24px rgba(41,182,246,0.45)' }, '&:disabled': { bgcolor: '#dbeff8', color: '#6f8690', boxShadow: 'none' } }}
+                    sx={{ bgcolor: '#2e7d32', px: 5, py: 1.4, borderRadius: 2, fontSize: '0.95rem', fontWeight: 700, textTransform: 'none', boxShadow: '0 3px 10px rgba(46,125,50,0.28)', '&:hover': { bgcolor: '#1b5e20' }, '&:disabled': { bgcolor: '#c8e6c9', color: '#a5d6a7', boxShadow: 'none' } }}
                   >
                     {analyzing ? 'Analyzing...' : 'Analyze Leaf'}
                   </Button>
                   {!analyzing && (
                     <Button
                       variant="outlined" size="large" onClick={handleReset} startIcon={<RestartAltIcon />}
-                      sx={{ borderColor: '#95d5b2', color: '#2d6a4f', px: 3, py: 1.4, borderRadius: '12px', fontSize: '0.95rem', textTransform: 'none', '&:hover': { borderColor: '#52b788', bgcolor: '#f1f8f3' } }}
+                      sx={{ borderColor: '#a5d6a7', color: '#2e7d32', px: 3, py: 1.4, borderRadius: 2, fontSize: '0.95rem', textTransform: 'none', '&:hover': { borderColor: '#2e7d32', bgcolor: '#f1f8e9' } }}
                     >
                       Reset
                     </Button>
                   )}
                 </Box>
               )}
-            </Box>
+            </Paper>
           </motion.div>
 
-          {/* ── RESULTS ── */}
+          {/* RESULTS */}
           <AnimatePresence>
             {analysisResult && (
               <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
-
-                {/* ── NOT DETECTED GATE ── */}
-                {isLeafNotDetected ? (
-                  <Box sx={{ py: 10, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '20px', border: '1px dashed #c8e6c9', mb: 3 }}>
-                    <Box sx={{ fontSize: 72, mb: 2, opacity: 0.15 }}>🍃</Box>
-                    <Typography variant="h4" sx={{ color: '#1b5e20', fontWeight: 900, mb: 1 }}>Leaf Not Detected</Typography>
-                    <Typography sx={{ color: '#4e6b5f', maxWidth: 400, mx: 'auto', mb: 1.5, lineHeight: 1.6 }}>
-                      The model's confidence is too low ({leafMainConfidence?.toFixed(1)}%) to confirm a rubber tree leaf.
-                      Please upload a clearer, well-lit photo of the leaf.
-                    </Typography>
-                    <Chip label={`Confidence: ${leafMainConfidence?.toFixed(1)}%`} sx={{ bgcolor: '#ffebee', color: '#b71c1c', border: '1px solid #ef9a9a', fontWeight: 700 }} />
-                  </Box>
-                ) : (<>
-
-                {/* Model info alerts */}
-                {modelInfo && (
-                  <Alert
-                    severity={modelInfo.fallback ? 'warning' : 'success'}
-                    icon={modelInfo.fallback ? <WarningIcon /> : <ScienceIcon />}
-                    sx={{ mb: 2.5, borderRadius: 2 }}
-                  >
-                    <Typography variant="body2">
-                      {modelInfo.fallback
-                        ? '⚠️ Fallback analysis: ML model unavailable'
-                        : `✅ Analyzed using ML model: ${modelInfo.model_file || modelInfo.modelUsed || 'Leaf.pt'}`}
-                    </Typography>
-                  </Alert>
-                )}
-
-                {/* Results header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AnalyticsIcon sx={{ color: '#2e7d32' }} />
-                    <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 800 }}>Analysis Results</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    {aiInsights && (
-                      <Button
-                        variant="outlined" size="small"
-                        onClick={() => setShowAiInsights(!showAiInsights)}
-                        startIcon={<BiotechIcon />}
-                        sx={{
-                          borderColor: showAiInsights ? '#2e7d32' : '#a5d6a7',
-                          color: '#2e7d32', borderRadius: 2, textTransform: 'none',
-                          bgcolor: showAiInsights ? '#f1f8e9' : 'transparent',
-                          '&:hover': { borderColor: '#2e7d32', bgcolor: '#f1f8e9' }
-                        }}
-                      >
-                        {showAiInsights ? 'Hide AI Insights' : 'AI Insights'}
-                      </Button>
-                    )}
-                  </Box>
-                </Box>
-
-                {/* 1 ── AI Insights (collapsible) */}
+                {/* AI Insights */}
                 <AnimatePresence>
                   {showAiInsights && aiInsights && (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: 0.05 }}>
@@ -556,51 +476,44 @@ const LeafDetection = () => {
                               </Box>
                             </Grid>
                           )}
-
-                          {aiInsights.tappabilityAdvice && (
-                            <Grid item xs={12}>
-                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.07)', borderRadius: 2 }}>
-                                <Typography variant="caption" sx={{ opacity: 0.65, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                                  <OpacityIcon sx={{ fontSize: 14 }} /> Tappability Assessment
-                                </Typography>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)' }}>
-                                  {aiInsights.tappabilityAdvice}
-                                </Typography>
-                              </Box>
-                            </Grid>
-                          )}
-
-                          {aiInsights.promptRecommendations?.length > 0 && (
-                            <Grid item xs={12}>
-                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.07)', borderRadius: 2 }}>
-                                <Typography variant="caption" sx={{ opacity: 0.65, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, display: 'block', mb: 1 }}>
-                                  Recommended Questions
-                                </Typography>
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
-                                  {aiInsights.promptRecommendations.map((prompt, idx) => (
-                                    <Chip key={idx} label={prompt} size="small"
-                                      sx={{ bgcolor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)', fontSize: '0.7rem' }} />
-                                  ))}
-                                </Box>
-                              </Box>
-                            </Grid>
-                          )}
-
-                          {aiInsights.source && (
-                            <Grid item xs={12}>
-                              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', textAlign: 'right' }}>
-                                AI insights provided by {aiInsights.source.provider === 'groq' ? 'Groq' : 'Fallback system'}
-                                {aiInsights.source.model ? ` (${aiInsights.source.model})` : ''}
-                              </Typography>
-                            </Grid>
-                          )}
                         </Grid>
                       </Paper>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* 2 ── Health Status Hero Card */}
+                {/* Results header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AnalyticsIcon sx={{ color: '#2e7d32' }} />
+                    <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 800 }}>Analysis Results</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {aiInsights && (
+                      <Button
+                        variant="outlined" size="small"
+                        onClick={() => setShowAiInsights(!showAiInsights)}
+                        startIcon={<BiotechIcon />}
+                        sx={{
+                          borderColor: showAiInsights ? '#2e7d32' : '#a5d6a7',
+                          color: '#2e7d32', borderRadius: 2, textTransform: 'none',
+                          bgcolor: showAiInsights ? '#f1f8e9' : 'transparent',
+                          '&:hover': { borderColor: '#2e7d32', bgcolor: '#f1f8e9' }
+                        }}
+                      >
+                        {showAiInsights ? 'Hide AI Insights' : 'AI Insights'}
+                      </Button>
+                    )}
+                    <Button
+                      variant="outlined" size="small" onClick={downloadReport} startIcon={<DownloadIcon />}
+                      sx={{ borderColor: '#a5d6a7', color: '#2e7d32', borderRadius: 2, textTransform: 'none', '&:hover': { borderColor: '#2e7d32', bgcolor: '#f1f8e9' } }}
+                    >
+                      Download Report
+                    </Button>
+                  </Box>
+                </Box>
+
+                {/* Health Status Hero */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
                   <Card elevation={0} sx={{ borderRadius: 3, mb: 3, background: getHealthGradient(diseaseInfo.healthStatus), color: 'white', overflow: 'hidden', position: 'relative' }}>
                     <Box sx={{ position: 'absolute', top: -24, right: -24, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
@@ -611,18 +524,6 @@ const LeafDetection = () => {
                           <Typography variant="h2" sx={{ fontWeight: 900, lineHeight: 1, mt: 0.5, letterSpacing: -1, textTransform: 'capitalize' }}>
                             {diseaseInfo.healthStatus || 'Unknown'}
                           </Typography>
-                          {diseaseInfo.allPredictions?.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.7, mt: 1.5 }}>
-                              {diseaseInfo.allPredictions.map((p, i) => (
-                                <Chip key={i} label={`${p.class} ${Number(p.confidence || 0).toFixed(0)}%`} size="small"
-                                  sx={i === 0
-                                    ? { bgcolor: 'rgba(255,255,255,0.28)', color: 'white', fontWeight: 700, fontSize: '0.7rem' }
-                                    : { bgcolor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }
-                                  }
-                                />
-                              ))}
-                            </Box>
-                          )}
                         </Grid>
                         <Grid item xs={12} md={7}>
                           <Box sx={{ mb: 2.5 }}>
@@ -630,7 +531,9 @@ const LeafDetection = () => {
                               <Typography variant="body2" sx={{ opacity: 0.8 }}>Detection Confidence</Typography>
                               <Typography variant="body2" sx={{ fontWeight: 800 }}>{diseaseInfo.confidence?.toFixed(1)}%</Typography>
                             </Box>
-                            <LinearProgress variant="determinate" value={diseaseInfo.confidence || 0}
+                            <LinearProgress
+                              variant="determinate"
+                              value={diseaseInfo.confidence || 0}
                               sx={{ height: 10, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.22)', '& .MuiLinearProgress-bar': { bgcolor: 'white', borderRadius: 99 } }}
                             />
                           </Box>
@@ -654,171 +557,98 @@ const LeafDetection = () => {
                   </Card>
                 </motion.div>
 
-                {/* 3 ── Tappability Score Card */}
-                {tappabilityScore > 0 && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                    <Card elevation={0} sx={{ 
-                      borderRadius: 3, 
-                      mb: 3, 
-                      background: isTappable 
-                        ? 'linear-gradient(135deg, #0d47a1 0%, #1565c0 50%, #1976d2 100%)' 
-                        : 'linear-gradient(135deg, #e65100 0%, #ef6c00 50%, #f57c00 100%)',
-                      color: 'white', 
-                      overflow: 'hidden', 
-                      position: 'relative' 
-                    }}>
-                      <Box sx={{ position: 'absolute', top: -24, right: -24, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
-                      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                        <Grid container spacing={3} alignItems="center">
-                          <Grid item xs={12} md={5}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                              {isTappable ? (
-                                <CheckCircleIcon sx={{ fontSize: 24, color: '#a5d6a7' }} />
-                              ) : (
-                                <WarningIcon sx={{ fontSize: 24, color: '#ffcc80' }} />
-                              )}
-                              <Typography variant="caption" sx={{ opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700 }}>
-                                Tappability Score
-                              </Typography>
-                            </Box>
-                            <Typography variant="h2" sx={{ fontWeight: 900, lineHeight: 1, mt: 0.5, letterSpacing: -1 }}>
-                              {tappabilityScore}
-                              <Typography component="span" variant="h5" sx={{ fontWeight: 400, ml: 0.5, opacity: 0.8 }}>%</Typography>
-                            </Typography>
-                            <Chip 
-                              label={isTappable ? 'Ready for Tapping' : 'Not Recommended'} 
-                              size="small"
-                              sx={{ 
-                                mt: 1.5, 
-                                bgcolor: isTappable ? 'rgba(76,175,80,0.3)' : 'rgba(244,67,54,0.3)', 
-                                color: 'white', 
-                                fontWeight: 700,
-                                fontSize: '0.7rem'
-                              }}
-                            />
-                          </Grid>
-                          <Grid item xs={12} md={7}>
-                            <Box sx={{ mb: 2 }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
-                                <Typography variant="body2" sx={{ opacity: 0.8 }}>Tappability Progress</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 800 }}>{tappabilityScore}%</Typography>
-                              </Box>
-                              <LinearProgress variant="determinate" value={tappabilityScore || 0}
-                                sx={{ height: 10, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.22)', '& .MuiLinearProgress-bar': { bgcolor: 'white', borderRadius: 99 } }}
-                              />
-                            </Box>
-                            {tappabilityReason && (
-                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.13)', borderRadius: 2 }}>
-                                <Typography variant="caption" sx={{ opacity: 0.65, display: 'block', mb: 0.5 }}>Recommendation</Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.5 }}>
-                                  {tappabilityReason}
-                                </Typography>
-                              </Box>
-                            )}
-                          </Grid>
-                        </Grid>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )}
+                {/* Spots + Color + Texture */}
+                <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1.5px solid #c8e6c9', bgcolor: '#fafef9' }}>
+                        <SectionLabel icon={<BugReportIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Spots Detected" />
+                        <Typography variant="h2" sx={{ fontWeight: 900, color: '#1b5e20', lineHeight: 1, letterSpacing: -1 }}>
+                          {visualMetrics.spotCount ?? 0}
+                          <Typography component="span" variant="h5" sx={{ fontWeight: 400, ml: 0.6, color: '#4caf50' }}>spots</Typography>
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <Chip
+                            label={`Severity: ${diseaseInfo.severity || 'N/A'}`} size="small"
+                            sx={{ bgcolor: getSeverityColor(diseaseInfo.severity), color: 'white', fontWeight: 700, fontSize: '0.72rem' }}
+                          />
+                        </Box>
+                      </Paper>
+                    </motion.div>
+                  </Grid>
 
-                {/* 4 ── Disease Analysis */}
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1.5px solid #c8e6c9', bgcolor: '#fafef9' }}>
+                        <SectionLabel icon={<ColorLensIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Dominant Color" />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                          <Box sx={{
+                            width: 52, height: 52, borderRadius: 2,
+                            bgcolor: getColorHex(visualMetrics.dominantColor),
+                            border: '3px solid #e8f5e9',
+                            boxShadow: `0 2px 10px ${getColorHex(visualMetrics.dominantColor)}55`,
+                            flexShrink: 0
+                          }} />
+                          <Box>
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: '#1b5e20', textTransform: 'capitalize', lineHeight: 1.2 }}>
+                              {visualMetrics.dominantColor || 'Unknown'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">Leaf Coverage: {visualMetrics.leafCoverage ?? 0}%</Typography>
+                          </Box>
+                        </Box>
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1.5px solid #c8e6c9', bgcolor: '#fafef9' }}>
+                        <SectionLabel icon={<TextureIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Texture" />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                          {getTextureIcon(visualMetrics.texture)}
+                          <Typography variant="h5" sx={{ fontWeight: 800, color: '#1b5e20', textTransform: 'capitalize' }}>
+                            {visualMetrics.texture || '—'}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+                </Grid>
+
+                {/* Disease Analysis */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
-                  <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #c8e6c9', bgcolor: 'white' }}>
-                    <SectionLabel icon={<BugReportIcon sx={{ color: '#4caf50', fontSize: 17 }} />} label="Disease Analysis" />
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #c8e6c9', bgcolor: 'white' }}>
+                    <SectionLabel icon={<BugReportIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Disease Analysis" />
 
                     {isHealthy ? (
-                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1.2, borderRadius: 2, bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
-                        <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 18 }} />
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1.2, borderRadius: 2, bgcolor: '#e8f5e9' }}>
+                        <CheckCircleIcon sx={{ color: '#2e7d32', fontSize: 18 }} />
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 700, color: '#2e7d32' }}>Tree is Healthy</Typography>
-                          <Typography variant="caption" sx={{ color: '#546e7a' }}>No signs of disease detected. Continue regular monitoring.</Typography>
+                          <Typography variant="caption" color="text.secondary">No signs of disease detected.</Typography>
                         </Box>
                       </Box>
                     ) : (
                       <>
-                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 2, bgcolor: 'rgba(244, 67, 54, 0.1)', mb: 2 }}>
-                          <ErrorIcon sx={{ color: '#ef5350', fontSize: 17 }} />
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 2, bgcolor: '#ffebee', mb: 2.5 }}>
+                          <ErrorIcon sx={{ color: '#c62828', fontSize: 17 }} />
                           <Typography variant="body2" sx={{ fontWeight: 700, color: '#c62828' }}>
-                            {diseaseInfo.name} Detected — Confidence: {diseaseInfo.confidence?.toFixed(1)}%
+                            {diseaseInfo.name} — Confidence: {diseaseInfo.confidence?.toFixed(1)}%
                           </Typography>
                         </Box>
-
                         {diseaseInfo.description && (
-                          <Typography variant="body2" sx={{ color: '#546e7a', mb: 2.5, px: 0.5 }}>
-                            {diseaseInfo.description}
-                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, px: 0.5 }}>{diseaseInfo.description}</Typography>
                         )}
-
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} md={6}>
-                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255, 152, 0, 0.05)', borderRadius: 2, border: '1px solid rgba(255, 152, 0, 0.2)', height: '100%' }}>
-                              <Typography variant="caption" sx={{ color: '#ef6c00', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.2 }}>
-                                <WarningIcon sx={{ fontSize: 14 }} /> Symptoms
-                              </Typography>
-                              <List dense disablePadding>
-                                {analysisResult.symptoms?.length
-                                  ? analysisResult.symptoms.map((s, i) => (
-                                    <ListItem key={i} disableGutters sx={{ py: 0.3 }}>
-                                      <ListItemIcon sx={{ minWidth: 26 }}><WarningIcon sx={{ color: '#ffb74d', fontSize: 15 }} /></ListItemIcon>
-                                      <ListItemText primary={s} primaryTypographyProps={{ variant: 'body2', sx: { color: '#37474f' } }} />
-                                    </ListItem>
-                                  ))
-                                  : <ListItem disableGutters><ListItemText primary="No symptom information available" primaryTypographyProps={{ variant: 'body2', sx: { color: '#607d8b' } }} /></ListItem>
-                                }
-                              </List>
-                            </Box>
-                          </Grid>
-
-                          <Grid item xs={12} md={6}>
-                            <Box sx={{ p: 2.5, bgcolor: 'rgba(33, 150, 243, 0.05)', borderRadius: 2, border: '1px solid rgba(33, 150, 243, 0.2)', height: '100%' }}>
-                              <Typography variant="caption" sx={{ color: '#1976d2', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.2 }}>
-                                <InfoIcon sx={{ fontSize: 14 }} /> Causes
-                              </Typography>
-                              <List dense disablePadding>
-                                {analysisResult.causes?.length
-                                  ? analysisResult.causes.map((c, i) => (
-                                    <ListItem key={i} disableGutters sx={{ py: 0.3 }}>
-                                      <ListItemIcon sx={{ minWidth: 26 }}><InfoIcon sx={{ color: '#64b5f6', fontSize: 15 }} /></ListItemIcon>
-                                      <ListItemText primary={c} primaryTypographyProps={{ variant: 'body2', sx: { color: '#37474f' } }} />
-                                    </ListItem>
-                                  ))
-                                  : <ListItem disableGutters><ListItemText primary="No cause information available" primaryTypographyProps={{ variant: 'body2', sx: { color: '#607d8b' } }} /></ListItem>
-                                }
-                              </List>
-                            </Box>
-                          </Grid>
-                        </Grid>
                       </>
                     )}
                   </Paper>
                 </motion.div>
 
-                {/* 5 ── Top Predictions */}
-                {diseaseInfo.allPredictions?.length > 1 && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }}>
-                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #c8e6c9', bgcolor: 'white' }}>
-                      <SectionLabel icon={<AnalyticsIcon sx={{ color: '#4caf50', fontSize: 17 }} />} label="Top Predictions" />
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {diseaseInfo.allPredictions.map((pred, i) => (
-                          <Chip key={i}
-                            label={`${pred.class} (${Number(pred.confidence || 0).toFixed(0)}%)`}
-                            size="small"
-                            sx={i === 0
-                              ? { bgcolor: '#2e7d32', color: 'white', fontWeight: 700, fontSize: '0.72rem' }
-                              : { bgcolor: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7', fontWeight: 600, fontSize: '0.72rem' }}
-                          />
-                        ))}
-                      </Box>
-                    </Paper>
-                  </motion.div>
-                )}
-
-                {/* 6 ── Detection Visualization */}
+                {/* Detection Visualization */}
                 {(visualizationSrc || hasDetectionBoxes) && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
-                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #c8e6c9', bgcolor: 'white' }}>
-                      <SectionLabel icon={<ScienceIcon sx={{ color: '#4caf50', fontSize: 17 }} />} label="Detection Visualization" />
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #c8e6c9', bgcolor: 'white' }}>
+                      <SectionLabel icon={<ScienceIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Detection Visualization" />
 
                       {visualizationSrc && (
                         <Box sx={{ textAlign: 'center', mb: hasDetectionBoxes ? 2.5 : 0 }}>
@@ -831,7 +661,7 @@ const LeafDetection = () => {
                       )}
 
                       {hasDetectionBoxes && (
-                        <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, bgcolor: '#fafef9', border: '1px solid #c8e6c9' }}>
+                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                           <Table size="small">
                             <TableBody>
                               {detections
@@ -840,13 +670,13 @@ const LeafDetection = () => {
                                   const [x1, y1, x2, y2] = det.bbox.map((v) => Number(v).toFixed(1));
                                   return (
                                     <TableRow key={`leaf-box-${idx}`}>
-                                      <TableCell sx={{ fontWeight: 700, color: '#1b4332', width: '34%', borderBottom: '1px solid #dcefdc' }}>
+                                      <TableCell sx={{ fontWeight: 700, color: '#1b5e20', width: '34%' }}>
                                         {det.class || det.display_name || det.original_class || `Detection ${idx + 1}`}
                                       </TableCell>
-                                      <TableCell sx={{ color: '#2e7d32', width: '22%', borderBottom: '1px solid #dcefdc' }}>
+                                      <TableCell sx={{ color: '#2e7d32', width: '22%' }}>
                                         {Number(det.confidence || 0).toFixed(2)}%
                                       </TableCell>
-                                      <TableCell sx={{ color: '#546e7a', borderBottom: '1px solid #dcefdc' }}>
+                                      <TableCell sx={{ color: '#616161' }}>
                                         [{x1}, {y1}] to [{x2}, {y2}]
                                       </TableCell>
                                     </TableRow>
@@ -859,27 +689,13 @@ const LeafDetection = () => {
                     </Paper>
                   </motion.div>
                 )}
-
-                {/* Metadata footer */}
-                {imageMetadata && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 0.5, pb: 1 }}>
-                    <InfoIcon sx={{ fontSize: 13, color: '#bdbdbd' }} />
-                    <Typography variant="caption" color="text.disabled">
-                      Analyzed: {new Date(imageMetadata.analyzedAt).toLocaleString()} ·
-                      File: {imageMetadata.filename} ·
-                      Size: {imageMetadata.fileSizeKB} KB
-                      {imageMetadata.source === 'camera' ? ' · Camera capture' : ''}
-                    </Typography>
-                  </Box>
-                )}
-              </>)}
               </motion.div>
             )}
           </AnimatePresence>
         </Container>
       </Box>
 
-      {/* ── CAMERA DIALOG ────────────────────────────────────────────────────── */}
+      {/* CAMERA DIALOG */}
       <Dialog open={cameraOpen} onClose={() => setCameraOpen(false)} maxWidth="md" fullWidth
         PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}>
         <DialogTitle sx={{ bgcolor: '#1b5e20', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
@@ -928,9 +744,9 @@ const LeafDetection = () => {
       </Dialog>
 
       <canvas ref={canvasRef} style={{ display: 'none' }} />
-      <UserFooter />
+
     </>
   );
 };
- 
-export default LeafDetection;
+
+export default AdminLeafDetection;

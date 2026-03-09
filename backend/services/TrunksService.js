@@ -386,7 +386,8 @@ class TrunksService {
       returnVisualization = true,
       detailedAnalysis = true,
       useCache = false,
-      cacheKey = null
+      cacheKey = null,
+      timeoutMs = 120000
     } = options;
 
     // Check cache if enabled
@@ -465,11 +466,16 @@ class TrunksService {
       let stdout = '';
       let stderr = '';
 
-      // Set timeout for the process (30 seconds)
+      const effectiveTimeoutMs =
+        Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+          ? Number(timeoutMs)
+          : 120000;
+
+      // Set timeout for the process
       const timeout = setTimeout(() => {
         proc.kill();
-        reject(new Error('ML inference timed out after 30 seconds'));
-      }, 30000);
+        reject(new Error(`ML inference timed out after ${Math.round(effectiveTimeoutMs / 1000)} seconds`));
+      }, effectiveTimeoutMs);
 
       proc.stdout.on('data', (data) => {
         stdout += data.toString();

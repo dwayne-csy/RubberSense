@@ -728,37 +728,37 @@ exports.getAnalysisHistory = async (req, res) => {
       .limit(limitNum)
       .lean();
 
+    // Format analyses for frontend
     const formattedAnalyses = analyses.map((analysis) => {
-      const compat = buildApiAnalysisFromStored(analysis);
+      const severityLevel = analysis.severityLevel || 
+        (analysis.severity >= 80 ? 'Critical' : 
+         analysis.severity >= 60 ? 'High' : 
+         analysis.severity >= 40 ? 'Medium' : 
+         analysis.severity >= 20 ? 'Low' : 'Very Low');
+      
       return {
         _id: analysis._id,
+        id: analysis._id,
         imageUrl: analysis.imageUrl,
-        imagePublicId: analysis.imagePublicId,
-        treeProfileId: compat.treeProfileId || analysis.treeProfileId || null,
+        image: analysis.imageUrl,
         createdAt: analysis.createdAt,
-        updatedAt: analysis.updatedAt,
-        diseaseDetected: analysis.diseaseDetected,
-        confidence: analysis.confidence,
-        severity: analysis.severity,
-        severityLevel: analysis.severityLevel,
-        spotsCount: analysis.spotsCount,
-        colorAnalysis: analysis.colorAnalysis,
-        processingTime: analysis.processingTime,
-        mlModelUsed: analysis.mlModelUsed,
-        treeIdentification: compat.treeIdentification,
-        leafAnalysis: compat.leafAnalysis,
-        diseaseDetection: compat.diseaseDetection,
-        tappabilityAssessment: compat.tappabilityAssessment,
-        tapabilityAssessment: compat.tapabilityAssessment,
-        productivityRecommendation: compat.productivityRecommendation,
-        aiInsights: compat.aiInsights,
-        tree: compat.tree
+        status: 'Completed',
+        confidence: analysis.confidence || 0,
+        diseaseDetected: analysis.diseaseDetected || 'Unknown',
+        diseaseType: analysis.diseaseDetected || 'None',
+        diseaseStatus: analysis.diseaseDetected === 'Healthy' ? 'Healthy' : 'Infected',
+        severity: analysis.severity || 0,
+        severityLevel: severityLevel,
+        affectedArea: analysis.colorAnalysis?.affectedAreaPercentage || 0,
+        spotsCount: analysis.spotsCount || 0,
+        recommendation: analysis.treatmentRecommendations?.[0] || 'Monitor'
       };
     });
     
     res.status(200).json({
       success: true,
       data: formattedAnalyses,
+      analyses: formattedAnalyses, // Include both formats for compatibility
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -774,6 +774,180 @@ exports.getAnalysisHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching history',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get single leaf analysis by ID
+// @route   GET /api/v1/leaf/analysis/:analysisId
+// @access  Private
+exports.getAnalysisById = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { analysisId } = req.params;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    
+    // Find the analysis and ensure it belongs to the user
+    const analysis = await LeafAnalysis.findOne({
+      _id: analysisId,
+      userId: userId
+    }).lean();
+    
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Analysis not found'
+      });
+    }
+    
+    // Extract data from fullAnalysis if available
+    const fullAnalysis = analysis.fullAnalysis || {};
+    const diseaseInfo = fullAnalysis.diseaseInfo || analysis.diseaseInfo || {};
+    const visualMetrics = fullAnalysis.visualMetrics || analysis.visualMetrics || {};
+    const colorAnalysis = analysis.colorAnalysis || fullAnalysis.color_analysis || {};
+    
+    // Determine disease status
+    const isHealthy = analysis.diseaseDetected?.toLowerCase() === 'healthy' || 
+                      diseaseInfo.healthStatus?.toLowerCase() === 'healthy' ||
+                      !analysis.diseaseDetected || 
+                      analysis.diseaseDetected === 'None' ||
+                      analysis.diseaseDetected === 'Unknown';
+    
+    const diseaseStatus = isHealthy ? 'Healthy' : 'Infected';
+    
+    // Determine severity level
+    let severityLevel = analysis.severityLevel || 'None';
+    if (analysis.severity >= 80) severityLevel = 'Critical';
+    else if (analysis.severity >= 60) severityLevel = 'High';
+    else if (analysis.severity >= 40) severityLevel = 'Medium';
+    else if (analysis.severity >= 20) severityLevel = 'Low';
+    else if (analysis.severity > 0) severityLevel = 'Very Low';
+    
+    // Get disease name
+    const diseaseName = analysis.diseaseDetected || 
+                        diseaseInfo.name || 
+                        (isHealthy ? 'Healthy' : 'Unknown Disease');
+    
+    // Get treatment recommendations
+    const treatmentRecommendations = analysis.treatmentRecommendations || 
+                                     fullAnalysis.treatment_recommendations ||
+                                     fullAnalysis.treatment ||
+                                     [];
+    
+    // Get prevention strategies
+    const preventionStrategies = analysis.preventionStrategies || 
+                                 fullAnalysis.prevention_strategies ||
+                                 fullAnalysis.prevention ||
+                                 [];
+    
+    // Get all predictions
+    const allPredictions = diseaseInfo.allPredictions || 
+                          fullAnalysis.all_predictions || 
+                          [];
+    
+    // Get symptoms and causes
+    const symptoms = fullAnalysis.symptoms || [];
+    const causes = fullAnalysis.causes || [];
+    
+    // Get AI insights
+    const aiInsights = analysis.aiInsights || fullAnalysis.aiInsights || null;
+    
+    // Format for frontend (matches AnalysisDetails.jsx expectations)
+    const formattedAnalysis = {
+      _id: analysis._id,
+      id: analysis._id,
+      type: 'Leaf',
+      imageUrl: analysis.imageUrl,
+      image: analysis.imageUrl,
+      createdAt: analysis.createdAt,
+      status: 'Completed',
+      confidence: analysis.confidence || diseaseInfo.confidence || 0,
+      
+      // Disease info
+      diseaseDetected: diseaseName,
+      diseaseType: diseaseName,
+      diseaseStatus: diseaseStatus,
+      diseaseName: diseaseName,
+      diseaseDescription: diseaseInfo.description || fullAnalysis.description || '',
+      
+      // Severity
+      severity: analysis.severity || 0,
+      severityLevel: severityLevel,
+      severityNumber: analysis.severity || 0,
+      
+      // Visual metrics
+      spotsCount: analysis.spotsCount || visualMetrics.spotCount || 0,
+      affectedArea: analysis.colorAnalysis?.affectedAreaPercentage || 
+                    (100 - (visualMetrics.leafCoverage || 0)) || 0,
+      leafCoverage: visualMetrics.leafCoverage || 
+                    analysis.colorAnalysis?.healthyGreenPercentage || 0,
+      
+      // Color analysis
+      dominantColor: colorAnalysis.primaryColor || 
+                     visualMetrics.dominantColor || 
+                     'Unknown',
+      colorHex: colorAnalysis.hex || 
+                (visualMetrics.dominantColor === 'Green' ? '#4caf50' : 
+                 visualMetrics.dominantColor === 'Yellow' ? '#ffeb3b' : 
+                 visualMetrics.dominantColor === 'Brown' ? '#795548' : '#2e7d32'),
+      
+      // Texture
+      texture: visualMetrics.texture || 'Unknown',
+      
+      // Color distribution
+      colorDistribution: visualMetrics.colorDistribution || {},
+      
+      // Recommendations
+      treatmentRecommendations: treatmentRecommendations,
+      preventionStrategies: preventionStrategies,
+      recommendation: treatmentRecommendations[0] || 
+                     fullAnalysis.recommendations?.[0] || 
+                     'Monitor leaf condition regularly',
+      
+      // Additional data
+      symptoms: symptoms,
+      causes: causes,
+      allPredictions: allPredictions,
+      aiInsights: aiInsights,
+      
+      // Model info
+      mlModelUsed: analysis.mlModelUsed || fullAnalysis.ml_model_used || false,
+      modelInfo: fullAnalysis.modelInfo || {},
+      
+      // Tree info (if linked)
+      treeProfileId: analysis.treeProfileId || null,
+      treeSnapshot: analysis.treeSnapshot || null,
+      
+      // Detailed results for renderLeafResults()
+      result: {
+        diseaseStatus: diseaseStatus,
+        diseaseType: diseaseName,
+        severity: severityLevel,
+        affectedArea: analysis.colorAnalysis?.affectedAreaPercentage || 
+                      (100 - (visualMetrics.leafCoverage || 0)) || 0,
+        recommendation: treatmentRecommendations[0] || 'Monitor'
+      }
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: formattedAnalysis,
+      analysis: formattedAnalysis, // Include both formats for compatibility
+      message: 'Analysis retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Get leaf analysis error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching analysis',
       error: error.message
     });
   }
@@ -947,45 +1121,6 @@ exports.deleteAnalysis = async (req, res) => {
   }
 };
 
-// @desc    Get single analysis by ID
-// @route   GET /api/v1/leaf/analysis/:analysisId
-// @access  Private
-exports.getAnalysisById = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
-    const { analysisId } = req.params;
-    
-    const analysis = await LeafAnalysis.findOne({
-      _id: analysisId,
-      userId: userId
-    });
-    
-    if (!analysis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Analysis not found'
-      });
-    }
-
-    const formattedAnalysis = buildApiAnalysisFromStored(
-      typeof analysis.toObject === 'function' ? analysis.toObject() : analysis
-    );
-    formattedAnalysis.analysisId = analysis._id;
-    
-    res.status(200).json({
-      success: true,
-      data: formattedAnalysis
-    });
-    
-  } catch (error) {
-    console.error('Get analysis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching analysis',
-      error: error.message
-    });
-  }
-};
 
 // @desc    Batch delete multiple analyses
 // @route   DELETE /api/v1/leaf/history/batch

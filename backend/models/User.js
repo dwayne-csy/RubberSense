@@ -75,6 +75,32 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+    
+    deactivationReason: {
+        type: String,
+        enum: [
+            'inappropriate_content',
+            'offensive_comments',
+            'inappropriate_messages',
+            'community_violation',
+            'harassment',
+            'other'
+        ],
+        default: null
+    },
+    deactivationReasonText: {
+        type: String,
+        default: null
+    },
+    deactivatedAt: {
+        type: Date,
+        default: null
+    },
+    deactivatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
     isDeleted: {
         type: Boolean,
         default: false,

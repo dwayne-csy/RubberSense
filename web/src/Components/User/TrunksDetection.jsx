@@ -28,29 +28,16 @@ import {
   DialogActions,
   Fab,
   Tooltip,
-  Zoom,
   Fade,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableRow,
-  Radio,
-  RadioGroup,
-  FormControlLabel,
-  FormControl,
-  FormLabel,
   InputLabel,
   Select,
   MenuItem,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  Badge
+  FormControl,
 } from '@mui/material';
 import {
   CloudUpload as CloudUploadIcon,
@@ -74,19 +61,24 @@ import {
   PhotoCamera as PhotoCameraIcon,
   Close as CloseIcon,
   FlipCameraAndroid as FlipCameraIcon,
-  AddPhotoAlternate as AddPhotoAlternateIcon,
-  History as HistoryIcon,
   Assessment as AssessmentIcon,
-  ExpandMore as ExpandMoreIcon,
-  Speed as SpeedIcon,
-  Opacity as OpacityIcon,
-  Grain as GrainIcon,
   Biotech as BiotechIcon,
-  LocalHospital as LocalHospitalIcon,
   WaterDrop as WaterDropIcon,
-  PestControl as PestControlIcon
+  FileUpload as FileUploadIcon,
+  Park as ParkIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// ── Shared label component (mirrors Latex.jsx) ───────────────────────────────
+const SectionLabel = ({ icon, label }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
+    <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: '#8B4513', flexShrink: 0 }} />
+    {icon}
+    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#3E2723', letterSpacing: 0.3 }}>
+      {label}
+    </Typography>
+  </Box>
+);
 
 const TrunksDetection = () => {
   const [user, setUser] = useState(null);
@@ -98,27 +90,15 @@ const TrunksDetection = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
-  const [activeStep, setActiveStep] = useState(0);
-  const [expandedSections, setExpandedSections] = useState({
-    color: true,
-    texture: true,
-    disease: true,
-    recommendations: true
-  });
 
-  // Source chooser
-  const [chooserOpen, setChooserOpen] = useState(false);
-
-  // Camera states
+  // Camera
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
   const [capturing, setCapturing] = useState(false);
   const [cameraError, setCameraError] = useState(null);
 
-  // History states
-  const [recentAnalyses, setRecentAnalyses] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
+  // Tree profiles
   const [treeProfiles, setTreeProfiles] = useState([]);
   const [selectedTreeId, setSelectedTreeId] = useState('');
   const [loadingTrees, setLoadingTrees] = useState(false);
@@ -130,50 +110,19 @@ const TrunksDetection = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
-  // Analysis steps for stepper
-  const analysisSteps = [
-    {
-      label: 'Image Upload',
-      description: 'Select or capture a clear image of the rubber tree trunk',
-      icon: <CloudUploadIcon />
-    },
-    {
-      label: 'ML Processing',
-      description: 'AI model analyzes trunk features and detects diseases',
-      icon: <BiotechIcon />
-    },
-    {
-      label: 'Results Analysis',
-      description: 'Review comprehensive health assessment',
-      icon: <AssessmentIcon />
-    }
-  ];
-
   const fetchUserTrees = async () => {
     setLoadingTrees(true);
     try {
       let response;
-      try {
-        response = await axios.get(`${API_BASE_URL}/api/v1/trees`);
-      } catch (primaryRouteError) {
-        response = await axios.get(`${API_BASE_URL}/api/trees`);
-      }
-
+      try { response = await axios.get(`${API_BASE_URL}/api/v1/trees`); }
+      catch { response = await axios.get(`${API_BASE_URL}/api/trees`); }
       const trees = Array.isArray(response.data?.data) ? response.data.data : [];
       setTreeProfiles(trees);
-      setSelectedTreeId((prevSelectedTreeId) => {
-        if (prevSelectedTreeId && trees.some((tree) => tree?._id === prevSelectedTreeId)) {
-          return prevSelectedTreeId;
-        }
-        return trees[0]?._id || '';
-      });
-    } catch (err) {
-      console.error('Error fetching tree profiles:', err);
-      setTreeProfiles([]);
-      setSelectedTreeId('');
-    } finally {
-      setLoadingTrees(false);
-    }
+      setSelectedTreeId(prev =>
+        prev && trees.some(t => t?._id === prev) ? prev : trees[0]?._id || ''
+      );
+    } catch { setTreeProfiles([]); setSelectedTreeId(''); }
+    finally { setLoadingTrees(false); }
   };
 
   useEffect(() => {
@@ -182,385 +131,181 @@ const TrunksDetection = () => {
       if (!token) return navigate('/login');
       try {
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        const response = await axios.get(`${API_BASE_URL}/api/v1/users/me`);
-        if (response.data.success) {
-          setUser(response.data.user);
-          fetchRecentAnalyses(response.data.user.id);
-          fetchUserTrees();
-        } else {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          navigate('/login');
-        }
-      } catch (err) {
-        console.error('Auth check error:', err);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-      } finally {
-        setLoading(false);
-      }
+        const res = await axios.get(`${API_BASE_URL}/api/v1/users/me`);
+        if (res.data.success) { setUser(res.data.user); fetchUserTrees(); }
+        else { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }
+      } catch { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }
+      finally { setLoading(false); }
     };
-
     const fetchSystemInfo = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/v1/trunks/info`);
-        if (response.data.success) {
-          setSystemInfo(response.data.data);
-          console.log('System info:', response.data.data);
-        }
-      } catch (err) {
-        console.error('Error fetching system info:', err);
-      }
+        const res = await axios.get(`${API_BASE_URL}/api/v1/trunks/info`);
+        if (res.data.success) setSystemInfo(res.data.data);
+      } catch {}
     };
-
-    checkAuth();
-    fetchSystemInfo();
+    checkAuth(); fetchSystemInfo();
   }, [navigate, API_BASE_URL]);
 
-  const fetchRecentAnalyses = async (userId) => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/v1/trunks/history?limit=5`);
-      if (response.data.success) {
-        setRecentAnalyses(response.data.data.history || []);
-      }
-    } catch (err) {
-      console.error('Error fetching recent analyses:', err);
-    }
-  };
+  useEffect(() => () => { if (stream) stream.getTracks().forEach(t => t.stop()); }, [stream]);
 
   useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [stream]);
-
-  useEffect(() => {
-    if (cameraOpen) {
-      startCamera();
-    } else if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
+    if (cameraOpen) startCamera();
+    else if (stream) { stream.getTracks().forEach(t => t.stop()); setStream(null); }
   }, [cameraOpen, facingMode]);
 
   const startCamera = async () => {
     setCameraError(null);
     try {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const ms = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-    } catch (err) {
-      console.error('Camera error:', err);
-      setCameraError('Unable to access camera. Please ensure camera permissions are granted.');
-    }
+      setStream(ms);
+      if (videoRef.current) videoRef.current.srcObject = ms;
+    } catch { setCameraError('Unable to access camera. Please ensure camera permissions are granted.'); }
   };
 
-  const handleFlipCamera = () => {
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
-  };
+  const handleFlipCamera = () => setFacingMode(p => p === 'user' ? 'environment' : 'user');
 
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
     setCapturing(true);
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    
-    canvas.toBlob((blob) => {
+    const v = videoRef.current, c = canvasRef.current;
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    c.toBlob(blob => {
       const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
       setSelectedImage(file);
-      
       const reader = new FileReader();
-      reader.onload = (e) => setImagePreview(e.target.result);
+      reader.onload = e => setImagePreview(e.target.result);
       reader.readAsDataURL(file);
-      
-      setCameraOpen(false);
-      setCapturing(false);
-      setAnalysisResult(null);
-      setSuccessMessage(null);
-      setError(null);
-      setActiveStep(1);
+      setCameraOpen(false); setCapturing(false);
+      setAnalysisResult(null); setSuccessMessage(null); setError(null);
     }, 'image/jpeg', 0.95);
   };
 
-  const handleImageSelect = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      processSelectedFile(e.target.files[0]);
-    }
-  };
+  const handleImageSelect = e => { if (e.target.files?.[0]) processSelectedFile(e.target.files[0]); };
 
-  const processSelectedFile = (file) => {
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setError('Invalid file type. Please select a JPEG, PNG, or WebP image.');
-      return;
-    }
-
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File too large. Maximum size is 10MB.');
-      return;
-    }
-
-    setError(null);
-    setSelectedImage(file);
-    setAnalysisResult(null);
-    setSuccessMessage(null);
-    setActiveStep(1);
-
+  const processSelectedFile = file => {
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type))
+      return setError('Invalid file type. Please select a JPEG, PNG, or WebP image.');
+    if (file.size > 10 * 1024 * 1024) return setError('File too large. Maximum size is 10MB.');
+    setError(null); setSelectedImage(file); setAnalysisResult(null); setSuccessMessage(null);
     const reader = new FileReader();
-    reader.onload = (e) => setImagePreview(e.target.result);
+    reader.onload = e => setImagePreview(e.target.result);
     reader.readAsDataURL(file);
   };
 
   const handleAnalyze = async () => {
-    if (!selectedImage) {
-      setError('Please select an image first.');
-      return;
-    }
-
-    if (treeProfiles.length > 0 && !selectedTreeId) {
-      setError('Please select a tree profile before analyzing.');
-      return;
-    }
-
-    setAnalyzing(true);
-    setError(null);
-    setSuccessMessage(null);
-
+    if (!selectedImage) return setError('Please select an image first.');
+    if (treeProfiles.length > 0 && !selectedTreeId) return setError('Please select a tree profile before analyzing.');
+    setAnalyzing(true); setError(null); setSuccessMessage(null);
     try {
-      const formData = new FormData();
-      formData.append('image', selectedImage);
+      const fd = new FormData();
+      fd.append('image', selectedImage);
       if (selectedTreeId) {
-        formData.append('treeId', selectedTreeId);
-        const selectedTree = treeProfiles.find((tree) => tree?._id === selectedTreeId);
-        if (selectedTree?.treeID) {
-          formData.append('treeID', selectedTree.treeID);
-        }
+        fd.append('treeId', selectedTreeId);
+        const tree = treeProfiles.find(t => t?._id === selectedTreeId);
+        if (tree?.treeID) fd.append('treeID', tree.treeID);
       }
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/v1/trunks/analyze`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          timeout: 30000 // 30 second timeout
-        }
-      );
-
-      if (response.data.success) {
-        console.log('Analysis result:', response.data.data);
-        setAnalysisResult(response.data.data);
-        setSuccessMessage(`Analysis completed successfully! ID: ${response.data.data.analysisId}`);
-        setActiveStep(2);
-        
-        // Refresh recent analyses
-        if (user) {
-          fetchRecentAnalyses(user.id);
-        }
-      } else {
-        setError(response.data.message || 'Analysis failed. Please try again.');
-      }
+      const res = await axios.post(`${API_BASE_URL}/api/v1/trunks/analyze`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        timeout: 120000,
+      });
+      if (res.data.success) {
+        setAnalysisResult(res.data.data);
+        setSuccessMessage(`Analysis completed successfully! ID: ${res.data.data.analysisId}`);
+      } else setError(res.data.message || 'Analysis failed. Please try again.');
     } catch (err) {
-      console.error('Analysis error:', err);
-      
-      if (err.code === 'ECONNABORTED') {
-        setError('Analysis timed out. Please try again.');
-      } else if (err.response?.status === 413) {
-        setError('File too large. Please upload a smaller image.');
-      } else if (err.response?.status === 400) {
-        setError(err.response.data.message || 'Invalid image format.');
-      } else if (err.response?.status === 404) {
-        setError('ML service unavailable. Please try again later.');
-      } else {
-        setError(err.response?.data?.message || 'Error analyzing image. Please try again.');
-      }
-    } finally {
-      setAnalyzing(false);
-    }
+      if (err.code === 'ECONNABORTED') setError('Analysis timed out after 2 minutes. Please try again with a clearer image.');
+      else if (err.response?.status === 413) setError('File too large. Please upload a smaller image.');
+      else if (err.response?.status === 400) setError(err.response.data.message || 'Invalid image format.');
+      else if (err.response?.status === 404) setError('ML service unavailable. Please try again later.');
+      else setError(err.response?.data?.message || 'Error analyzing image. Please try again.');
+    } finally { setAnalyzing(false); }
   };
 
   const handleReset = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    setAnalysisResult(null);
-    setError(null);
-    setSuccessMessage(null);
-    setActiveStep(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    setSelectedImage(null); setImagePreview(null); setAnalysisResult(null);
+    setError(null); setSuccessMessage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const toggleSection = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  const getHealthScoreGradient = score => {
+    if (score >= 80) return 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 60%, #388e3c 100%)';
+    if (score >= 60) return 'linear-gradient(135deg, #e65100 0%, #ef6c00 60%, #f57c00 100%)';
+    if (score >= 40) return 'linear-gradient(135deg, #b71c1c 0%, #c62828 60%, #d32f2f 100%)';
+    return 'linear-gradient(135deg, #7f0000 0%, #b71c1c 100%)';
   };
 
-  // Helper functions for styling and formatting
-  const getHealthScoreColor = (score) => {
-    if (score >= 80) return '#4caf50';
-    if (score >= 60) return '#ff9800';
-    if (score >= 40) return '#f44336';
-    return '#b71c1c';
-  };
-
-  const getHealthScoreGradient = (score) => {
-    if (score >= 80) return 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)';
-    if (score >= 60) return 'linear-gradient(135deg, #ff9800 0%, #e65100 100%)';
-    if (score >= 40) return 'linear-gradient(135deg, #f44336 0%, #b71c1c 100%)';
-    return 'linear-gradient(135deg, #b71c1c 0%, #7f0000 100%)';
-  };
-
-  const getHealthScoreLabel = (score) => {
+  const getHealthScoreLabel = score => {
     if (score >= 80) return 'Excellent';
     if (score >= 60) return 'Good';
     if (score >= 40) return 'Fair';
     return 'Critical';
   };
 
-  const getMaturityIcon = (maturityClass) => {
-    if (maturityClass?.toLowerCase() === 'immature') {
-      return <GrassIcon sx={{ color: '#8B4513' }} />;
-    }
-    return <ForestIcon sx={{ color: '#8B4513' }} />;
-  };
+  const getMaturityIcon = cls =>
+    cls?.toLowerCase() === 'immature'
+      ? <GrassIcon sx={{ color: '#8B4513' }} />
+      : <ForestIcon sx={{ color: '#8B4513' }} />;
 
-  const getDiseaseIcon = (diseaseName) => {
-    if (diseaseName === 'Healthy') {
-      return <CheckCircleIcon sx={{ color: '#4caf50' }} />;
-    }
-    return <BugReportIcon sx={{ color: '#f44336' }} />;
-  };
-
-  const getTextureIcon = (textureType) => {
-    switch (textureType?.toLowerCase()) {
-      case 'smooth':
-        return <SpaIcon sx={{ color: '#4caf50' }} />;
+  const getTextureIcon = type => {
+    switch (type?.toLowerCase()) {
+      case 'smooth': return <SpaIcon sx={{ color: '#2e7d32' }} />;
       case 'moderately rough':
-        return <TextureIcon sx={{ color: '#ff9800' }} />;
-      case 'rough':
-        return <TextureIcon sx={{ color: '#ff9800' }} />;
-      case 'very rough / cracked':
-        return <WarningIcon sx={{ color: '#f44336' }} />;
-      default:
-        return <TextureIcon sx={{ color: '#8B4513' }} />;
+      case 'rough': return <TextureIcon sx={{ color: '#e65100' }} />;
+      case 'very rough / cracked': return <WarningIcon sx={{ color: '#c62828' }} />;
+      default: return <TextureIcon sx={{ color: '#8B4513' }} />;
     }
   };
 
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'none':
-        return '#4caf50';
-      case 'low':
-      case 'mild to moderate':
-        return '#2196f3';
-      case 'moderate':
-        return '#ff9800';
-      case 'moderate to severe':
-        return '#f44336';
-      case 'severe':
-      case 'critical':
-        return '#b71c1c';
-      default:
-        return '#757575';
+  const getSeverityColor = s => {
+    switch (s?.toLowerCase()) {
+      case 'none': return '#2e7d32';
+      case 'low': case 'mild to moderate': return '#1565c0';
+      case 'moderate': return '#e65100';
+      case 'moderate to severe': return '#c62828';
+      case 'severe': case 'critical': return '#b71c1c';
+      default: return '#546e7a';
     }
   };
 
-  const getUrgencyColor = (urgency) => {
-    switch (urgency?.toLowerCase()) {
-      case 'low':
-        return '#4caf50';
-      case 'medium':
-        return '#ff9800';
-      case 'high':
-        return '#f44336';
-      case 'critical':
-        return '#b71c1c';
-      default:
-        return '#757575';
+  const getUrgencyColor = u => {
+    switch (u?.toLowerCase()) {
+      case 'low': return '#2e7d32';
+      case 'medium': return '#e65100';
+      case 'high': return '#c62828';
+      case 'critical': return '#b71c1c';
+      default: return '#546e7a';
     }
   };
 
   const downloadReport = () => {
     if (!analysisResult) return;
-
-    const reportData = {
-      ...analysisResult,
-      generatedAt: new Date().toISOString(),
-      generatedBy: user?.email,
-      reportId: `TRUNK-${Date.now()}`,
-      analysisId: analysisResult.analysisId,
-      summary: {
-        healthStatus: analysisResult.primary_detection?.health_status,
-        diseaseName: analysisResult.disease?.name,
-        confidence: analysisResult.primary_detection?.confidence,
-        healthScore: analysisResult.health_score
-      }
-    };
-
-    const blob = new Blob(
-      [JSON.stringify(reportData, null, 2)],
-      { type: 'application/json' }
-    );
-    
+    const blob = new Blob([JSON.stringify({
+      ...analysisResult, generatedAt: new Date().toISOString(),
+      generatedBy: user?.email, reportId: `TRUNK-${Date.now()}`,
+    }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `trunk-analysis-${Date.now()}.json`;
-    a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `trunk-analysis-${Date.now()}.json`; a.click();
     URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        minHeight: '100vh', 
-        bgcolor: '#f5f5f5' 
-      }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-        >
-          <CircularProgress size={60} thickness={4} sx={{ color: '#8B4513' }} />
-        </motion.div>
-        <Typography variant="h6" sx={{ mt: 3, color: '#8B4513', fontWeight: 500 }}>
-          Loading Trunk Detection System...
-        </Typography>
-      </Box>
-    );
-  }
+  const NOT_DETECTED_THRESHOLD = 35;
 
-  // Extract data with proper null checks
+  if (loading) return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#070f1a' }}>
+      <UserHeader />
+      <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}>
+        <CircularProgress size={52} thickness={3} sx={{ color: '#ffa726' }} />
+      </motion.div>
+      <Typography variant="body1" sx={{ mt: 3, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Loading Trunk Detection System...</Typography>
+    </Box>
+  );
+
+  // ── Data extraction ───────────────────────────────────────────────────────────
   const image = analysisResult?.image || {};
   const primaryDetection = analysisResult?.primary_detection || {};
   const maturity = analysisResult?.maturity || {};
@@ -570,505 +315,596 @@ const TrunksDetection = () => {
   const detections = analysisResult?.all_detections || analysisResult?.detections || [];
   const detectionCount = Array.isArray(detections) ? detections.length : 0;
   const meanDetectionConfidence = detectionCount > 0
-    ? Math.round(detections.reduce((sum, item) => sum + Number(item?.confidence || 0), 0) / detectionCount)
-    : 0;
+    ? Math.round(detections.reduce((sum, d) => sum + Number(d?.confidence || 0), 0) / detectionCount) : 0;
   const hasColorAnalysis = Boolean(visualAnalysis?.color && Object.keys(visualAnalysis.color).length > 0);
   const hasTextureAnalysis = Boolean(visualAnalysis?.texture && Object.keys(visualAnalysis.texture).length > 0);
   const hasLesionAnalysis = Boolean(visualAnalysis?.lesions && visualAnalysis?.source === 'model_detection');
-  const hasMlOutputSignals =
-    Boolean(modelInfo?.type || modelInfo?.model_file || modelInfo?.classes) ||
-    detectionCount > 0 ||
-    Boolean(primaryDetection?.class_name || primaryDetection?.class || primaryDetection?.display_name);
-  const isMlUsed = (
-    analysisResult?.model_used ??
-    analysisResult?.ml_model_used ??
-    modelInfo?.model_used ??
-    hasMlOutputSignals
-  ) !== false;
+  const hasMlOutputSignals = Boolean(modelInfo?.type || modelInfo?.model_file) || detectionCount > 0 || Boolean(primaryDetection?.class_name || primaryDetection?.class);
+  const isMlUsed = (analysisResult?.model_used ?? analysisResult?.ml_model_used ?? modelInfo?.model_used ?? hasMlOutputSignals) !== false;
   const fallbackReason = analysisResult?.fallback_reason || modelInfo?.reason || 'ML model unavailable';
-  const showModelBanner =
-    analysisResult?.model_used !== undefined ||
-    analysisResult?.ml_model_used !== undefined ||
-    modelInfo?.model_used !== undefined ||
-    Boolean(analysisResult?.fallback_reason || modelInfo?.reason || modelInfo?.model_file);
+  const showModelBanner = analysisResult?.model_used !== undefined || analysisResult?.ml_model_used !== undefined || modelInfo?.model_used !== undefined || Boolean(analysisResult?.fallback_reason || modelInfo?.reason || modelInfo?.model_file);
   const imageMetadata = analysisResult?.image_metadata || {};
   const isHealthy = !disease?.detected;
   const visualizationValue = analysisResult?.visualization;
   const visualizationSrc =
     typeof visualizationValue === 'string' && visualizationValue.length > 0
       ? (visualizationValue.startsWith('data:image') || visualizationValue.startsWith('http')
-          ? visualizationValue
-          : `data:image/jpeg;base64,${visualizationValue}`)
+          ? visualizationValue : `data:image/jpeg;base64,${visualizationValue}`)
       : null;
-  const hasBoxCoordinates = detectionCount > 0 && detections.some((det) => Array.isArray(det?.bbox) && det.bbox.length === 4);
+  const hasBoxCoordinates = detectionCount > 0 && detections.some(d => Array.isArray(d?.bbox) && d.bbox.length === 4);
+  const healthScore = analysisResult?.health_score || analysisResult?.healthScore || 0;
+  const trunksMainConfidence = analysisResult ? Number(primaryDetection?.confidence ?? healthScore ?? 0) : null;
+  const isTrunksNotDetected = trunksMainConfidence !== null && trunksMainConfidence < NOT_DETECTED_THRESHOLD;
 
   return (
     <>
       <UserHeader />
 
-      <Box sx={{ minHeight: '100vh', bgcolor: '#f5f5f5', pt: '80px', pb: '90px' }}>
+      <Box sx={{ minHeight: '100vh', bgcolor: '#f5f9f5', pt: '80px', pb: '90px' }}>
         <Container maxWidth="lg">
-          {/* Hero Section */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Paper 
-              elevation={3} 
-              sx={{
-                p: { xs: 3, md: 5 },
-                mb: 4,
-                background: 'linear-gradient(135deg, #3E2723 0%, #5D3A1A 55%, #8B4513 100%)',
-                color: 'white',
-                borderRadius: 4,
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-            >
-              <Box sx={{ 
-                position: 'absolute', 
-                top: -20, 
-                right: -20, 
-                width: 200, 
-                height: 200, 
-                borderRadius: '50%', 
-                background: 'rgba(255,255,255,0.07)' 
-              }} />
-              <Box sx={{ 
-                position: 'absolute', 
-                bottom: -40, 
-                left: -40, 
-                width: 300, 
-                height: 300, 
-                borderRadius: '50%', 
-                background: 'rgba(255,255,255,0.04)' 
-              }} />
 
-{/* History/Stats Buttons */}
-<Box sx={{ 
-  position: 'absolute', 
-  top: 20, 
-  right: 20, 
-  zIndex: 2, 
-  display: 'flex', 
-  gap: 1.5 
-}}>
-  <Button 
-    component={Link} 
-    to="/analysis-history"  // Changed from "/trunk-history" to "/analysis-history"
-    variant="contained" 
-    size="small" 
-    startIcon={<HistoryIcon />}
-    sx={{ 
-      bgcolor: 'rgba(255,255,255,0.18)', 
-      color: 'white', 
-      borderRadius: 2, 
-      textTransform: 'none',
-      '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } 
-    }}
-  >
-    History
-  </Button>
-  <Button 
-    component={Link} 
-    to="/trunk-stats" 
-    variant="contained" 
-    size="small" 
-    startIcon={<AssessmentIcon />}
-    sx={{ 
-      bgcolor: 'rgba(255,255,255,0.18)', 
-      color: 'white', 
-      borderRadius: 2, 
-      textTransform: 'none',
-      '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' } 
-    }}
-  >
-    Statistics
-  </Button>
-</Box>
-
-              <Box sx={{ position: 'relative', zIndex: 2 }}>
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>
-                  Rubber Tree Trunk Analysis
+          {/* ── HERO ── */}
+          <motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+            <Box sx={{
+              p: { xs: 3, md: '44px 48px' }, mb: 3,
+              background: 'linear-gradient(135deg, #fdf8f5 0%, #f5ede8 50%, #e8dfd8 100%)',
+              color: '#3E2723', borderRadius: '20px', position: 'relative', overflow: 'hidden',
+              border: '1px solid #bcaaa4',
+              boxShadow: '0 8px 32px rgba(62,39,35,0.12)'
+            }}>
+              <Box sx={{ position: 'absolute', right: '-40px', top: '-30px', width: '260px', height: '260px', borderRadius: '50%', background: 'rgba(139,69,19,0.08)', pointerEvents: 'none' }} />
+              <Box sx={{ position: 'absolute', right: '80px', bottom: '-60px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(121,85,72,0.08)', pointerEvents: 'none' }} />
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: '#efebe9', border: '1px solid #bcaaa4', borderRadius: '8px', px: 1.5, py: 0.5, mb: 2 }}>
+                  <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#5d4037', boxShadow: '0 0 8px #5d4037' }} />
+                  <Typography sx={{ color: '#3E2723', fontWeight: 800, fontSize: '0.72rem', letterSpacing: 1.2, textTransform: 'uppercase' }}>Trunk Analysis</Typography>
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1, lineHeight: 1, mb: 1, color: '#3E2723' }}>
+                  Rubber Tree <Box component="span" sx={{ color: '#5d4037' }}>Trunk</Box> Detection
                 </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.85, mb: 2.5 }}>
-                  AI-Powered Maturity Detection & Disease Classification System
+                <Typography sx={{ opacity: 0.85, maxWidth: 460, lineHeight: 1.7, fontSize: '1rem', color: '#6d4c41' }}>
+                  AI-powered maturity detection & disease classification system.
                 </Typography>
-                {systemInfo && (
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip
-                      icon={systemInfo.systemStatus?.mlReady ? <CheckCircleIcon /> : <WarningIcon />}
-                      label={systemInfo.systemStatus?.mlReady ? 'ML Model Active' : 'Using Fallback Analysis'}
-                      sx={{
-                        bgcolor: systemInfo.systemStatus?.mlReady ? 'rgba(76,175,80,0.22)' : 'rgba(255,152,0,0.22)',
-                        color: 'white',
-                        border: '1px solid rgba(255,255,255,0.3)',
-                        '& .MuiChip-icon': { color: 'white' }
-                      }}
-                    />
-                    {systemInfo.mlModel?.status === 'Active' && (
-                      <Chip
-                        icon={<ScienceIcon />}
-                        label={`${systemInfo.mlModel?.name} (${systemInfo.mlModel?.sizeKB} KB)`}
-                        sx={{
-                          bgcolor: 'rgba(255,255,255,0.12)',
-                          color: 'white',
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          '& .MuiChip-icon': { color: 'white' }
-                        }}
-                      />
-                    )}
-                  </Box>
-                )}
               </Box>
-            </Paper>
+            </Box>
           </motion.div>
 
-          {/* Stepper */}
-          <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: 3 }}>
-            <Stepper activeStep={activeStep} orientation="horizontal" sx={{ flexWrap: 'wrap' }}>
-              {analysisSteps.map((step, index) => (
-                <Step key={step.label}>
-                  <StepLabel StepIconComponent={() => (
-                    <Box sx={{ 
-                      width: 40, 
-                      height: 40, 
-                      borderRadius: '50%', 
-                      bgcolor: index <= activeStep ? '#8B4513' : '#e0e0e0',
-                      color: index <= activeStep ? 'white' : '#757575',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mr: 1
-                    }}>
-                      {step.icon}
-                    </Box>
-                  )}>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{step.label}</Typography>
-                      <Typography variant="caption" color="text.secondary">{step.description}</Typography>
-                    </Box>
-                  </StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-          </Paper>
-
-          {/* Alerts */}
+          {/* ── ALERTS ───────────────────────────────────────────────────────── */}
           <AnimatePresence>
             {error && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <Alert 
-                  severity="error" 
-                  onClose={() => setError(null)} 
-                  icon={<ErrorIcon />} 
-                  sx={{ mb: 3, borderRadius: 2 }}
-                >
-                  {error}
-                </Alert>
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2.5, borderRadius: 2 }}>{error}</Alert>
               </motion.div>
             )}
             {successMessage && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <Alert 
-                  severity="success" 
-                  onClose={() => setSuccessMessage(null)} 
-                  icon={<CheckCircleIcon />} 
-                  sx={{ mb: 3, borderRadius: 2 }}
-                >
-                  {successMessage}
-                </Alert>
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <Alert severity="success" onClose={() => setSuccessMessage(null)} sx={{ mb: 2.5, borderRadius: 2 }}>{successMessage}</Alert>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Upload Panel */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Paper 
-              elevation={3} 
-              sx={{ 
-                p: { xs: 3, md: 4 }, 
-                mb: 4, 
-                borderRadius: 4, 
-                border: '2px solid #8B4513', 
-                bgcolor: 'white' 
-              }}
-            >
-              <Typography 
-                variant="h5" 
-                sx={{ 
-                  color: '#8B4513', 
-                  mb: 3, 
-                  fontWeight: 700, 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1 
-                }}
-              >
-                <CloudUploadIcon /> Upload or Capture Trunk Image
-              </Typography>
+          {/* ── UPLOAD PANEL ── */}
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Box sx={{ p: { xs: 3, md: 4 }, mb: 3, borderRadius: '16px', border: '1px solid #bcaaa4', bgcolor: 'white', boxShadow: '0 4px 16px rgba(62,39,35,0.08)' }}>
 
-              {imagePreview ? (
-                <Box sx={{ position: 'relative' }}>
-                  <motion.img
-                    src={imagePreview}
-                    alt="Trunk preview"
-                    style={{ 
-                      width: '100%', 
-                      maxHeight: 400, 
-                      objectFit: 'contain', 
-                      borderRadius: 16, 
-                      border: '3px solid #8B4513', 
-                      display: 'block' 
-                    }}
-                    initial={{ opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                  />
-                  <IconButton 
-                    onClick={handleReset} 
-                    sx={{
-                      position: 'absolute',
-                      top: 10,
-                      right: 10,
-                      bgcolor: 'rgba(244,67,54,0.9)',
-                      color: 'white',
-                      '&:hover': { bgcolor: '#d32f2f' }
-                    }}
-                  >
-                    <RestartAltIcon />
-                  </IconButton>
-                </Box>
-              ) : (
-                <motion.div 
-                  whileHover={{ scale: 1.01 }} 
-                  whileTap={{ scale: 0.99 }}
-                >
-                  <Box 
-                    onClick={() => setChooserOpen(true)} 
-                    sx={{
-                      border: '3px dashed #8B4513',
-                      borderRadius: 4,
-                      p: { xs: 5, md: 8 },
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      bgcolor: '#f5f0e6',
-                      transition: 'all 0.25s',
-                      '&:hover': {
-                        bgcolor: '#efe4d8',
-                        borderColor: '#5D3A1A'
-                      }
-                    }}
-                  >
-                    <motion.div
-                      animate={{ y: [0, -10, 0] }}
-                      transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                    >
-                      <AddPhotoAlternateIcon sx={{ fontSize: 90, color: '#8B4513', mb: 2 }} />
-                    </motion.div>
-                    <Typography variant="h6" sx={{ color: '#8B4513', fontWeight: 700, mb: 0.5 }}>
-                      Add Trunk Image
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Click to <strong>take a photo</strong> or <strong>upload from device</strong>
-                    </Typography>
-                    <Typography variant="caption" color="text.disabled">
-                      JPEG · PNG · WebP — max 10 MB
-                    </Typography>
-                  </Box>
-                </motion.div>
+              {!imagePreview && (
+                <Grid container spacing={2}>
+                  {[
+                    { icon: <FileUploadIcon sx={{ color: '#ffa726', fontSize: 28 }} />, title: 'Upload Image', sub: 'Select from your device', hint: 'JPEG · PNG · WebP · max 10 MB', onClick: () => fileInputRef.current?.click() },
+                    { icon: <PhotoCameraIcon sx={{ color: '#ffa726', fontSize: 28 }} />, title: 'Take a Photo', sub: 'Use your device camera', hint: 'Capture trunk sample live', onClick: () => setCameraOpen(true) },
+                  ].map(({ icon, title, sub, hint, onClick }) => (
+                    <Grid item xs={12} sm={6} key={title}>
+                      <motion.div whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.985 }}>
+                        <Box onClick={onClick} sx={{
+                          border: '1px solid #bcaaa4', borderRadius: '12px', p: 3.5,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.2,
+                          cursor: 'pointer', bgcolor: '#fdf8f5', transition: 'all 0.18s',
+                          '&:hover': { bgcolor: '#f5ede8', borderColor: '#8d6e63', boxShadow: '0 4px 20px rgba(93,64,55,0.12)' },
+                        }}>
+                          <Box sx={{ width: 58, height: 58, borderRadius: '50%', bgcolor: '#efebe9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</Box>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#3E2723' }}>{title}</Typography>
+                          <Typography variant="body2" sx={{ color: '#6d4c41', textAlign: 'center' }}>{sub}</Typography>
+                          <Typography variant="caption" sx={{ color: '#8d6e63', textAlign: 'center' }}>{hint}</Typography>
+                        </Box>
+                      </motion.div>
+                    </Grid>
+                  ))}
+                </Grid>
               )}
 
-              <input 
-                ref={fileInputRef} 
-                type="file" 
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleImageSelect} 
-                style={{ display: 'none' }} 
-              />
+              {imagePreview && (
+                <Box sx={{ position: 'relative', mb: 3 }}>
+                  <motion.img src={imagePreview} alt="Trunk preview"
+                    style={{ width: '100%', maxHeight: 380, objectFit: 'contain', borderRadius: 12, border: '2px solid #d7ccc8', display: 'block' }}
+                    initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                  />
+                  <IconButton onClick={handleReset} size="small" sx={{ position: 'absolute', top: 10, right: 10, bgcolor: 'rgba(198,40,40,0.9)', color: 'white', '&:hover': { bgcolor: '#b71c1c' } }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                  <Chip icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />} label={selectedImage?.name || 'Image ready'} size="small"
+                    sx={{ position: 'absolute', bottom: 12, left: 12, bgcolor: 'rgba(62,39,35,0.85)', color: 'white', fontSize: '0.7rem', backdropFilter: 'blur(4px)' }}
+                  />
+                </Box>
+              )}
 
-              <Box sx={{ mt: 3 }}>
-                <FormControl fullWidth sx={{ maxWidth: 460 }}>
-                  <InputLabel id="trunk-tree-profile-select-label">Target Tree Profile</InputLabel>
-                  <Select
-                    labelId="trunk-tree-profile-select-label"
-                    value={selectedTreeId}
-                    label="Target Tree Profile"
-                    onChange={(event) => setSelectedTreeId(event.target.value)}
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleImageSelect} style={{ display: 'none' }} />
+
+              {/* Tree Profile Selector */}
+              <Box sx={{ mt: imagePreview ? 0 : 2.5 }}>
+                <FormControl size="small" sx={{ minWidth: 300, maxWidth: 460 }}>
+                  <InputLabel id="trunk-tree-select-label">Target Tree Profile</InputLabel>
+                  <Select labelId="trunk-tree-select-label" value={selectedTreeId} label="Target Tree Profile"
+                    onChange={e => setSelectedTreeId(e.target.value)}
                     disabled={loadingTrees || treeProfiles.length === 0}
+                    sx={{ borderRadius: 2, bgcolor: '#fdf8f5', '& .MuiOutlinedInput-notchedOutline': { borderColor: '#d7ccc8' } }}
                   >
-                    {treeProfiles.map((tree) => (
+                    {treeProfiles.map(tree => (
                       <MenuItem key={tree._id} value={tree._id}>
-                        {(tree.treeID || tree.treeId || 'Unknown Tree')} - {(tree.species || 'Rubber')}
+                        {tree.treeID || tree.treeId || 'Unknown Tree'} — {tree.species || 'Rubber'}
                       </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
                 {!loadingTrees && treeProfiles.length === 0 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    No tree profiles found. You can still analyze, but it will use the latest available tree context.
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.8, display: 'block' }}>
+                    No tree profiles found. Analysis will use the latest available tree context.
                   </Typography>
                 )}
               </Box>
 
-              <Box sx={{ 
-                display: 'flex', 
-                gap: 2, 
-                justifyContent: 'center', 
-                mt: 3, 
-                flexWrap: 'wrap' 
-              }}>
-                <Button 
-                  variant="contained" 
-                  size="large" 
-                  onClick={handleAnalyze}
-                  disabled={!selectedImage || analyzing}
-                  startIcon={analyzing ? <CircularProgress size={20} color="inherit" /> : <AnalyticsIcon />}
-                  sx={{
-                    bgcolor: '#8B4513',
-                    px: 6,
-                    py: 1.5,
-                    borderRadius: 3,
-                    fontSize: '1.1rem',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    boxShadow: '0 4px 14px rgba(139,69,19,0.3)',
-                    '&:hover': { bgcolor: '#5D3A1A' },
-                    '&:disabled': { bgcolor: '#d4b896', color: '#a0785a' }
-                  }}
-                >
-                  {analyzing ? 'Analyzing...' : 'Analyze Trunk'}
-                </Button>
-                {selectedImage && !analyzing && (
-                  <Button 
-                    variant="outlined" 
-                    size="large" 
-                    onClick={handleReset} 
-                    startIcon={<RestartAltIcon />}
-                    sx={{
-                      borderColor: '#8B4513',
-                      color: '#8B4513',
-                      px: 4,
-                      py: 1.5,
-                      borderRadius: 3,
-                      fontSize: '1.1rem',
-                      textTransform: 'none',
-                      '&:hover': { borderColor: '#5D3A1A', bgcolor: '#f5f0e6' }
-                    }}
-                  >
-                    Reset
+              {imagePreview && (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2.5 }}>
+                  <Button variant="contained" size="large" onClick={handleAnalyze}
+                    disabled={!selectedImage || analyzing}
+                    startIcon={analyzing ? <CircularProgress size={18} color="inherit" /> : <AnalyticsIcon />}
+                    sx={{ bgcolor: '#ffa726', color: '#000', px: 5, py: 1.4, borderRadius: '12px', fontSize: '0.95rem', fontWeight: 800, textTransform: 'none', boxShadow: '0 4px 20px rgba(255,167,38,0.35)', '&:hover': { bgcolor: '#ffb74d', boxShadow: '0 6px 24px rgba(255,167,38,0.45)' }, '&:disabled': { bgcolor: '#ede3da', color: '#8d8075', boxShadow: 'none' } }}>
+                    {analyzing ? 'Analyzing...' : 'Analyze Trunk'}
                   </Button>
-                )}
-              </Box>
-            </Paper>
+                  {!analyzing && (
+                    <Button variant="outlined" size="large" onClick={handleReset} startIcon={<RestartAltIcon />}
+                      sx={{ borderColor: '#bcaaa4', color: '#5d4037', px: 3, py: 1.4, borderRadius: '12px', fontSize: '0.95rem', textTransform: 'none', '&:hover': { borderColor: '#8d6e63', bgcolor: '#f5ede8' } }}>
+                      Reset
+                    </Button>
+                  )}
+                </Box>
+              )}
+            </Box>
           </motion.div>
 
-          {/* Results Section */}
+          {/* ── RESULTS ── */}
           <AnimatePresence>
             {analysisResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.55 }}
-              >
-                {/* Cloudinary Image Info */}
-                {image && image.url && (
-                  <Fade in={true}>
-                    <Alert 
-                      severity="info" 
-                      icon={<InfoIcon />} 
-                      sx={{ mb: 3, borderRadius: 2 }}
-                    >
-                      <Typography variant="body2">
-                        Image stored securely in cloud. Analysis ID: {analysisResult.analysisId}
-                      </Typography>
-                    </Alert>
-                  </Fade>
-                )}
+              <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
 
-                {/* Image Preview in Results */}
-                {image && image.url && (
-                  <Box sx={{ mb: 2, textAlign: 'center' }}>
-                    <Typography variant="subtitle2" sx={{ color: '#8B4513', mb: 1 }}>
-                      Analyzed Image:
+                {/* ── NOT DETECTED GATE ── */}
+                {isTrunksNotDetected ? (
+                  <Box sx={{ py: 10, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '20px', border: '1px dashed #d7ccc8', mb: 3 }}>
+                    <Box sx={{ fontSize: 72, mb: 2, opacity: 0.15 }}>🌳</Box>
+                    <Typography variant="h4" sx={{ color: '#3E2723', fontWeight: 900, mb: 1 }}>Trunks Not Detected</Typography>
+                    <Typography sx={{ color: '#6d4c41', maxWidth: 400, mx: 'auto', mb: 1.5, lineHeight: 1.6 }}>
+                      The model's confidence is too low ({trunksMainConfidence?.toFixed(1)}%) to confirm a rubber tree trunk.
+                      Please upload a clearer, well-lit photo of the trunk.
                     </Typography>
-                    <img 
-                      src={image.url} 
-                      alt="Analyzed trunk" 
-                      style={{ 
-                        maxWidth: '200px', 
-                        maxHeight: '150px', 
-                        borderRadius: 8,
-                        border: '2px solid #8B4513'
-                      }} 
-                    />
+                    <Chip label={`Confidence: ${trunksMainConfidence?.toFixed(1)}%`} sx={{ bgcolor: '#ffebee', color: '#b71c1c', border: '1px solid #ef9a9a', fontWeight: 700 }} />
                   </Box>
+                ) : (<>
+
+                {/* Model banner */}
+                {showModelBanner && (
+                  <Alert severity={isMlUsed ? 'success' : 'warning'} icon={isMlUsed ? <ScienceIcon /> : <WarningIcon />} sx={{ mb: 2.5, borderRadius: 2 }}>
+                    <Typography variant="body2">
+                      {isMlUsed ? `✅ Analyzed using ML model: ${modelInfo.model_file || 'Trunks-v2.pt'}` : `⚠️ Fallback analysis: ${fallbackReason}`}
+                    </Typography>
+                  </Alert>
                 )}
 
-                {/* Detection Box Visualization */}
-                {(visualizationSrc || hasBoxCoordinates) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.04 }}
-                  >
-                    <Paper elevation={2} sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: 'white' }}>
-                      <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 700, mb: 2 }}>
-                        Detection Box Result
-                      </Typography>
+                {/* Results header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AnalyticsIcon sx={{ color: '#8B4513' }} />
+                    <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 800 }}>Analysis Results</Typography>
+                  </Box>
+                </Box>
 
+                {/* 1 ── Health Score Hero */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
+                  <Card elevation={0} sx={{ borderRadius: 3, mb: 3, background: getHealthScoreGradient(healthScore), color: 'white', overflow: 'hidden', position: 'relative' }}>
+                    <Box sx={{ position: 'absolute', top: -24, right: -24, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+                    <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                      <Grid container spacing={3} alignItems="center">
+                        <Grid item xs={12} md={4}>
+                          <Typography variant="caption" sx={{ opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700 }}>Overall Health Score</Typography>
+                          <Typography variant="h2" sx={{ fontWeight: 900, lineHeight: 1, mt: 0.5, letterSpacing: -1 }}>{healthScore}%</Typography>
+                          <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5, fontWeight: 600 }}>{getHealthScoreLabel(healthScore)}</Typography>
+                          {analysisResult.all_predictions?.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.7, mt: 1.5 }}>
+                              {analysisResult.all_predictions.map((p, i) => (
+                                <Chip key={i} label={`${p.class} ${p.confidence}%`} size="small"
+                                  sx={i === 0
+                                    ? { bgcolor: 'rgba(255,255,255,0.28)', color: 'white', fontWeight: 700, fontSize: '0.7rem' }
+                                    : { bgcolor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Grid>
+                        <Grid item xs={12} md={8}>
+                          <Box sx={{ mb: 2.5 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
+                              <Typography variant="body2" sx={{ opacity: 0.8 }}>Health Progress</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 800 }}>{healthScore}%</Typography>
+                            </Box>
+                            <LinearProgress variant="determinate" value={healthScore}
+                              sx={{ height: 10, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.22)', '& .MuiLinearProgress-bar': { bgcolor: 'white', borderRadius: 99 } }}
+                            />
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                              {['Critical', 'Poor', 'Fair', 'Good', 'Excellent'].map(l => (
+                                <Typography key={l} variant="caption" sx={{ opacity: 0.6, fontSize: '0.65rem' }}>{l}</Typography>
+                              ))}
+                            </Box>
+                          </Box>
+                          <Grid container spacing={1.5}>
+                            <Grid item xs={6}>
+                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.13)', borderRadius: 2 }}>
+                                <Typography variant="caption" sx={{ opacity: 0.65 }}>Disease</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 800, mt: 0.3, lineHeight: 1.2, color: disease.detected ? '#ffcdd2' : 'white' }}>
+                                  {disease.name || 'None'}
+                                </Typography>
+                              </Box>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.13)', borderRadius: 2 }}>
+                                <Typography variant="caption" sx={{ opacity: 0.65 }}>Maturity</Typography>
+                                <Typography variant="body1" sx={{ fontWeight: 800, mt: 0.3 }}>{maturity.class || '—'}</Typography>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Grid>
+                      </Grid>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* 2 ── Maturity + Disease + Detections row */}
+                <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1px solid #d7ccc8', bgcolor: 'white' }}>
+                        <SectionLabel icon={getMaturityIcon(maturity.class)} label="Maturity" />
+                        <Typography variant="h4" sx={{ fontWeight: 900, color: '#3E2723', lineHeight: 1, letterSpacing: -0.5 }}>
+                          {maturity.class || 'Unknown'}
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                            <Typography variant="caption" sx={{ color: '#6d4c41' }}>Confidence</Typography>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: '#fbc02d' }}>{maturity.confidence}%</Typography>
+                          </Box>
+                          <LinearProgress variant="determinate" value={maturity.confidence || 0}
+                            sx={{ height: 6, borderRadius: 99, bgcolor: '#efebe9', '& .MuiLinearProgress-bar': { bgcolor: '#fbc02d', borderRadius: 99 } }}
+                          />
+                        </Box>
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: `1px solid ${disease.detected ? '#ef9a9a' : '#d7ccc8'}`, bgcolor: disease.detected ? '#fff5f5' : 'white' }}>
+                        <SectionLabel
+                          icon={disease.detected ? <BugReportIcon sx={{ color: '#ef5350', fontSize: 17 }} /> : <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 17 }} />}
+                          label="Disease Status"
+                        />
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 2, bgcolor: disease.detected ? 'rgba(244,67,54,0.1)' : 'rgba(76,175,80,0.1)', mb: 1.5 }}>
+                          {disease.detected
+                            ? <ErrorIcon sx={{ color: '#ef5350', fontSize: 17 }} />
+                            : <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 17 }} />}
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: disease.detected ? '#c62828' : '#2e7d32' }}>
+                            {disease.name || 'Healthy'}
+                          </Typography>
+                        </Box>
+                        {disease.detected && (
+                          <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap' }}>
+                            <Chip label={`Severity: ${disease.severity}`} size="small" sx={{ bgcolor: getSeverityColor(disease.severity), color: 'white', fontWeight: 600, fontSize: '0.7rem', border: 'none' }} />
+                            <Chip label={`Urgency: ${disease.urgency}`} size="small" sx={{ bgcolor: getUrgencyColor(disease.urgency), color: 'white', fontWeight: 600, fontSize: '0.7rem', border: 'none' }} />
+                          </Box>
+                        )}
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1px solid #d7ccc8', bgcolor: 'white' }}>
+                        <SectionLabel icon={<TimelineIcon sx={{ color: '#ffb74d', fontSize: 17 }} />} label="Model Detections" />
+                        <Typography variant="h2" sx={{ fontWeight: 900, color: '#3E2723', lineHeight: 1, letterSpacing: -1 }}>
+                          {detectionCount}
+                          <Typography component="span" variant="h5" sx={{ fontWeight: 400, ml: 0.6, color: '#ffb74d' }}>
+                            {detectionCount === 1 ? 'object' : 'objects'}
+                          </Typography>
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: '#6d4c41', display: 'block', mt: 1.5 }}>
+                          Avg confidence: {meanDetectionConfidence}%
+                        </Typography>
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+                </Grid>
+
+                {/* 3 ── Color Analysis */}
+                {hasColorAnalysis && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #d7ccc8', bgcolor: 'white' }}>
+                      <SectionLabel icon={<ColorLensIcon sx={{ color: '#ffb74d', fontSize: 17 }} />} label="Color Analysis" />
+                      <Grid container spacing={3} alignItems="center">
+                        <Grid item xs={12} sm={3} sx={{ textAlign: 'center' }}>
+                          <Box sx={{
+                            width: 72, height: 72, borderRadius: 2, mx: 'auto', mb: 1.5,
+                            bgcolor: visualAnalysis?.color?.hex || '#8B4513',
+                            border: '3px solid #d7ccc8',
+                            boxShadow: `0 2px 10px ${visualAnalysis?.color?.hex || '#8B4513'}55`,
+                          }} />
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#3E2723' }}>{visualAnalysis?.color?.name || '—'}</Typography>
+                          <Typography variant="caption" sx={{ color: '#6d4c41' }}>Dominant Color</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={9}>
+                          <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                            {visualAnalysis?.color?.rgb && (
+                              [{ l: 'R', v: visualAnalysis.color.rgb.r }, { l: 'G', v: visualAnalysis.color.rgb.g }, { l: 'B', v: visualAnalysis.color.rgb.b }].map(({ l, v }) => (
+                                <Grid item xs={4} key={l}>
+                                  <Box sx={{ p: 1.5, bgcolor: '#fdf8f5', borderRadius: 1.5, textAlign: 'center', border: '1px solid #efebe9' }}>
+                                    <Typography variant="caption" sx={{ color: '#8d6e63', fontWeight: 600, display: 'block' }}>{l}</Typography>
+                                    <Typography variant="body1" sx={{ fontWeight: 700, color: '#3E2723' }}>{v}</Typography>
+                                  </Box>
+                                </Grid>
+                              ))
+                            )}
+                          </Grid>
+                          {visualAnalysis?.color?.hsv && (
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              {[{ l: 'H', v: `${visualAnalysis.color.hsv.h}°` }, { l: 'S', v: String(visualAnalysis.color.hsv.s) }, { l: 'V', v: String(visualAnalysis.color.hsv.v) }].map(({ l, v }) => (
+                                <Box key={l} sx={{ flex: 1, p: 1, bgcolor: '#fdf8f5', borderRadius: 1.5, textAlign: 'center', border: '1px solid #efebe9' }}>
+                                  <Typography variant="caption" sx={{ color: '#8d6e63', fontWeight: 600, display: 'block' }}>{l}</Typography>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#3E2723' }}>{v}</Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          )}
+                          {visualAnalysis?.color?.description && (
+                            <Typography variant="caption" sx={{ color: '#6d4c41', display: 'block', mt: 1.5 }}>
+                              {visualAnalysis.color.description}
+                            </Typography>
+                          )}
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </motion.div>
+                )}
+
+                {/* 4 ── Texture Analysis */}
+                {hasTextureAnalysis && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #d7ccc8', bgcolor: 'white' }}>
+                      <SectionLabel icon={<TextureIcon sx={{ color: '#ffb74d', fontSize: 17 }} />} label="Texture Analysis" />
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} sm={4}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                            {getTextureIcon(visualAnalysis?.texture?.type)}
+                            <Typography variant="h5" sx={{ fontWeight: 800, color: '#3E2723', textTransform: 'capitalize' }}>
+                              {visualAnalysis?.texture?.type || '—'}
+                            </Typography>
+                          </Box>
+                          {visualAnalysis?.texture?.description && (
+                            <Typography variant="body2" sx={{ color: '#6d4c41' }}>{visualAnalysis.texture.description}</Typography>
+                          )}
+                          {visualAnalysis?.texture?.health_indicator != null && (
+                            <Box sx={{ mt: 1.5 }}>
+                              <Chip label={`Health: ${visualAnalysis.texture.health_indicator}%`} size="small"
+                                sx={{ bgcolor: visualAnalysis.texture.health_indicator > 70 ? '#2e7d32' : visualAnalysis.texture.health_indicator > 50 ? '#e65100' : '#c62828', color: 'white', fontWeight: 600, fontSize: '0.72rem', border: 'none' }}
+                              />
+                            </Box>
+                          )}
+                        </Grid>
+                        <Grid item xs={12} sm={8}>
+                          {visualAnalysis?.texture?.metrics && (
+                            [{ label: 'Contrast', value: visualAnalysis.texture.metrics.contrast, max: 100 },
+                             { label: 'Roughness', value: visualAnalysis.texture.metrics.roughness, max: 100 },
+                             { label: 'Entropy', value: visualAnalysis.texture.metrics.entropy, max: 8, fmt: v => Number(v).toFixed(2) }
+                            ].map(({ label, value, max, fmt }) => (
+                              <Box key={label} sx={{ mb: 1.8 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                  <Typography variant="caption" sx={{ color: '#6d4c41' }}>{label}</Typography>
+                                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#3E2723' }}>{fmt ? fmt(value) : value}</Typography>
+                                </Box>
+                                <LinearProgress variant="determinate" value={Math.min(100, (value / max) * 100)}
+                                  sx={{ height: 7, borderRadius: 99, bgcolor: '#efebe9', '& .MuiLinearProgress-bar': { bgcolor: '#ffb74d', borderRadius: 99 } }}
+                                />
+                              </Box>
+                            ))
+                          )}
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </motion.div>
+                )}
+
+                {/* 5 ── Lesion Detection */}
+                {hasLesionAnalysis && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: `1px solid ${visualAnalysis.lesions.detected ? '#ef9a9a' : '#d7ccc8'}`, bgcolor: visualAnalysis.lesions.detected ? '#fff5f5' : 'white' }}>
+                      <SectionLabel icon={<WarningIcon sx={{ color: visualAnalysis.lesions.detected ? '#ef5350' : '#4caf50', fontSize: 17 }} />} label="Lesion Detection" />
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 2, bgcolor: visualAnalysis.lesions.detected ? 'rgba(244,67,54,0.1)' : 'rgba(76,175,80,0.1)' }}>
+                            {visualAnalysis.lesions.detected ? <ErrorIcon sx={{ color: '#ef5350', fontSize: 17 }} /> : <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 17 }} />}
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 700, color: visualAnalysis.lesions.detected ? '#c62828' : '#2e7d32' }}>
+                                {visualAnalysis.lesions.detected ? `${visualAnalysis.lesions.count} Lesions Detected` : 'No Lesions Detected'}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#6d4c41' }}>{visualAnalysis.lesions.description}</Typography>
+                            </Box>
+                          </Box>
+                        </Grid>
+                        {visualAnalysis.lesions.detected && (
+                          <Grid item xs={12} md={6}>
+                            <Box sx={{ p: 2, bgcolor: '#fdf8f5', borderRadius: 2, border: '1px solid #efebe9' }}>
+                              <Typography variant="caption" sx={{ color: '#3E2723', fontWeight: 700, display: 'block', mb: 1 }}>Lesion Details</Typography>
+                              <Typography variant="body2" sx={{ color: '#6d4c41' }}>Affected Area: {visualAnalysis.lesions.affected_area_percentage}% of trunk</Typography>
+                              <Typography variant="body2" sx={{ color: '#6d4c41' }}>Severity: {visualAnalysis.lesions.severity}</Typography>
+                              {visualAnalysis.lesions.types?.length > 0 && (
+                                <Typography variant="body2" sx={{ color: '#6d4c41' }}>Types: {visualAnalysis.lesions.types.join(', ')}</Typography>
+                              )}
+                            </Box>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </Paper>
+                  </motion.div>
+                )}
+
+                {/* 6 ── Disease Analysis */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }}>
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #d7ccc8', bgcolor: 'white' }}>
+                    <SectionLabel icon={<BugReportIcon sx={{ color: '#ffb74d', fontSize: 17 }} />} label="Disease Analysis" />
+                    {isHealthy ? (
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1.2, borderRadius: 2, bgcolor: 'rgba(76,175,80,0.1)' }}>
+                        <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 18 }} />
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#2e7d32' }}>Tree is Healthy</Typography>
+                          <Typography variant="caption" sx={{ color: '#6d4c41' }}>No signs of disease detected. Continue regular monitoring.</Typography>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <>
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 2, bgcolor: 'rgba(244,67,54,0.1)', mb: 2.5 }}>
+                          <ErrorIcon sx={{ color: '#ef5350', fontSize: 17 }} />
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#c62828' }}>
+                            {disease.name} — Confidence: {disease.confidence}%
+                          </Typography>
+                        </Box>
+                        {disease.description && (
+                          <Typography variant="body2" sx={{ color: '#546e7a', mb: 2.5, px: 0.5 }}>{disease.description}</Typography>
+                        )}
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255,152,0,0.05)', borderRadius: 2, border: '1px solid rgba(255,152,0,0.2)', height: '100%' }}>
+                              <Typography variant="caption" sx={{ color: '#ffcc80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.2 }}>
+                                <WarningIcon sx={{ fontSize: 14 }} /> Symptoms
+                              </Typography>
+                              <List dense disablePadding>
+                                {disease.symptoms?.length
+                                  ? disease.symptoms.map((s, i) => (
+                                    <ListItem key={i} disableGutters sx={{ py: 0.3 }}>
+                                      <ListItemIcon sx={{ minWidth: 26 }}><WarningIcon sx={{ color: '#ffb74d', fontSize: 15 }} /></ListItemIcon>
+                                      <ListItemText primary={s} primaryTypographyProps={{ variant: 'body2', sx: { color: '#37474f' } }} />
+                                    </ListItem>
+                                  ))
+                                  : <ListItem disableGutters><ListItemText primary="No symptom information available" primaryTypographyProps={{ variant: 'body2', sx: { color: '#607d8b' } }} /></ListItem>
+                                }
+                              </List>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12} md={6}>
+                            <Box sx={{ p: 2.5, bgcolor: 'rgba(33,150,243,0.05)', borderRadius: 2, border: '1px solid rgba(33,150,243,0.2)', height: '100%' }}>
+                              <Typography variant="caption" sx={{ color: '#90caf9', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.2 }}>
+                                <HealingIcon sx={{ fontSize: 14 }} /> Treatment
+                              </Typography>
+                              <Typography variant="body2" sx={{ color: '#37474f' }}>
+                                {disease.treatment || 'No treatment information available.'}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          {disease.latex_impact && (
+                            <Grid item xs={12}>
+                              <Box sx={{ p: 2, bgcolor: 'rgba(33,150,243,0.05)', borderRadius: 2, border: '1px solid rgba(33,150,243,0.2)', display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <WaterDropIcon sx={{ color: '#64b5f6' }} />
+                                <Typography variant="body2" sx={{ color: '#37474f' }}>
+                                  <span style={{ color: '#1b5e20', fontWeight: 700 }}>Latex Impact:</span> {disease.latex_impact}
+                                </Typography>
+                              </Box>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </>
+                    )}
+                  </Paper>
+                </motion.div>
+
+                {/* 7 ── Care Recommendations */}
+                {analysisResult.care_recommendations?.length > 0 && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, background: 'linear-gradient(135deg, #3E2723 0%, #5D3A1A 100%)', color: 'white', position: 'relative', overflow: 'hidden' }}>
+                      <Box sx={{ position: 'absolute', right: -30, bottom: -30, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
+                        <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.55)' }} />
+                        <AgricultureIcon sx={{ fontSize: 18 }} />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Care Recommendations</Typography>
+                      </Box>
+                      <List dense disablePadding>
+                        {analysisResult.care_recommendations.map((rec, i) => (
+                          <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.05 }}>
+                            <ListItem disableGutters sx={{ py: 0.9, alignItems: 'flex-start' }}>
+                              <ListItemIcon sx={{ minWidth: 34, mt: 0.3 }}>
+                                <Box sx={{
+                                  width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                  bgcolor: rec.priority === 'immediate' ? '#f44336' : rec.priority === 'soon' ? '#ff9800' : rec.priority === 'monitor' ? '#2196f3' : '#4caf50',
+                                }}>
+                                  <Typography sx={{ fontSize: '0.6rem', fontWeight: 800, color: 'white' }}>{i + 1}</Typography>
+                                </Box>
+                              </ListItemIcon>
+                              <Box sx={{ flex: 1 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 0.3, flexWrap: 'wrap' }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700, color: 'white' }}>{rec.action}</Typography>
+                                  <Chip label={rec.priority} size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase',
+                                    bgcolor: rec.priority === 'immediate' ? '#f44336' : rec.priority === 'soon' ? '#ff9800' : rec.priority === 'monitor' ? '#2196f3' : '#4caf50',
+                                    color: 'white' }} />
+                                  {rec.timeframe && <Chip label={rec.timeframe} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.9)' }} />}
+                                </Box>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)' }}>{rec.description}</Typography>
+                              </Box>
+                            </ListItem>
+                            {i < analysisResult.care_recommendations.length - 1 && (
+                              <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', my: 0.5 }} />
+                            )}
+                          </motion.div>
+                        ))}
+                      </List>
+                      <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)', mt: 2, mb: 1.5 }} />
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>
+                        Based on the tree's maturity level{disease.detected ? ', detected disease,' : ''} and overall health assessment.
+                      </Typography>
+                    </Paper>
+                  </motion.div>
+                )}
+
+                {/* 8 ── Visualization */}
+                {(visualizationSrc || hasBoxCoordinates) && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.33 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #d7ccc8', bgcolor: 'white' }}>
+                      <SectionLabel icon={<ScienceIcon sx={{ color: '#8B4513', fontSize: 17 }} />} label="Detection Visualization" />
                       {visualizationSrc && (
-                        <Box sx={{ textAlign: 'center', mb: hasBoxCoordinates ? 2 : 0 }}>
-                          <img
-                            src={visualizationSrc}
-                            alt="Detected bounding boxes"
-                            style={{
-                              width: '100%',
-                              maxHeight: '460px',
-                              objectFit: 'contain',
-                              borderRadius: 12,
-                              border: '2px solid #8B4513',
-                              background: '#faf7f2'
-                            }}
+                        <Box sx={{ textAlign: 'center', mb: hasBoxCoordinates ? 2.5 : 0 }}>
+                          <motion.img initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                            src={visualizationSrc} alt="Detection visualization"
+                            style={{ maxWidth: '100%', maxHeight: 420, borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.09)', border: '2px solid #d7ccc8' }}
                           />
                         </Box>
                       )}
-
                       {hasBoxCoordinates && (
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
                           <Table size="small">
                             <TableBody>
-                              {detections
-                                .filter((det) => Array.isArray(det?.bbox) && det.bbox.length === 4)
-                                .map((det, idx) => {
-                                  const [x1, y1, x2, y2] = det.bbox.map((v) => Number(v).toFixed(1));
-                                  return (
-                                    <TableRow key={`box-${idx}`}>
-                                      <TableCell sx={{ fontWeight: 700, color: '#3E2723', width: '32%' }}>
-                                        {det.display_name || det.class_name || det.class || `Detection ${idx + 1}`}
-                                      </TableCell>
-                                      <TableCell sx={{ color: '#5D3A1A', width: '20%' }}>
-                                        {Number(det.confidence || 0).toFixed(2)}%
-                                      </TableCell>
-                                      <TableCell sx={{ color: '#616161' }}>
-                                        [{x1}, {y1}] to [{x2}, {y2}]
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
+                              {detections.filter(d => Array.isArray(d?.bbox) && d.bbox.length === 4).map((det, idx) => {
+                                const [x1, y1, x2, y2] = det.bbox.map(v => Number(v).toFixed(1));
+                                return (
+                                  <TableRow key={`box-${idx}`}>
+                                    <TableCell sx={{ fontWeight: 700, color: '#3E2723', width: '32%' }}>
+                                      {det.display_name || det.class_name || det.class || `Detection ${idx + 1}`}
+                                    </TableCell>
+                                    <TableCell sx={{ color: '#8B4513', width: '20%' }}>{Number(det.confidence || 0).toFixed(2)}%</TableCell>
+                                    <TableCell sx={{ color: '#616161' }}>[{x1}, {y1}] to [{x2}, {y2}]</TableCell>
+                                  </TableRow>
+                                );
+                              })}
                             </TableBody>
                           </Table>
                         </TableContainer>
@@ -1077,1258 +913,88 @@ const TrunksDetection = () => {
                   </motion.div>
                 )}
 
-                {/* ML Model Info Banner */}
-                {showModelBanner && (
-                  <Fade in={true}>
-                    <Alert 
-                      severity={isMlUsed ? "info" : "warning"} 
-                      icon={isMlUsed ? <ScienceIcon /> : <WarningIcon />}
-                      sx={{ mb: 3, borderRadius: 2 }}
-                    >
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {isMlUsed 
-                            ? `Analyzed using ML model: ${modelInfo.model_file || 'Trunks-v2.pt'}`
-                            : `Fallback analysis: ${fallbackReason}`}
-                        </Typography>
-                        {primaryDetection && (
-                          <Typography variant="caption" color="text.secondary">
-                            Primary detection: {primaryDetection.display_name} ({primaryDetection.confidence}% confidence)
-                          </Typography>
-                        )}
+                {/* 9 ── All Predictions */}
+                {analysisResult.all_predictions?.length > 0 && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #d7ccc8', bgcolor: 'white' }}>
+                      <SectionLabel icon={<AnalyticsIcon sx={{ color: '#8B4513', fontSize: 17 }} />} label="All Predictions" />
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {analysisResult.all_predictions.map((pred, i) => (
+                          <Tooltip key={i} title={`Class ID: ${pred.class_id}`} arrow>
+                            <Chip
+                              label={`${pred.class} (${pred.confidence}%)`} size="small"
+                              sx={i === 0
+                                ? { bgcolor: '#8B4513', color: 'white', fontWeight: 700, fontSize: '0.72rem' }
+                                : { bgcolor: '#efebe9', color: '#3E2723', border: '1px solid #d7ccc8', fontWeight: 500, fontSize: '0.72rem' }}
+                            />
+                          </Tooltip>
+                        ))}
                       </Box>
-                    </Alert>
-                  </Fade>
-                )}
-
-                {/* Header with Download */}
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  mb: 3 
-                }}>
-                  <Typography 
-                    variant="h5" 
-                    sx={{ 
-                      color: '#8B4513', 
-                      fontWeight: 800, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 1 
-                    }}
-                  >
-                    <AnalyticsIcon /> Analysis Results
-                  </Typography>
-                  <Button 
-                    variant="outlined" 
-                    size="small" 
-                    onClick={downloadReport} 
-                    startIcon={<DownloadIcon />}
-                    sx={{ 
-                      borderColor: '#8B4513', 
-                      color: '#8B4513', 
-                      borderRadius: 3, 
-                      textTransform: 'none',
-                      '&:hover': { borderColor: '#5D3A1A', bgcolor: '#f5f0e6' } 
-                    }}
-                  >
-                    Download Report
-                  </Button>
-                </Box>
-
-                {/* Health Score Hero */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                >
-                  <Card 
-                    elevation={3} 
-                    sx={{ 
-                      borderRadius: 3, 
-                      mb: 3, 
-                      background: getHealthScoreGradient(analysisResult.health_score || analysisResult.healthScore), 
-                      color: 'white' 
-                    }}
-                  >
-                    <CardContent sx={{ p: 3 }}>
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={4}>
-                          <Typography 
-                            variant="body2" 
-                            sx={{ 
-                              opacity: 0.8, 
-                              textTransform: 'uppercase', 
-                              letterSpacing: 1, 
-                              mb: 0.5, 
-                              fontSize: '0.75rem', 
-                              fontWeight: 700 
-                            }}
-                          >
-                            Overall Health Score
-                          </Typography>
-                          <Typography variant="h2" sx={{ fontWeight: 900, lineHeight: 1.1 }}>
-                            {analysisResult.health_score || analysisResult.healthScore}%
-                          </Typography>
-                          <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5, fontWeight: 600 }}>
-                            {getHealthScoreLabel(analysisResult.health_score || analysisResult.healthScore)}
-                          </Typography>
-                        </Grid>
-                        <Grid item xs={12} md={8}>
-                          <LinearProgress 
-                            variant="determinate" 
-                            value={analysisResult.health_score || analysisResult.healthScore || 0}
-                            sx={{ 
-                              height: 16, 
-                              borderRadius: 99, 
-                              bgcolor: 'rgba(255,255,255,0.25)',
-                              '& .MuiLinearProgress-bar': { 
-                                bgcolor: 'white', 
-                                borderRadius: 99 
-                              } 
-                            }} 
-                          />
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Critical</Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Poor</Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Fair</Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Good</Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>Excellent</Typography>
-                          </Box>
-                        </Grid>
-                      </Grid>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-
-                {/* Quick Stats Cards */}
-                <Grid container spacing={3} sx={{ mb: 3 }}>
-                  {/* Maturity */}
-                  <Grid item xs={12} md={4}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                    >
-                      <Card 
-                        elevation={2} 
-                        sx={{ 
-                          borderRadius: 3, 
-                          border: '2px solid #8B4513', 
-                          height: '100%' 
-                        }}
-                      >
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            {getMaturityIcon(maturity.class)}
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                color: '#8B4513', 
-                                fontWeight: 700, 
-                                textTransform: 'uppercase', 
-                                letterSpacing: 1, 
-                                fontSize: '0.75rem' 
-                              }}
-                            >
-                              Maturity
-                            </Typography>
-                          </Box>
-                          <Typography variant="h5" sx={{ color: '#3E2723', fontWeight: 800, mb: 1 }}>
-                            {maturity.class || 'Unknown'}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Confidence: {maturity.confidence}%
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Grid>
-
-                  {/* Disease Status */}
-                  <Grid item xs={12} md={4}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                    >
-                      <Card 
-                        elevation={2} 
-                        sx={{ 
-                          borderRadius: 3, 
-                          border: '2px solid #8B4513', 
-                          height: '100%' 
-                        }}
-                      >
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            {getDiseaseIcon(disease.name)}
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                color: '#8B4513', 
-                                fontWeight: 700, 
-                                textTransform: 'uppercase', 
-                                letterSpacing: 1, 
-                                fontSize: '0.75rem' 
-                              }}
-                            >
-                              Disease Status
-                            </Typography>
-                          </Box>
-                          <Typography 
-                            variant="h5" 
-                            sx={{
-                              color: disease.detected ? '#f44336' : '#4caf50',
-                              fontWeight: 800,
-                              mb: 1
-                            }}
-                          >
-                            {disease.name || 'Unknown'}
-                          </Typography>
-                          {disease.detected && (
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                              <Chip
-                                label={`Severity: ${disease.severity}`}
-                                size="small"
-                                sx={{ 
-                                  bgcolor: getSeverityColor(disease.severity), 
-                                  color: 'white', 
-                                  fontWeight: 600 
-                                }}
-                              />
-                              <Chip
-                                label={`Urgency: ${disease.urgency}`}
-                                size="small"
-                                sx={{ 
-                                  bgcolor: getUrgencyColor(disease.urgency), 
-                                  color: 'white', 
-                                  fontWeight: 600 
-                                }}
-                              />
-                            </Box>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Grid>
-
-                  {/* Age Estimation */}
-                  <Grid item xs={12} md={4}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      <Card 
-                        elevation={2} 
-                        sx={{ 
-                          borderRadius: 3, 
-                          border: '2px solid #8B4513', 
-                          height: '100%' 
-                        }}
-                      >
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            <TimelineIcon sx={{ color: '#8B4513' }} />
-                            <Typography 
-                              variant="body2" 
-                              sx={{ 
-                                color: '#8B4513', 
-                                fontWeight: 700, 
-                                textTransform: 'uppercase', 
-                                letterSpacing: 1, 
-                                fontSize: '0.75rem' 
-                              }}
-                            >
-                              Model Detections
-                            </Typography>
-                          </Box>
-                          <Typography variant="h2" sx={{ color: '#3E2723', fontWeight: 900, lineHeight: 1 }}>
-                            {detectionCount}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            detected object{detectionCount === 1 ? '' : 's'}
-                          </Typography>
-                          <Typography variant="caption" color="text.disabled">
-                            Average confidence: {meanDetectionConfidence}%
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Grid>
-                </Grid>
-
-                {/* Color Analysis Section */}
-                {hasColorAnalysis && (
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.24 }}
-                >
-                  <Accordion 
-                    expanded={expandedSections.color} 
-                    onChange={() => toggleSection('color')}
-                    sx={{ 
-                      mb: 2, 
-                      borderRadius: 3, 
-                      '&:before': { display: 'none' },
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                    }}
-                  >
-                    <AccordionSummary 
-                      expandIcon={<ExpandMoreIcon />}
-                      sx={{ 
-                        bgcolor: '#f5f0e6', 
-                        borderRadius: expandedSections.color ? '12px 12px 0 0' : '12px',
-                        '&.Mui-expanded': { minHeight: 48 }
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ColorLensIcon sx={{ color: '#8B4513' }} />
-                        <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 700 }}>
-                          Color Analysis
-                        </Typography>
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ p: 3 }}>
-                      <Grid container spacing={3} alignItems="center">
-                        {/* Color Swatch */}
-                        <Grid item xs={12} sm={3} sx={{ textAlign: 'center' }}>
-                          <Box sx={{
-                            width: 110,
-                            height: 110,
-                            borderRadius: '50%',
-                            mx: 'auto',
-                            mb: 1.5,
-                            background: visualAnalysis?.color?.hex || '#8B4513',
-                            border: '4px solid #f5f0e6',
-                            boxShadow: `0 4px 24px ${visualAnalysis?.color?.hex || '#8B4513'}88`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            <ColorLensIcon sx={{ fontSize: 48, color: 'rgba(255,255,255,0.85)' }} />
-                          </Box>
-                          <Typography variant="subtitle1" sx={{ color: '#8B4513', fontWeight: 700 }}>
-                            {visualAnalysis?.color?.name || '—'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">Dominant Color</Typography>
-                        </Grid>
-
-                        {/* Color Details */}
-                        <Grid item xs={12} sm={9}>
-                          <Grid container spacing={2} sx={{ mb: 2 }}>
-                            {visualAnalysis?.color?.rgb && (
-                              <>
-                                <Grid item xs={4}>
-                                  <Box sx={{ 
-                                    p: 2, 
-                                    bgcolor: '#f5f0e6', 
-                                    borderRadius: 2, 
-                                    border: '1px solid #e8d5bf', 
-                                    textAlign: 'center' 
-                                  }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                      Red
-                                    </Typography>
-                                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {visualAnalysis.color.rgb.r}
-                                    </Typography>
-                                  </Box>
-                                </Grid>
-                                <Grid item xs={4}>
-                                  <Box sx={{ 
-                                    p: 2, 
-                                    bgcolor: '#f5f0e6', 
-                                    borderRadius: 2, 
-                                    border: '1px solid #e8d5bf', 
-                                    textAlign: 'center' 
-                                  }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                      Green
-                                    </Typography>
-                                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {visualAnalysis.color.rgb.g}
-                                    </Typography>
-                                  </Box>
-                                </Grid>
-                                <Grid item xs={4}>
-                                  <Box sx={{ 
-                                    p: 2, 
-                                    bgcolor: '#f5f0e6', 
-                                    borderRadius: 2, 
-                                    border: '1px solid #e8d5bf', 
-                                    textAlign: 'center' 
-                                  }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                      Blue
-                                    </Typography>
-                                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {visualAnalysis.color.rgb.b}
-                                    </Typography>
-                                  </Box>
-                                </Grid>
-                              </>
-                            )}
-                          </Grid>
-
-                          {visualAnalysis?.color?.hsv && (
-                            <>
-                              <Typography variant="subtitle2" sx={{ color: '#8B4513', fontWeight: 700, mb: 1 }}>
-                                HSV Values
-                              </Typography>
-                              <Grid container spacing={2} sx={{ mb: 2 }}>
-                                <Grid item xs={4}>
-                                  <Box sx={{ 
-                                    p: 2, 
-                                    bgcolor: '#f5f0e6', 
-                                    borderRadius: 2, 
-                                    border: '1px solid #e8d5bf', 
-                                    textAlign: 'center' 
-                                  }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                      Hue
-                                    </Typography>
-                                    <Typography variant="body1" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {visualAnalysis.color.hsv.h}°
-                                    </Typography>
-                                  </Box>
-                                </Grid>
-                                <Grid item xs={4}>
-                                  <Box sx={{ 
-                                    p: 2, 
-                                    bgcolor: '#f5f0e6', 
-                                    borderRadius: 2, 
-                                    border: '1px solid #e8d5bf', 
-                                    textAlign: 'center' 
-                                  }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                      Saturation
-                                    </Typography>
-                                    <Typography variant="body1" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {visualAnalysis.color.hsv.s}
-                                    </Typography>
-                                  </Box>
-                                </Grid>
-                                <Grid item xs={4}>
-                                  <Box sx={{ 
-                                    p: 2, 
-                                    bgcolor: '#f5f0e6', 
-                                    borderRadius: 2, 
-                                    border: '1px solid #e8d5bf', 
-                                    textAlign: 'center' 
-                                  }}>
-                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                      Value
-                                    </Typography>
-                                    <Typography variant="body1" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {visualAnalysis.color.hsv.v}
-                                    </Typography>
-                                  </Box>
-                                </Grid>
-                              </Grid>
-                            </>
-                          )}
-
-                          {visualAnalysis?.color?.description && (
-                            <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                              {visualAnalysis.color.description}
-                            </Typography>
-                          )}
-                        </Grid>
-                      </Grid>
-                    </AccordionDetails>
-                  </Accordion>
-                </motion.div>
-                )}
-
-                {/* Texture Analysis Section */}
-                {hasTextureAnalysis && (
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.28 }}
-                >
-                  <Accordion 
-                    expanded={expandedSections.texture} 
-                    onChange={() => toggleSection('texture')}
-                    sx={{ 
-                      mb: 2, 
-                      borderRadius: 3, 
-                      '&:before': { display: 'none' },
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                    }}
-                  >
-                    <AccordionSummary 
-                      expandIcon={<ExpandMoreIcon />}
-                      sx={{ 
-                        bgcolor: '#f5f0e6', 
-                        borderRadius: expandedSections.texture ? '12px 12px 0 0' : '12px',
-                        '&.Mui-expanded': { minHeight: 48 }
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TextureIcon sx={{ color: '#8B4513' }} />
-                        <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 700 }}>
-                          Texture Analysis
-                        </Typography>
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ p: 3 }}>
-                      <Grid container spacing={3}>
-                        <Grid item xs={12} md={4} sx={{ textAlign: 'center' }}>
-                          <Box sx={{ p: 3 }}>
-                            <Box sx={{ 
-                              fontSize: 64, 
-                              mb: 1, 
-                              display: 'flex', 
-                              justifyContent: 'center', 
-                              '& svg': { fontSize: 64 } 
-                            }}>
-                              {getTextureIcon(visualAnalysis?.texture?.type)}
-                            </Box>
-                            <Typography 
-                              variant="h5" 
-                              sx={{ 
-                                color: '#3E2723', 
-                                fontWeight: 800, 
-                                mb: 1, 
-                                textTransform: 'capitalize' 
-                              }}
-                            >
-                              {visualAnalysis?.texture?.type || '—'}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {visualAnalysis?.texture?.description}
-                            </Typography>
-                            {visualAnalysis?.texture?.health_indicator && (
-                              <Box sx={{ mt: 2 }}>
-                                <Chip
-                                  label={`Health Indicator: ${visualAnalysis.texture.health_indicator}%`}
-                                  size="small"
-                                  sx={{ 
-                                    bgcolor: visualAnalysis.texture.health_indicator > 70 ? '#4caf50' : 
-                                            visualAnalysis.texture.health_indicator > 50 ? '#ff9800' : '#f44336',
-                                    color: 'white'
-                                  }}
-                                />
-                              </Box>
-                            )}
-                          </Box>
-                        </Grid>
-
-                        <Grid item xs={12} md={8}>
-                          <Typography variant="subtitle2" sx={{ color: '#8B4513', fontWeight: 700, mb: 2 }}>
-                            Texture Metrics
-                          </Typography>
-                          
-                          {visualAnalysis?.texture?.metrics && (
-                            <>
-                              {[
-                                { 
-                                  label: 'Contrast', 
-                                  value: visualAnalysis.texture.metrics.contrast,
-                                  max: 100,
-                                  color: '#8B4513'
-                                },
-                                { 
-                                  label: 'Roughness', 
-                                  value: visualAnalysis.texture.metrics.roughness,
-                                  max: 100,
-                                  color: '#8B4513'
-                                },
-                                { 
-                                  label: 'Entropy', 
-                                  value: visualAnalysis.texture.metrics.entropy,
-                                  max: 8,
-                                  display: val => val.toFixed(2),
-                                  color: '#8B4513'
-                                }
-                              ].map(({ label, value, max, display, color }) => (
-                                <Box key={label} sx={{ mb: 2 }}>
-                                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                                    <Typography variant="body2" color="text.secondary">{label}</Typography>
-                                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                                      {display ? display(value) : value}
-                                    </Typography>
-                                  </Box>
-                                  <LinearProgress 
-                                    variant="determinate" 
-                                    value={Math.min(100, (value / max) * 100)} 
-                                    sx={{ 
-                                      height: 8, 
-                                      borderRadius: 99, 
-                                      bgcolor: '#f5f0e6',
-                                      '& .MuiLinearProgress-bar': { 
-                                        bgcolor: color, 
-                                        borderRadius: 99 
-                                      } 
-                                    }} 
-                                  />
-                                </Box>
-                              ))}
-                            </>
-                          )}
-                        </Grid>
-                      </Grid>
-                    </AccordionDetails>
-                  </Accordion>
-                </motion.div>
-                )}
-
-                {/* Lesion Detection */}
-                {hasLesionAnalysis && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.30 }}
-                  >
-                    <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: 'white' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                        <WarningIcon sx={{ color: visualAnalysis.lesions.detected ? '#f44336' : '#4caf50' }} />
-                        <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 700 }}>
-                          Lesion Detection
-                        </Typography>
-                      </Box>
-
-                      <Grid container spacing={2}>
-                        <Grid item xs={12} md={6}>
-                          <Alert 
-                            severity={visualAnalysis.lesions.detected ? "warning" : "success"}
-                            sx={{ borderRadius: 2 }}
-                          >
-                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                              {visualAnalysis.lesions.detected 
-                                ? `${visualAnalysis.lesions.count} Lesions Detected` 
-                                : 'No Lesions Detected'}
-                            </Typography>
-                            <Typography variant="body2">
-                              {visualAnalysis.lesions.description}
-                            </Typography>
-                          </Alert>
-                        </Grid>
-
-                        {visualAnalysis.lesions.detected && (
-                          <Grid item xs={12} md={6}>
-                            <Box sx={{ p: 2, bgcolor: '#f5f0e6', borderRadius: 2 }}>
-                              <Typography variant="subtitle2" sx={{ color: '#8B4513', fontWeight: 700, mb: 1 }}>
-                                Lesion Details
-                              </Typography>
-                              <List dense>
-                                <ListItem>
-                                  <ListItemText 
-                                    primary="Affected Area" 
-                                    secondary={`${visualAnalysis.lesions.affected_area_percentage}% of trunk`}
-                                  />
-                                </ListItem>
-                                <ListItem>
-                                  <ListItemText 
-                                    primary="Severity" 
-                                    secondary={visualAnalysis.lesions.severity}
-                                  />
-                                </ListItem>
-                                {visualAnalysis.lesions.types?.length > 0 && (
-                                  <ListItem>
-                                    <ListItemText 
-                                      primary="Types" 
-                                      secondary={visualAnalysis.lesions.types.join(', ')}
-                                    />
-                                  </ListItem>
-                                )}
-                              </List>
-                            </Box>
-                          </Grid>
-                        )}
-                      </Grid>
                     </Paper>
                   </motion.div>
                 )}
 
-                {/* Disease Analysis Section */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.32 }}
-                >
-                  <Accordion 
-                    expanded={expandedSections.disease} 
-                    onChange={() => toggleSection('disease')}
-                    sx={{ 
-                      mb: 2, 
-                      borderRadius: 3, 
-                      '&:before': { display: 'none' },
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                    }}
-                  >
-                    <AccordionSummary 
-                      expandIcon={<ExpandMoreIcon />}
-                      sx={{ 
-                        bgcolor: '#f5f0e6', 
-                        borderRadius: expandedSections.disease ? '12px 12px 0 0' : '12px',
-                        '&.Mui-expanded': { minHeight: 48 }
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <BugReportIcon sx={{ color: '#8B4513' }} />
-                        <Typography variant="h6" sx={{ color: '#3E2723', fontWeight: 700 }}>
-                          Disease Analysis
-                        </Typography>
-                      </Box>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ p: 3 }}>
-                      {isHealthy ? (
-                        <Alert severity="success" sx={{ borderRadius: 2 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                            Tree is Healthy
-                          </Typography>
-                          <Typography variant="body2">
-                            No signs of disease detected. Continue regular monitoring.
-                          </Typography>
-                        </Alert>
-                      ) : (
-                        <>
-                          <Alert 
-                            severity="error" 
-                            sx={{ mb: 3, borderRadius: 2 }}
-                            icon={<BugReportIcon />}
-                          >
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                              {disease.name} Detected
-                            </Typography>
-                            <Typography variant="body2">
-                              Confidence: {disease.confidence}% · 
-                              Severity: {disease.severity} · 
-                              Urgency: {disease.urgency}
-                            </Typography>
-                          </Alert>
-
-                          {disease.description && (
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 3, px: 0.5 }}>
-                              {disease.description}
-                            </Typography>
-                          )}
-
-                          <Grid container spacing={3}>
-                            {/* Symptoms */}
-                            <Grid item xs={12} md={6}>
-                              <Box sx={{ 
-                                p: 2.5, 
-                                bgcolor: '#fff3e0', 
-                                borderRadius: 2, 
-                                border: '1px solid #ffcc80' 
-                              }}>
-                                <Typography 
-                                  variant="subtitle2" 
-                                  sx={{ 
-                                    color: '#e65100', 
-                                    fontWeight: 700, 
-                                    mb: 1, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: 0.8 
-                                  }}
-                                >
-                                  <WarningIcon sx={{ fontSize: 16 }} /> Symptoms
-                                </Typography>
-                                <List dense disablePadding>
-                                  {disease.symptoms?.length ? (
-                                    disease.symptoms.map((s, i) => (
-                                      <ListItem key={i} disableGutters sx={{ py: 0.3 }}>
-                                        <ListItemIcon sx={{ minWidth: 28 }}>
-                                          <WarningIcon sx={{ color: '#ff9800', fontSize: 16 }} />
-                                        </ListItemIcon>
-                                        <ListItemText 
-                                          primary={s} 
-                                          primaryTypographyProps={{ variant: 'body2' }} 
-                                        />
-                                      </ListItem>
-                                    ))
-                                  ) : (
-                                    <ListItem disableGutters>
-                                      <ListItemText 
-                                        primary="No symptom information available" 
-                                        primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }} 
-                                      />
-                                    </ListItem>
-                                  )}
-                                </List>
-                              </Box>
-                            </Grid>
-
-                            {/* Treatment */}
-                            <Grid item xs={12} md={6}>
-                              <Box sx={{ 
-                                p: 2.5, 
-                                bgcolor: '#e3f2fd', 
-                                borderRadius: 2, 
-                                border: '1px solid #90caf9' 
-                              }}>
-                                <Typography 
-                                  variant="subtitle2" 
-                                  sx={{ 
-                                    color: '#1565c0', 
-                                    fontWeight: 700, 
-                                    mb: 1, 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: 0.8 
-                                  }}
-                                >
-                                  <HealingIcon sx={{ fontSize: 16 }} /> Treatment
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  {disease.treatment || 'No treatment information available.'}
-                                </Typography>
-                              </Box>
-                            </Grid>
-
-                            {/* Latex Impact */}
-                            {disease.latex_impact && (
-                              <Grid item xs={12}>
-                                <Box sx={{ 
-                                  p: 2, 
-                                  bgcolor: '#f1f8e9', 
-                                  borderRadius: 2, 
-                                  border: '1px solid #a5d6a7',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1
-                                }}>
-                                  <WaterDropIcon sx={{ color: '#2e7d32' }} />
-                                  <Typography variant="body2" color="text.secondary">
-                                    <strong>Latex Impact:</strong> {disease.latex_impact}
-                                  </Typography>
-                                </Box>
-                              </Grid>
-                            )}
-                          </Grid>
-                        </>
-                      )}
-                    </AccordionDetails>
-                  </Accordion>
-                </motion.div>
-
-              {/* Care Recommendations */}
-{analysisResult.care_recommendations?.length > 0 && (
-  <motion.div
-    initial={{ opacity: 0, y: 14 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.36 }}
-  >
-    <Accordion 
-      expanded={expandedSections.recommendations} 
-      onChange={() => toggleSection('recommendations')}
-      sx={{ 
-        mb: 3, 
-        borderRadius: 3, 
-        '&:before': { display: 'none' },
-        background: 'linear-gradient(135deg, #3E2723 0%, #5D3A1A 100%)',
-        color: 'white'
-      }}
-    >
-      <AccordionSummary 
-        expandIcon={<ExpandMoreIcon sx={{ color: 'white' }} />}
-        sx={{ 
-          borderRadius: expandedSections.recommendations ? '12px 12px 0 0' : '12px',
-          '&.Mui-expanded': { minHeight: 48 }
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AgricultureIcon sx={{ color: 'rgba(255,255,255,0.9)' }} />
-          <Typography variant="h6" sx={{ fontWeight: 700, color: 'white' }}>
-            Care Recommendations
-          </Typography>
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails sx={{ p: 3 }}>
-        <Box sx={{ position: 'relative', overflow: 'hidden' }}>
-          <Box sx={{ 
-            position: 'absolute', 
-            right: -20, 
-            bottom: -20, 
-            width: 150, 
-            height: 150, 
-            borderRadius: '50%', 
-            background: 'rgba(255,255,255,0.05)' 
-          }} />
-          
-          <List dense disablePadding>
-            {analysisResult.care_recommendations.map((rec, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.36 + i * 0.06 }}
-              >
-                <ListItem disableGutters sx={{ py: 1, flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <Box sx={{ display: 'flex', width: '100%', alignItems: 'flex-start', gap: 1.5 }}>
-                    <ListItemIcon sx={{ minWidth: 28, mt: 0.3 }}>
-                      <Box sx={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: '50%',
-                        bgcolor: rec.priority === 'immediate' ? '#f44336' : 
-                                rec.priority === 'soon' ? '#ff9800' : 
-                                rec.priority === 'monitor' ? '#2196f3' : '#4caf50',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <Typography sx={{ fontSize: '0.75rem', fontWeight: 800, color: 'white' }}>
-                          {i + 1}
-                        </Typography>
-                      </Box>
-                    </ListItemIcon>
-                    <Box sx={{ flex: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: 'white' }}>
-                          {rec.action}
-                        </Typography>
-                        <Chip
-                          label={rec.priority}
-                          size="small"
-                          sx={{
-                            height: 20,
-                            fontSize: '0.6rem',
-                            fontWeight: 600,
-                            bgcolor: rec.priority === 'immediate' ? '#f44336' : 
-                                    rec.priority === 'soon' ? '#ff9800' : 
-                                    rec.priority === 'monitor' ? '#2196f3' : '#4caf50',
-                            color: 'white',
-                            textTransform: 'uppercase'
-                          }}
-                        />
-                        {rec.timeframe && (
-                          <Chip
-                            label={rec.timeframe}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: '0.6rem',
-                              bgcolor: 'rgba(255,255,255,0.15)',
-                              color: 'rgba(255,255,255,0.9)'
-                            }}
-                          />
-                        )}
-                      </Box>
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)', mb: 0.5 }}>
-                        {rec.description}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </ListItem>
-                {i < analysisResult.care_recommendations.length - 1 && (
-                  <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', my: 1 }} />
-                )}
-              </motion.div>
-            ))}
-          </List>
-          
-          <Divider sx={{ borderColor: 'rgba(255,255,255,0.15)', my: 2 }} />
-          
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>
-            Based on the tree's maturity level{disease.detected ? ', detected disease,' : ''} and overall health assessment.
-          </Typography>
-        </Box>
-      </AccordionDetails>
-    </Accordion>
-  </motion.div>
-)}
-
-                {/* All Predictions */}
-                {analysisResult.all_predictions && analysisResult.all_predictions.length > 0 && (
-                  <Fade in={true}>
-                    <Paper elevation={1} sx={{ p: 2, mb: 3, borderRadius: 3, bgcolor: '#fafafa' }}>
-                      <Typography variant="subtitle2" sx={{ color: '#8B4513', fontWeight: 700, mb: 1 }}>
-                        All Predictions
-                      </Typography>
-                      <Grid container spacing={1}>
-                        {analysisResult.all_predictions.map((pred, i) => (
-                          <Grid item xs={6} sm={4} md={2.4} key={i}>
-                            <Tooltip title={`Class ID: ${pred.class_id}`} arrow>
-                              <Box sx={{ 
-                                p: 1, 
-                                bgcolor: i === 0 ? '#f5f0e6' : 'white',
-                                borderRadius: 2,
-                                border: i === 0 ? '2px solid #8B4513' : '1px solid #e0e0e0',
-                                textAlign: 'center'
-                              }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600, display: 'block' }}>
-                                  {pred.class}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {pred.confidence}%
-                                </Typography>
-                                {pred.severity && (
-                                  <Chip 
-                                    label={pred.severity}
-                                    size="small"
-                                    sx={{ 
-                                      mt: 0.5,
-                                      height: 20,
-                                      fontSize: '0.6rem',
-                                      bgcolor: getSeverityColor(pred.severity),
-                                      color: 'white'
-                                    }}
-                                  />
-                                )}
-                              </Box>
-                            </Tooltip>
-                          </Grid>
-                        ))}
-                      </Grid>
-                    </Paper>
-                  </Fade>
-                )}
-
                 {/* Metadata */}
                 {imageMetadata && (
-                  <Fade in={true}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 1, flexWrap: 'wrap' }}>
-                      <InfoIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                      <Typography variant="caption" color="text.disabled">
-                        Analysis ID: {analysisResult.analysisId} · 
-                        Analyzed: {new Date(imageMetadata.analyzed_at).toLocaleString()} ·
-                        File: {imageMetadata.filename} ·
-                        Size: {imageMetadata.file_size_kb} KB
-                      </Typography>
-                    </Box>
-                  </Fade>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 0.5, pb: 1 }}>
+                    <InfoIcon sx={{ fontSize: 13, color: '#bdbdbd' }} />
+                    <Typography variant="caption" color="text.disabled">
+                      Analysis ID: {analysisResult.analysisId} ·
+                      Analyzed: {new Date(imageMetadata.analyzed_at).toLocaleString()} ·
+                      File: {imageMetadata.filename} ·
+                      Size: {imageMetadata.file_size_kb} KB
+                    </Typography>
+                  </Box>
                 )}
+              </>)}
               </motion.div>
             )}
           </AnimatePresence>
         </Container>
       </Box>
 
-      {/* Source Chooser Dialog */}
-      <Dialog 
-        open={chooserOpen} 
-        onClose={() => setChooserOpen(false)} 
-        maxWidth="xs" 
-        fullWidth
-        PaperProps={{ 
-          sx: { 
-            borderRadius: 4, 
-            overflow: 'hidden' 
-          } 
-        }}
-      >
-        <DialogTitle sx={{ 
-          bgcolor: '#8B4513', 
-          color: 'white', 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center' 
-        }}>
-          <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
-            Add Trunk Image
-          </Typography>
-          <IconButton onClick={() => setChooserOpen(false)} sx={{ color: 'white' }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, textAlign: 'center' }}>
-            How would you like to add your image?
-          </Typography>
-          <Grid container spacing={2} alignItems="stretch">
-            {[
-              {
-                icon: <CloudUploadIcon sx={{ fontSize: 52, color: '#8B4513' }} />,
-                label: 'Upload Image',
-                sub: 'From your device',
-                onClick: () => {
-                  setChooserOpen(false);
-                  fileInputRef.current?.click();
-                }
-              },
-              {
-                icon: <PhotoCameraIcon sx={{ fontSize: 52, color: '#8B4513' }} />,
-                label: 'Take a Photo',
-                sub: 'Use your camera',
-                onClick: () => {
-                  setChooserOpen(false);
-                  setCameraOpen(true);
-                }
-              }
-            ].map(({ icon, label, sub, onClick }) => (
-              <Grid item xs={6} key={label} sx={{ display: 'flex' }}>
-                <motion.div 
-                  whileHover={{ scale: 1.04 }} 
-                  whileTap={{ scale: 0.97 }} 
-                  style={{ width: '100%' }}
-                >
-                  <Box 
-                    onClick={onClick} 
-                    sx={{
-                      border: '2px dashed #8B4513',
-                      borderRadius: 3,
-                      p: 3,
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      bgcolor: '#f5f0e6',
-                      transition: 'all 0.2s',
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      '&:hover': {
-                        bgcolor: '#efe4d8',
-                        borderColor: '#5D3A1A'
-                      }
-                    }}
-                  >
-                    {icon}
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#3E2723' }}>
-                      {label}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {sub}
-                    </Typography>
-                  </Box>
-                </motion.div>
-              </Grid>
-            ))}
-          </Grid>
-        </DialogContent>
-      </Dialog>
-
-      {/* Camera Dialog */}
-      <Dialog 
-        open={cameraOpen} 
-        onClose={() => setCameraOpen(false)} 
-        maxWidth="md" 
-        fullWidth
-        PaperProps={{ 
-          sx: { 
-            borderRadius: 4, 
-            overflow: 'hidden' 
-          } 
-        }}
-      >
-        <DialogTitle sx={{ 
-          bgcolor: '#8B4513', 
-          color: 'white', 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center' 
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      {/* ── CAMERA DIALOG ────────────────────────────────────────────────────── */}
+      <Dialog open={cameraOpen} onClose={() => setCameraOpen(false)} maxWidth="md" fullWidth
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}>
+        <DialogTitle sx={{ bgcolor: '#3E2723', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <PhotoCameraIcon />
-            <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
-              Capture Trunk Image
-            </Typography>
+            <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>Capture Trunk Sample</Typography>
           </Box>
-          <IconButton onClick={() => setCameraOpen(false)} sx={{ color: 'white' }}>
-            <CloseIcon />
-          </IconButton>
+          <IconButton onClick={() => setCameraOpen(false)} sx={{ color: 'white' }} size="small"><CloseIcon /></IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 0, bgcolor: '#000', position: 'relative' }}>
+        <DialogContent sx={{ p: 0, bgcolor: '#000', position: 'relative', minHeight: 260 }}>
           {cameraError ? (
-            <Box sx={{ 
-              height: 400, 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              bgcolor: '#f5f5f5', 
-              p: 3 
-            }}>
-              <ErrorIcon sx={{ fontSize: 60, color: '#f44336', mb: 2 }} />
-              <Typography variant="h6" color="error">Camera Error</Typography>
-              <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
-                {cameraError}
-              </Typography>
+            <Box sx={{ height: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#fafafa', p: 3 }}>
+              <ErrorIcon sx={{ fontSize: 50, color: '#c62828', mb: 2 }} />
+              <Typography variant="h6" sx={{ color: '#c62828', fontWeight: 700 }}>Camera Unavailable</Typography>
+              <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>{cameraError}</Typography>
             </Box>
           ) : (
             <>
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline
-                style={{ 
-                  width: '100%', 
-                  height: 'auto', 
-                  maxHeight: 500, 
-                  objectFit: 'cover', 
-                  display: 'block' 
-                }} 
-              />
-              <Box sx={{ 
-                position: 'absolute', 
-                inset: 0, 
-                border: '4px solid #8B4513', 
-                pointerEvents: 'none' 
-              }} />
-              <Box sx={{ 
-                position: 'absolute', 
-                bottom: 16, 
-                left: 0, 
-                right: 0, 
-                textAlign: 'center',
-                color: 'white', 
-                textShadow: '1px 1px 4px rgba(0,0,0,0.8)', 
-                pointerEvents: 'none' 
-              }}>
-                <Typography variant="body2">Position trunk in frame and tap capture</Typography>
+              <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: 'auto', maxHeight: 480, objectFit: 'cover', display: 'block' }} />
+              <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Box sx={{ width: '68%', maxWidth: 320, aspectRatio: '4/3', border: '2px solid rgba(255,255,255,0.65)', borderRadius: 2, boxShadow: '0 0 0 9999px rgba(0,0,0,0.38)' }} />
+              </Box>
+              <Box sx={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                  Position trunk within the frame
+                </Typography>
               </Box>
             </>
           )}
         </DialogContent>
-        <DialogActions sx={{ 
-          justifyContent: 'center', 
-          gap: 2, 
-          p: 2.5, 
-          bgcolor: '#f5f5f5' 
-        }}>
-          <Button 
-            variant="contained" 
-            onClick={handleFlipCamera} 
-            disabled={!!cameraError} 
-            startIcon={<FlipCameraIcon />}
-            sx={{ 
-              bgcolor: '#8B4513', 
-              borderRadius: 99, 
-              textTransform: 'none', 
-              '&:hover': { bgcolor: '#5D3A1A' }, 
-              '&:disabled': { bgcolor: '#ccc' } 
-            }}
-          >
-            Flip Camera
+        <DialogActions sx={{ justifyContent: 'center', gap: 2.5, p: 2.5, bgcolor: '#fafafa' }}>
+          <Button variant="outlined" onClick={handleFlipCamera} disabled={!!cameraError} startIcon={<FlipCameraIcon />}
+            sx={{ borderColor: '#bcaaa4', color: '#8B4513', borderRadius: 2, textTransform: 'none', '&:hover': { borderColor: '#8B4513', bgcolor: '#f5ede6' }, '&:disabled': { borderColor: '#e0e0e0', color: '#bdbdbd' } }}>
+            Flip
           </Button>
-          <Fab 
-            onClick={captureImage} 
-            disabled={!stream || capturing || !!cameraError}
-            sx={{ 
-              bgcolor: '#f44336', 
-              '&:hover': { bgcolor: '#c62828' }, 
-              width: 70, 
-              height: 70, 
-              boxShadow: '0 4px 18px rgba(244,67,54,0.45)' 
-            }}
-          >
-            {capturing ? <CircularProgress size={28} color="inherit" /> : <PhotoCameraIcon sx={{ fontSize: 30 }} />}
+          <Fab onClick={captureImage} disabled={!stream || capturing || !!cameraError}
+            sx={{ bgcolor: '#c62828', '&:hover': { bgcolor: '#b71c1c' }, width: 62, height: 62, boxShadow: '0 3px 14px rgba(198,40,40,0.38)' }}>
+            {capturing ? <CircularProgress size={22} color="inherit" /> : <PhotoCameraIcon sx={{ fontSize: 26 }} />}
           </Fab>
-          <Button 
-            variant="outlined" 
-            onClick={() => setCameraOpen(false)} 
-            disabled={capturing} 
-            startIcon={<CloseIcon />}
-            sx={{ 
-              borderColor: '#bdbdbd', 
-              color: '#616161', 
-              borderRadius: 99, 
-              textTransform: 'none', 
-              '&:hover': { borderColor: '#9e9e9e' } 
-            }}
-          >
+          <Button variant="outlined" onClick={() => setCameraOpen(false)} disabled={capturing} startIcon={<CloseIcon />}
+            sx={{ borderColor: '#e0e0e0', color: '#757575', borderRadius: 2, textTransform: 'none', '&:hover': { borderColor: '#bdbdbd' } }}>
             Cancel
           </Button>
         </DialogActions>
@@ -2341,4 +1007,3 @@ const TrunksDetection = () => {
 };
 
 export default TrunksDetection;
-

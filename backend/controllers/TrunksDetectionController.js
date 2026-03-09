@@ -527,7 +527,8 @@ exports.analyzeTrunk = async (req, res) => {
         returnVisualization: true,
         detailedAnalysis: true,
         useCache: true,
-        cacheKey: cacheKey
+        cacheKey: cacheKey,
+        timeoutMs: 120000
       });
 
       if (!isTrunkDetected(analysis)) {
@@ -900,6 +901,469 @@ exports.getAnalysisHistory = async (req, res) => {
   }
 };
 
+
+// @desc    Get trunk analysis history for user
+// @route   GET /api/v1/trunks/history
+// @access  Private
+exports.getAnalysisHistory = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { limit = 10, page = 1, sortBy = 'createdAt', order = 'desc' } = req.query;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Build query
+    const query = { userId };
+    
+    // Optional filters
+    if (req.query.disease) {
+      query.$or = [
+        { 'primaryDetection.class': req.query.disease },
+        { 'primaryDetection.display_name': { $regex: req.query.disease, $options: 'i' } },
+        { 'disease.name': { $regex: req.query.disease, $options: 'i' } }
+      ];
+    }
+    
+    if (req.query.maturity) {
+      query['maturity.class'] = { $regex: req.query.maturity, $options: 'i' };
+    }
+    
+    if (req.query.minHealthScore) {
+      query.healthScore = { $gte: parseInt(req.query.minHealthScore) };
+    }
+    
+    if (req.query.startDate && req.query.endDate) {
+      query.createdAt = {
+        $gte: new Date(req.query.startDate),
+        $lte: new Date(req.query.endDate)
+      };
+    }
+    
+    // Get total count for pagination
+    const total = await TrunkAnalysis.countDocuments(query);
+    
+    // Get analyses with pagination
+    const analyses = await TrunkAnalysis.find(query)
+      .sort({ [sortBy]: order === 'desc' ? -1 : 1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+    
+    // Format analyses for frontend - SIMPLE AND DIRECT
+    const formattedAnalyses = analyses.map(analysis => {
+      // Extract primary detection info
+      let primaryDisplayName = 'Unknown';
+      let primaryConfidence = 0;
+      let healthStatus = 'Good';
+      
+      if (analysis.primaryDetection) {
+        primaryDisplayName = analysis.primaryDetection.display_name || 
+                            analysis.primaryDetection.name || 
+                            analysis.primaryDetection.class || 
+                            'Unknown';
+        primaryConfidence = analysis.primaryDetection.confidence || 0;
+      } else if (analysis.disease) {
+        primaryDisplayName = analysis.disease.name || 'Unknown';
+        primaryConfidence = analysis.disease.confidence || 0;
+      }
+      
+      // Determine health status based on health score
+      const healthScore = analysis.healthScore || 0;
+      if (healthScore >= 70) healthStatus = 'Good';
+      else if (healthScore >= 50) healthStatus = 'Fair';
+      else healthStatus = 'Poor';
+      
+      return {
+        _id: analysis._id,
+        id: analysis._id,
+        imageUrl: analysis.imageUrl,
+        image: analysis.imageUrl,
+        createdAt: analysis.createdAt,
+        status: 'Completed',
+        confidence: primaryConfidence,
+        healthStatus: healthStatus,
+        healthScore: healthScore,
+        diameter: analysis.diameter || 'N/A',
+        barkCondition: analysis.bark_condition || 'Good',
+        diseasePresent: primaryDisplayName !== 'Healthy' && primaryDisplayName !== 'Unknown',
+        diseaseType: primaryDisplayName,
+        woundsDetected: analysis.allDetections?.length || 0
+      };
+    });
+    
+    // Return in a format that's easy for frontend to parse
+    res.status(200).json({
+      success: true,
+      data: formattedAnalyses, // Direct array in data field
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+        hasNext: pageNum < Math.ceil(total / limitNum),
+        hasPrev: pageNum > 1
+      }
+    });
+  } catch (error) {
+    console.error('❌ Get history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching history',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get specific trunk analysis by ID
+// @route   GET /api/v1/trunks/analysis/:analysisId
+// @access  Private
+exports.getAnalysisById = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { analysisId } = req.params;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    
+    // Find the analysis and ensure it belongs to the user
+    const analysis = await TrunkAnalysis.findOne({
+      _id: analysisId,
+      userId: userId
+    }).lean();
+    
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Analysis not found'
+      });
+    }
+    
+    // Use the compatibility function to ensure all fields are properly formatted
+    const compatAnalysis = buildApiAnalysisFromStored(analysis);
+    
+    // Extract data from fullAnalysis if available
+    const fullAnalysis = analysis.fullAnalysis || {};
+    
+    // Extract primary detection info
+    let primaryClass = 'Unknown';
+    let primaryDisplayName = 'Unknown';
+    let primaryConfidence = 0;
+    let diseasePresent = false;
+    let diseaseSeverity = 'none';
+    
+    if (analysis.primaryDetection) {
+      primaryClass = analysis.primaryDetection.class || 
+                     analysis.primaryDetection.class_name || 
+                     'Unknown';
+      primaryDisplayName = analysis.primaryDetection.display_name || 
+                          analysis.primaryDetection.name || 
+                          primaryClass;
+      primaryConfidence = analysis.primaryDetection.confidence || 0;
+      diseasePresent = primaryDisplayName !== 'Healthy' && 
+                       primaryDisplayName !== 'Unknown' && 
+                       !primaryDisplayName.toLowerCase().includes('healthy');
+    } else if (analysis.disease) {
+      primaryClass = analysis.disease.class || 
+                     analysis.disease.name || 
+                     'Unknown';
+      primaryDisplayName = analysis.disease.name || primaryClass;
+      primaryConfidence = analysis.disease.confidence || 0;
+      diseasePresent = analysis.disease.detected || false;
+      diseaseSeverity = analysis.disease.severity || 'none';
+    } else if (compatAnalysis.primary_detection) {
+      primaryClass = compatAnalysis.primary_detection.class || 
+                     compatAnalysis.primary_detection.class_name || 
+                     'Unknown';
+      primaryDisplayName = compatAnalysis.primary_detection.display_name || 
+                          compatAnalysis.primary_detection.name || 
+                          primaryClass;
+      primaryConfidence = compatAnalysis.primary_detection.confidence || 0;
+      diseasePresent = primaryDisplayName !== 'Healthy' && 
+                       primaryDisplayName !== 'Unknown';
+    }
+    
+    // Extract maturity info
+    const maturityClass = analysis.maturity?.class || 
+                          compatAnalysis.maturity_class || 
+                          compatAnalysis.maturity?.class ||
+                          'Unknown';
+    const maturityConfidence = analysis.maturity?.confidence || 
+                               compatAnalysis.maturity?.confidence || 
+                               0;
+    
+    // Extract health score
+    const healthScore = analysis.healthScore || 
+                        compatAnalysis.health_score || 
+                        compatAnalysis.healthScore ||
+                        0;
+    
+    // Determine health status based on health score
+    let healthStatus = 'Good';
+    if (healthScore >= 80) healthStatus = 'Excellent';
+    else if (healthScore >= 70) healthStatus = 'Good';
+    else if (healthScore >= 50) healthStatus = 'Fair';
+    else healthStatus = 'Poor';
+    
+    // Extract bark condition
+    const barkCondition = compatAnalysis.bark_condition || 
+                          compatAnalysis.barkCondition || 
+                          analysis.bark_condition ||
+                          (healthStatus === 'Good' ? 'Good' : 'Fair');
+    
+    // Extract texture
+    const barkTexture = compatAnalysis.bark_texture || 
+                        compatAnalysis.barkTexture || 
+                        compatAnalysis.trunkAnalysis?.texture ||
+                        analysis.bark_texture ||
+                        (maturityClass.toLowerCase() === 'immature' ? 'Smooth' : 'Rough');
+    
+    // Extract color
+    const barkColor = compatAnalysis.bark_color || 
+                      compatAnalysis.barkColor || 
+                      compatAnalysis.trunkAnalysis?.color ||
+                      analysis.bark_color ||
+                      'Brown';
+    
+    // Extract age estimate
+    const ageEstimate = analysis.ageEstimate || 
+                        analysis.age_estimation?.estimated_years || 
+                        compatAnalysis.age_estimate ||
+                        compatAnalysis.age_estimation?.estimated_years ||
+                        null;
+    
+    // Get all detections
+    const detections = analysis.allDetections || 
+                       analysis.all_detections || 
+                       compatAnalysis.all_detections || 
+                       compatAnalysis.detections ||
+                       [];
+    
+    // Get care recommendations
+    const careRecommendations = analysis.careRecommendations || 
+                                analysis.care_recommendations || 
+                                compatAnalysis.care_recommendations || 
+                                fullAnalysis.care_recommendations ||
+                                [];
+    
+    // Get tapability assessment
+    const tapability = compatAnalysis.tapability_assessment || 
+                       compatAnalysis.tappability_assessment || 
+                       compatAnalysis.tapabilityAssessment || 
+                       compatAnalysis.tappabilityAssessment || 
+                       fullAnalysis.tapability_assessment ||
+                       {};
+    
+    // Get disease details
+    const disease = analysis.disease || 
+                    compatAnalysis.disease || 
+                    fullAnalysis.disease ||
+                    {};
+    
+    // Get visual analysis
+    const visualAnalysis = compatAnalysis.visual_analysis || 
+                           fullAnalysis.visual_analysis ||
+                           {};
+    
+    // Get color analysis
+    const colorAnalysis = compatAnalysis.color_analysis || 
+                          analysis.colorAnalysis ||
+                          visualAnalysis.color ||
+                          {};
+    
+    // Get texture analysis
+    const textureAnalysis = compatAnalysis.texture_analysis || 
+                            analysis.textureAnalysis ||
+                            visualAnalysis.texture ||
+                            {};
+    
+    // Get model info
+    const modelInfo = analysis.model_info || 
+                      compatAnalysis.model_info || 
+                      fullAnalysis.model_info ||
+                      {};
+    
+    // Get image metadata
+    const imageMetadata = analysis.image_metadata || 
+                          compatAnalysis.image_metadata || 
+                          fullAnalysis.image_metadata ||
+                          {
+                            filename: analysis.imageUrl?.split('/').pop() || 'trunk-image.jpg',
+                            file_size_kb: Math.round(analysis.fullAnalysis?.image_metadata?.fileSize || 0),
+                            analyzed_at: analysis.createdAt
+                          };
+    
+    // Get age estimation details
+    const ageEstimation = analysis.age_estimation || 
+                          compatAnalysis.age_estimation || 
+                          fullAnalysis.age_estimation ||
+                          null;
+    
+    // Get lesion analysis
+    const lesions = visualAnalysis.lesions || {};
+    
+    // Format for frontend (matches AnalysisDetails.jsx expectations)
+    const formattedAnalysis = {
+      _id: analysis._id,
+      id: analysis._id,
+      type: 'Trunks',
+      imageUrl: analysis.imageUrl,
+      image: analysis.imageUrl,
+      createdAt: analysis.createdAt,
+      status: 'Completed',
+      confidence: primaryConfidence,
+      
+      // Health metrics
+      healthStatus: healthStatus,
+      healthScore: healthScore,
+      
+      // Physical metrics
+      diameter: analysis.diameter || 'N/A',
+      barkCondition: barkCondition,
+      barkTexture: barkTexture,
+      barkColor: barkColor,
+      
+      // Disease info
+      diseasePresent: diseasePresent,
+      diseaseType: primaryDisplayName,
+      diseaseName: primaryDisplayName,
+      diseaseConfidence: primaryConfidence,
+      diseaseSeverity: diseaseSeverity,
+      diseaseDescription: disease.description || '',
+      diseaseSymptoms: disease.symptoms || [],
+      diseaseTreatment: disease.treatment || '',
+      diseaseLatexImpact: disease.latex_impact || '',
+      
+      // Maturity info
+      maturity: maturityClass,
+      maturityConfidence: maturityConfidence,
+      ageEstimate: ageEstimate,
+      
+      // Age estimation details
+      ageEstimation: ageEstimation,
+      
+      // Detection counts
+      woundsDetected: detections.length || 0,
+      detectionCount: detections.length || 0,
+      detections: detections.slice(0, 10).map(d => ({
+        class: d.class || d.class_name || d.display_name || 'Unknown',
+        confidence: d.confidence || 0,
+        bbox: d.bbox || []
+      })),
+      
+      // Tapability
+      tapabilityScore: tapability.score || tapability.tapability_score || healthScore,
+      isTappable: tapability.isTappable || (healthScore >= 60 && maturityClass.toLowerCase() !== 'immature'),
+      tapabilityRecommendation: tapability.recommendation || tapability.reason || 
+                               (healthScore >= 60 ? 'Suitable for tapping' : 'Not recommended for tapping'),
+      tapabilityStatus: tapability.status || (healthScore >= 60 ? 'Tappable' : 'Not Tappable'),
+      
+      // Care recommendations
+      careRecommendations: careRecommendations.map(rec => {
+        if (typeof rec === 'string') return rec;
+        return rec.action || rec.description || 'Monitor tree condition';
+      }),
+      detailedCareRecommendations: careRecommendations,
+      
+      // Visual analysis
+      visualAnalysis: visualAnalysis,
+      colorAnalysis: colorAnalysis,
+      textureAnalysis: textureAnalysis,
+      lesions: lesions,
+      
+      // Tree info
+      treeProfileId: analysis.treeProfileId || compatAnalysis.treeProfileId || null,
+      treeID: analysis.treeID || compatAnalysis.treeID || null,
+      treeSnapshot: analysis.treeSnapshot || compatAnalysis.tree || null,
+      
+      // Model info
+      mlModelUsed: analysis.mlModelUsed !== false,
+      modelInfo: modelInfo,
+      
+      // Metadata
+      imageMetadata: imageMetadata,
+      processingTime: analysis.processingTime || fullAnalysis.processingTime || 'N/A',
+      
+      // Compatibility fields for older frontend
+      treeIdentification: compatAnalysis.treeIdentification || {},
+      trunkAnalysis: compatAnalysis.trunkAnalysis || {},
+      tappabilityAssessment: tapability,
+      diseaseDetection: compatAnalysis.diseaseDetection || [],
+      
+      // Detailed results for renderTrunksResults() - THIS IS WHAT AnalysisDetails.jsx USES
+      result: {
+        healthStatus: healthStatus,
+        healthScore: healthScore,
+        diameter: analysis.diameter || 'N/A',
+        barkCondition: barkCondition,
+        barkTexture: barkTexture,
+        barkColor: barkColor,
+        woundsDetected: detections.length || 0,
+        diseasePresent: diseasePresent,
+        diseaseType: primaryDisplayName,
+        diseaseSeverity: diseaseSeverity,
+        maturity: maturityClass,
+        ageEstimate: ageEstimate,
+        tapabilityScore: tapability.score || tapability.tapability_score || healthScore,
+        isTappable: tapability.isTappable || (healthScore >= 60 && maturityClass.toLowerCase() !== 'immature'),
+        careRecommendations: careRecommendations.slice(0, 3).map(rec => 
+          typeof rec === 'string' ? rec : (rec.action || rec.description || 'Monitor tree condition')
+        )
+      },
+      
+      // Full data for detailed views
+      fullAnalysis: {
+        ...compatAnalysis,
+        primaryDetection: {
+          class: primaryClass,
+          display_name: primaryDisplayName,
+          confidence: primaryConfidence
+        },
+        detections: detections,
+        careRecommendations: careRecommendations,
+        maturity: {
+          class: maturityClass,
+          confidence: maturityConfidence
+        },
+        tapabilityAssessment: tapability,
+        modelInfo: modelInfo
+      }
+    };
+    
+    // Return in the format expected by AnalysisDetails.jsx
+    res.status(200).json({
+      success: true,
+      data: formattedAnalysis,
+      analysis: formattedAnalysis, // Include both formats for compatibility
+      message: 'Analysis retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Get trunk analysis error:', error);
+    console.error('Error stack:', error.stack);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching analysis details',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+
 /**
  * @desc    Get trunk analysis statistics for user
  * @route   GET /api/v1/trunks/stats
@@ -1027,54 +1491,6 @@ exports.getAnalysisStats = async (req, res) => {
   }
 };
 
-/**
- * @desc    Get specific trunk analysis by ID
- * @route   GET /api/v1/trunks/analysis/:id
- * @access  Private
- */
-exports.getAnalysisById = async (req, res) => {
-  try {
-    const userId = req.user?.id || req.user?._id;
-    const { id } = req.params;
-    
-    const analysis = await TrunkAnalysis.findOne({
-      _id: id,
-      userId: userId
-    });
-    
-    if (!analysis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Analysis not found'
-      });
-    }
-    
-    // Format the analysis for frontend/mobile
-    const formattedAnalysis = buildApiAnalysisFromStored(analysis.toObject());
-    
-    // Ensure primary detection is available
-    if (!formattedAnalysis.primaryDetection && formattedAnalysis.disease) {
-      formattedAnalysis.primaryDetection = {
-        class: formattedAnalysis.disease.class || formattedAnalysis.disease.name,
-        display_name: formattedAnalysis.disease.name,
-        confidence: formattedAnalysis.disease.confidence,
-        health_status: formattedAnalysis.disease.detected ? 'diseased' : 'healthy'
-      };
-    }
-    
-    res.status(200).json({
-      success: true,
-      data: formattedAnalysis
-    });
-  } catch (error) {
-    console.error('❌ Get analysis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching analysis',
-      error: error.message
-    });
-  }
-};
 
 /**
  * @desc    Delete a specific analysis

@@ -1,6 +1,20 @@
 // RubberSense/backend/controllers/ManageUser.js
 const User = require('../models/User');
 
+// Helper function to get reason message
+const getDeactivationReasonMessage = (reason, customText) => {
+  const messages = {
+    'inappropriate_content': 'Your account has been deactivated due to posting or sending messages that contain inappropriate or offensive words.',
+    'offensive_comments': 'Posting Offensive Comments - Your account was deactivated because you commented content that violates our community guidelines.',
+    'inappropriate_messages': 'Sending Inappropriate Messages - Your account has been disabled after sending messages that contain offensive, abusive, or harmful language.',
+    'community_violation': 'Violation of Community Standards - Your account was deactivated for behavior that does not follow our platform\'s rules and guidelines.',
+    'harassment': 'Harassment or Abusive Behavior - Your account has been suspended due to repeated inappropriate comments or messages toward other users.',
+    'other': customText || 'Your account has been deactivated. Please contact support for more information.'
+  };
+  
+  return messages[reason] || messages.other;
+};
+
 // Get ALL users
 exports.getAllUsers = async (req, res) => {
   try {
@@ -106,10 +120,12 @@ exports.getInactiveUsers = async (req, res) => {
   }
 };
 
-// Toggle user active/inactive status
+// Toggle user active/inactive status with reason
 exports.toggleUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
+    const { reason, reasonText } = req.body;
+    
     const user = await User.findById(id);
     
     if (!user) {
@@ -120,8 +136,28 @@ exports.toggleUserStatus = async (req, res) => {
     }
 
     const oldStatus = user.isActive;
-    user.isActive = !user.isActive;
+    
+    // If deactivating, save the reason
+    if (user.isActive) {
+      // Deactivating user
+      user.isActive = false;
+      user.deactivationReason = reason || 'other';
+      user.deactivationReasonText = reasonText || null;
+      user.deactivatedAt = new Date();
+      user.deactivatedBy = req.user.id; // The admin who deactivated
+    } else {
+      // Reactivating user - clear deactivation info
+      user.isActive = true;
+      user.deactivationReason = null;
+      user.deactivationReasonText = null;
+      user.deactivatedAt = null;
+      user.deactivatedBy = null;
+    }
+    
     await user.save();
+
+    // Get reason message for response
+    const reasonMessage = getDeactivationReasonMessage(user.deactivationReason, user.deactivationReasonText);
 
     res.status(200).json({
       success: true,
@@ -130,10 +166,44 @@ exports.toggleUserStatus = async (req, res) => {
       userId: user._id,
       name: user.name,
       email: user.email,
-      lastLogin: user.lastLogin
+      lastLogin: user.lastLogin,
+      deactivationReason: user.deactivationReason,
+      deactivationReasonMessage: !user.isActive ? reasonMessage : null
     });
   } catch (error) {
     console.error('❌ Error updating user status:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server Error' 
+    });
+  }
+};
+
+// Get deactivation reason for a specific user
+exports.getDeactivationReason = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id).select('isActive deactivationReason deactivationReasonText deactivatedAt deactivatedBy');
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    const reasonMessage = getDeactivationReasonMessage(user.deactivationReason, user.deactivationReasonText);
+
+    res.status(200).json({
+      success: true,
+      isActive: user.isActive,
+      deactivationReason: user.deactivationReason,
+      deactivationReasonMessage: !user.isActive ? reasonMessage : null,
+      deactivatedAt: user.deactivatedAt,
+      deactivatedBy: user.deactivatedBy
+    });
+  } catch (error) {
+    console.error('❌ Error getting deactivation reason:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server Error' 
@@ -181,7 +251,7 @@ exports.verifyUser = async (req, res) => {
   }
 };
 
-// Get user's current status (online/offline) - FIXED
+// Get user's current status (online/offline)
 exports.getUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -194,7 +264,7 @@ exports.getUserStatus = async (req, res) => {
       });
     }
 
-    // FIXED: Proper online status calculation
+    // Calculate online status
     let isOnline = false;
     if (user.lastLogin) {
       const lastLoginTime = new Date(user.lastLogin).getTime();
@@ -222,4 +292,3 @@ exports.getUserStatus = async (req, res) => {
     });
   }
 };
-

@@ -80,6 +80,40 @@ const ChevronRightIcon = ({ size = 16 }) => (
   </svg>
 );
 
+// ── Deactivation Reasons ─────────────────────────────────────────────────────
+const DEACTIVATION_REASONS = [
+  {
+    value: 'inappropriate_content',
+    label: 'Inappropriate Content',
+    message: 'Your account has been deactivated due to posting or sending messages that contain inappropriate or offensive words.'
+  },
+  {
+    value: 'offensive_comments',
+    label: 'Posting Offensive Comments',
+    message: 'Your account was deactivated because you commented content that violates our community guidelines.'
+  },
+  {
+    value: 'inappropriate_messages',
+    label: 'Sending Inappropriate Messages',
+    message: 'Your account has been disabled after sending messages that contain offensive, abusive, or harmful language.'
+  },
+  {
+    value: 'community_violation',
+    label: 'Violation of Community Standards',
+    message: 'Your account was deactivated for behavior that does not follow our platform\'s rules and guidelines.'
+  },
+  {
+    value: 'harassment',
+    label: 'Harassment or Abusive Behavior',
+    message: 'Your account has been suspended due to repeated inappropriate comments or messages toward other users.'
+  },
+  {
+    value: 'other',
+    label: 'Other Reason',
+    message: ''
+  }
+];
+
 // ── Global Styles ─────────────────────────────────────────────────────────────
 const globalStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -451,6 +485,12 @@ const UserList = () => {
   const [userOnlineStatus, setUserOnlineStatus] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  
+  // Deactivation modal states
+  const [showDeactivationModal, setShowDeactivationModal] = useState(false);
+  const [deactivatingUser, setDeactivatingUser] = useState(null);
+  const [deactivationReason, setDeactivationReason] = useState('');
+  const [customReasonText, setCustomReasonText] = useState('');
 
   const activityIntervalRef = useRef(null);
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
@@ -548,23 +588,121 @@ const UserList = () => {
 
   useEffect(() => { if (users.length > 0) updateOnlineStatus(); }, [users]);
 
-  const toggleUserStatus = async (userId, currentStatus) => {
+  const handleDeactivateWithReason = (user) => {
+    setDeactivatingUser(user);
+    setDeactivationReason('');
+    setCustomReasonText('');
+    setShowDeactivationModal(true);
+  };
+
+  const confirmDeactivation = async () => {
+    if (!deactivationReason) {
+      showNotification('Please select a deactivation reason', 'error');
+      return;
+    }
+
+    if (deactivationReason === 'other' && !customReasonText.trim()) {
+      showNotification('Please provide a reason for deactivation', 'error');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await axios.put(
-        `${API_BASE_URL}/api/v1/users/${userId}/toggle-status`, {},
+        `${API_BASE_URL}/api/v1/users/${deactivatingUser._id}/toggle-status`,
+        { 
+          reason: deactivationReason,
+          reasonText: deactivationReason === 'other' ? customReasonText.trim() : null
+        },
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
+
       if (response.data.success) {
         showNotification(response.data.message);
-        setUsers(prev => prev.map(u => u._id === userId ? { ...u, isActive: !currentStatus } : u));
-        if (selectedUser && selectedUser._id === userId) {
-          setSelectedUser(prev => ({ ...prev, isActive: !currentStatus }));
+        
+        // Update users list
+        setUsers(prev => prev.map(u => u._id === deactivatingUser._id ? { 
+          ...u, 
+          isActive: false,
+          deactivationReason: deactivationReason,
+          deactivationReasonMessage: response.data.deactivationReasonMessage
+        } : u));
+        
+        // Update filtered users if needed
+        setFilteredUsers(prev => prev.map(u => u._id === deactivatingUser._id ? { 
+          ...u, 
+          isActive: false,
+          deactivationReason: deactivationReason,
+          deactivationReasonMessage: response.data.deactivationReasonMessage
+        } : u));
+        
+        // Update selected user if modal is open
+        if (selectedUser && selectedUser._id === deactivatingUser._id) {
+          setSelectedUser(prev => ({ 
+            ...prev, 
+            isActive: false,
+            deactivationReason: deactivationReason,
+            deactivationReasonMessage: response.data.deactivationReasonMessage
+          }));
         }
+        
+        setShowDeactivationModal(false);
+        setDeactivatingUser(null);
       }
     } catch (error) {
-      console.error('Error toggling user status:', error);
-      showNotification('Failed to update user status', 'error');
+      console.error('Error deactivating user:', error);
+      showNotification('Failed to deactivate user', 'error');
+    }
+  };
+
+  const toggleUserStatus = async (userId, currentStatus) => {
+    if (currentStatus) {
+      // If currently active, show deactivation modal
+      const user = users.find(u => u._id === userId);
+      handleDeactivateWithReason(user);
+    } else {
+      // If currently inactive, reactivate without reason
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.put(
+          `${API_BASE_URL}/api/v1/users/${userId}/toggle-status`,
+          {}, // No reason needed for reactivation
+          { headers: { 'Authorization': `Bearer ${token}` } }
+        );
+        
+        if (response.data.success) {
+          showNotification('User reactivated successfully');
+          
+          // Update users list
+          setUsers(prev => prev.map(u => u._id === userId ? { 
+            ...u, 
+            isActive: true,
+            deactivationReason: null,
+            deactivationReasonMessage: null
+          } : u));
+          
+          // Update filtered users if needed
+          setFilteredUsers(prev => prev.map(u => u._id === userId ? { 
+            ...u, 
+            isActive: true,
+            deactivationReason: null,
+            deactivationReasonMessage: null
+          } : u));
+          
+          // Update selected user if modal is open
+          if (selectedUser && selectedUser._id === userId) {
+            setSelectedUser(prev => ({ 
+              ...prev, 
+              isActive: true,
+              deactivationReason: null,
+              deactivationReasonMessage: null
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error reactivating user:', error);
+        showNotification('Failed to reactivate user', 'error');
+      }
     }
   };
 
@@ -760,6 +898,27 @@ const UserList = () => {
                       </p>
                     </div>
                   </div>
+                  
+                  {/* Deactivation reason display for inactive users */}
+                  {!user.isActive && user.deactivationReason && (
+                    <div style={{ 
+                      marginTop: '12px', 
+                      padding: '12px', 
+                      background: '#fff3e0', 
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      color: '#e65100',
+                      border: '1px solid #ffe0b2'
+                    }}>
+                      <strong style={{ display: 'block', marginBottom: '6px' }}>Deactivation Reason:</strong>
+                      <div>
+                        {DEACTIVATION_REASONS.find(r => r.value === user.deactivationReason)?.message || 
+                         user.deactivationReasonMessage || 
+                         'Account deactivated'}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="ul-card-footer">
                     <div className="ul-card-tags">
                       <span className={`ul-badge ${user.isActive ? 'active-badge' : 'inactive-badge'}`}>
@@ -929,6 +1088,38 @@ const UserList = () => {
                       <span className="ul-detail-value">{formatDate(selectedUser.createdAt)}</span>
                     </div>
                   </div>
+
+                  {/* Deactivation Information Section */}
+                  {!selectedUser.isActive && selectedUser.deactivationReason && (
+                    <div className="ul-detail-section" style={{ background: '#fff3e0', border: '1px solid #ffe0b2' }}>
+                      <div className="ul-detail-section-title" style={{ color: '#e65100' }}>
+                        <XIcon size={12} /> Deactivation Information
+                      </div>
+                      <div className="ul-detail-row">
+                        <span className="ul-detail-label">Reason</span>
+                        <span className="ul-detail-value" style={{ color: '#e65100' }}>
+                          {DEACTIVATION_REASONS.find(r => r.value === selectedUser.deactivationReason)?.label || 'Other'}
+                        </span>
+                      </div>
+                      {selectedUser.deactivatedAt && (
+                        <div className="ul-detail-row">
+                          <span className="ul-detail-label">Deactivated On</span>
+                          <span className="ul-detail-value">{formatDate(selectedUser.deactivatedAt)}</span>
+                        </div>
+                      )}
+                      <div style={{ 
+                        marginTop: '12px',
+                        padding: '12px',
+                        background: 'white',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        lineHeight: '1.5'
+                      }}>
+                        {DEACTIVATION_REASONS.find(r => r.value === selectedUser.deactivationReason)?.message || 
+                         selectedUser.deactivationReasonMessage}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="ul-modal-footer">
@@ -947,6 +1138,162 @@ const UserList = () => {
                     <PowerIcon size={13} />{selectedUser.isActive ? 'Deactivate' : 'Activate'}
                   </button>
                   <button className="ul-btn ul-btn-reset" onClick={() => setModalVisible(false)}>Close</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Deactivation Reason Modal */}
+          {showDeactivationModal && deactivatingUser && (
+            <div className="ul-modal-overlay">
+              <div className="ul-modal" style={{ maxWidth: '500px' }}>
+                <div className="ul-modal-header">
+                  <h2 className="ul-modal-title">Deactivate User</h2>
+                  <button className="ul-modal-close" onClick={() => setShowDeactivationModal(false)}>
+                    <CloseIcon size={15} />
+                  </button>
+                </div>
+                <div className="ul-modal-divider" />
+                <div className="ul-modal-body">
+                  <div style={{ marginBottom: '24px' }}>
+                    <p style={{ 
+                      fontWeight: 'bold', 
+                      marginBottom: '8px',
+                      fontSize: '1.1rem'
+                    }}>
+                      Deactivating: {deactivatingUser.name}
+                    </p>
+                    <p style={{ 
+                      color: 'var(--grey-mid)', 
+                      fontSize: '0.9rem',
+                      background: '#f5f5f5',
+                      padding: '10px',
+                      borderRadius: '6px'
+                    }}>
+                      Please select a reason for deactivation. This message will be shown to the user when they try to log in.
+                    </p>
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '12px', 
+                      fontWeight: '600',
+                      color: 'var(--grey-dark)'
+                    }}>
+                      Deactivation Reason *
+                    </label>
+                    {DEACTIVATION_REASONS.map((reason) => (
+                      <div key={reason.value} style={{ 
+                        marginBottom: '15px',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        background: deactivationReason === reason.value ? '#e8f5e9' : 'transparent',
+                        border: deactivationReason === reason.value ? '2px solid var(--green-mid)' : '2px solid transparent',
+                        transition: 'all 0.2s'
+                      }}>
+                        <label style={{ 
+                          display: 'flex', 
+                          alignItems: 'flex-start', 
+                          gap: '12px', 
+                          cursor: 'pointer' 
+                        }}>
+                          <input
+                            type="radio"
+                            name="deactivationReason"
+                            value={reason.value}
+                            checked={deactivationReason === reason.value}
+                            onChange={(e) => setDeactivationReason(e.target.value)}
+                            style={{ 
+                              marginTop: '4px',
+                              width: '18px',
+                              height: '18px',
+                              cursor: 'pointer'
+                            }}
+                          />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              fontWeight: '600', 
+                              marginBottom: '6px',
+                              color: 'var(--grey-dark)'
+                            }}>
+                              {reason.label}
+                            </div>
+                            {reason.message && (
+                              <div style={{ 
+                                fontSize: '0.85rem', 
+                                color: 'var(--grey-mid)',
+                                lineHeight: '1.5'
+                              }}>
+                                {reason.message}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  {deactivationReason === 'other' && (
+                    <div style={{ marginBottom: '24px' }}>
+                      <label style={{ 
+                        display: 'block', 
+                        marginBottom: '8px', 
+                        fontWeight: '600',
+                        color: 'var(--grey-dark)'
+                      }}>
+                        Custom Reason *
+                      </label>
+                      <textarea
+                        className="ul-search-input"
+                        style={{ 
+                          width: '100%', 
+                          minHeight: '100px',
+                          padding: '12px',
+                          resize: 'vertical',
+                          fontSize: '0.9rem'
+                        }}
+                        placeholder="Please provide a detailed reason for deactivation..."
+                        value={customReasonText}
+                        onChange={(e) => setCustomReasonText(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ 
+                    background: '#fff3e0', 
+                    padding: '15px', 
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    color: '#e65100',
+                    marginBottom: '10px',
+                    border: '1px solid #ffe0b2'
+                  }}>
+                    <strong style={{ display: 'block', marginBottom: '6px' }}>⚠️ Important:</strong>
+                    The user will see this deactivation message when they attempt to log in. 
+                    Make sure the reason is clear and appropriate.
+                  </div>
+                </div>
+
+                <div className="ul-modal-footer">
+                  <button 
+                    className="ul-btn ul-btn-reset" 
+                    onClick={() => setShowDeactivationModal(false)}
+                    style={{ padding: '10px 20px' }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    className="ul-btn ul-btn-deactivate"
+                    onClick={confirmDeactivation}
+                    style={{ 
+                      padding: '10px 20px',
+                      background: '#c62828',
+                      color: 'white'
+                    }}
+                  >
+                    Deactivate User
+                  </button>
                 </div>
               </div>
             </div>

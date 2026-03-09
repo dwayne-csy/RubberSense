@@ -5,9 +5,7 @@ import Register from './Components/user/Register';
 import Home from './Components/User/Home.jsx';
 import Dashboard from './Components/Admin/Dashboard.jsx';
 import Profile from './Components/User/Profile.jsx';
-import AdminProfile from './Components/Admin/AdminProfile.jsx';
 import EditProfile from './Components/User/EditProfile.jsx';
-import AdminEditProfile from './Components/Admin/AdminEditProfile.jsx';
 import ForgotPassword from './Components/User/ForgotPassword.jsx';
 import ResetPassword from './Components/User/ResetPassword.jsx'; 
 import ChangePassword from './Components/User/ChangePassword.jsx';
@@ -39,7 +37,11 @@ import LandingAboutRubber from './Components/landingpage/LandingAboutRubber.jsx'
 import LandingContactUs from './Components/landingpage/LandingContactUs.jsx';
 import LandingChatbotWidget from './Components/landingpage/LandingChatbotWidget.jsx';
 import AnalysisLogs from './Components/Admin/AnalysisLogs.jsx';
-import AnalysisStatistics from './Components/Admin/AnalysisStatistics.jsx';
+import MarketPrice from './Components/Admin/MarketPrice.jsx';
+import AdminLatexDetection from  './Components/Admin/mldetection/AdminLatexDetection.jsx';
+import AdminLeafDetection from './Components/Admin/mldetection/AdminLeafDetection.jsx';
+import AdminTrunksDetection from './Components/Admin/mldetection/AdminTrunksDetection.jsx';
+import MLDetection from './Components/Admin/ML-Detection.jsx';
 
 
 function App() {
@@ -56,8 +58,6 @@ function App() {
         <Route path="/admin/dashboard" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/profile/edit" element={<EditProfile />} />
-        <Route path="/admin/profile" element={<AdminProfile />} />
-        <Route path="/admin/profile/edit" element={<AdminEditProfile />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/change-password" element={<ChangePassword />} />
@@ -90,8 +90,11 @@ function App() {
         <Route path="/landingcontact" element={<LandingContactUs />} />
         <Route path="/landingchatbot" element={<LandingChatbotWidget />} />
         <Route path="/admin/analysis-logs" element={<AnalysisLogs />} />
-        <Route path="/admin/analysis-stats" element={<AnalysisStatistics />} />
-        
+        <Route path="/admin/market-price" element={<MarketPrice />} />
+        <Route path="/admin/ml/latex" element={<AdminLatexDetection />} />
+        <Route path="/admin/ml/leaf" element={<AdminLeafDetection />} />
+        <Route path="/admin/ml/trunks" element={<AdminTrunksDetection />} />
+        <Route path="/admin/ml-detection" element={<MLDetection />} />
        
       </Routes>
     </Router>

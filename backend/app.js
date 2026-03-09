@@ -135,13 +135,15 @@ const manageUserRoutes = require('./routes/ManageUser');
 const uploadRoutes = require('./routes/uploadRoutes');
 const adminReportRoutes = require('./routes/adminReportRoutes');
 const notificationRoutes = require('./routes/Notification');
-const latexDetectionRoutes = require('./routes/latexDetectionRoutes');
+const latexDetectionRoutes = require('./routes/LatexDetectionRoutes');
 const leafRoutes = require('./routes/LeafDetectionRoutes');
 const trunksDetectionRoutes = require('./routes/TrunksDetectionRoutes');
 const treeRoutes = require('./routes/TreesRoutes');
 const marketRoutes = require('./routes/MarketRoutes');
 const groqChatbotRoutes = require('./routes/groqchatbotroute');
 const adminAnalysisRoutes = require('./routes/AdminAnalysisHistoryRoute');
+const adminMLRoutes = require('./routes/AdminMLRoutes');
+
 
 // ========== API ROUTES ==========
 app.use('/api/v1/users', userRoutes);
@@ -160,6 +162,7 @@ app.use('/api/v1/leaf', leafRoutes);
 app.use('/api/v1/trunks', trunksDetectionRoutes);
 app.use('/api/v1/trees', treeRoutes);
 app.use('/api/v1/market', marketRoutes);
+app.use('/api/v1/admin/ml', adminMLRoutes);
 // Mobile compatibility path
 app.use('/api/trees', treeRoutes);
 app.use('/api/market', marketRoutes);

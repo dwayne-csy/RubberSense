@@ -81,6 +81,8 @@ exports.registerUser = async (req, res) => {
 };
 
 // ========== LOGIN USER (LOCAL ONLY) ==========
+
+// ========== LOGIN USER (LOCAL ONLY) ==========
 exports.loginUser = async (req, res) => {
   try {
     console.log('🔐 Login attempt for:', req.body.email);
@@ -93,7 +95,18 @@ exports.loginUser = async (req, res) => {
     const user = await User.findOne({ email }).select('+password');
     if (!user) return res.status(401).json({ message: 'Invalid email or password' });
 
-    if (!user.isActive) return res.status(403).json({ message: 'Your account is inactive. Please contact support.' });
+    // Check if account is inactive and show deactivation reason
+    if (!user.isActive) {
+      const reasonMessage = getDeactivationReasonMessage(user.deactivationReason, user.deactivationReasonText);
+      return res.status(403).json({ 
+        success: false,
+        message: 'Your account is inactive',
+        deactivationReason: user.deactivationReason,
+        deactivationMessage: reasonMessage,
+        deactivatedAt: user.deactivatedAt
+      });
+    }
+
     if (!user.isVerified) return res.status(403).json({ message: 'Please verify your email first.' });
 
     const isPasswordMatched = await user.comparePassword(password);
@@ -118,6 +131,20 @@ exports.loginUser = async (req, res) => {
     console.error('❌ LOGIN ERROR:', error);
     res.status(500).json({ success: false, message: 'Login failed. Please try again.' });
   }
+};
+
+// Helper function for deactivation messages (add this at the bottom of the file, before module.exports)
+const getDeactivationReasonMessage = (reason, customText) => {
+  const messages = {
+    'inappropriate_content': 'Your account has been deactivated due to posting or sending messages that contain inappropriate or offensive words.',
+    'offensive_comments': 'Posting Offensive Comments - Your account was deactivated because you commented content that violates our community guidelines.',
+    'inappropriate_messages': 'Sending Inappropriate Messages - Your account has been disabled after sending messages that contain offensive, abusive, or harmful language.',
+    'community_violation': 'Violation of Community Standards - Your account was deactivated for behavior that does not follow our platform\'s rules and guidelines.',
+    'harassment': 'Harassment or Abusive Behavior - Your account has been suspended due to repeated inappropriate comments or messages toward other users.',
+    'other': customText || 'Your account has been deactivated. Please contact support for more information.'
+  };
+  
+  return messages[reason] || messages.other;
 };
 
 // ========== UPDATE PROFILE ==========

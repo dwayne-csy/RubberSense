@@ -251,16 +251,72 @@ const Login = () => {
         
         // Check if user is admin and redirect accordingly
         if (response.data.user.role === 'admin') {
-          navigate('/admin/dashboard');  // Redirect to admin dashboard
+          navigate('/admin/dashboard');
         } else {
-          navigate('/home');  // Redirect to regular user home
+          navigate('/home');
         }
       }
     } catch (error) {
       console.error('Login error:', error);
       
       if (error.response) {
-        setError(error.response.data.message || 'Login failed. Please try again.');
+        // Check if this is a deactivation error with a reason
+        if (error.response.status === 403 && error.response.data.deactivationMessage) {
+          // Format the deactivation message nicely
+          const deactivationMsg = error.response.data.deactivationMessage;
+          const deactivatedAt = error.response.data.deactivatedAt;
+          
+          setError(
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ 
+                fontWeight: 'bold', 
+                marginBottom: '12px', 
+                fontSize: '16px',
+                color: '#c33',
+                borderBottom: '1px solid #fcc',
+                paddingBottom: '8px'
+              }}>
+                ⚠️ Account Deactivated
+              </div>
+              <div style={{ 
+                marginBottom: '12px', 
+                color: '#c33',
+                lineHeight: '1.5',
+                fontSize: '14px'
+              }}>
+                {deactivationMsg}
+              </div>
+              {deactivatedAt && (
+                <div style={{ 
+                  fontSize: '13px', 
+                  color: '#999', 
+                  marginBottom: '12px',
+                  padding: '8px',
+                  background: '#f5f5f5',
+                  borderRadius: '4px'
+                }}>
+                  Deactivated on: {new Date(deactivatedAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </div>
+              )}
+              <div style={{ 
+                fontSize: '13px', 
+                marginTop: '8px', 
+                padding: '10px', 
+                background: '#fff3e0', 
+                borderRadius: '4px',
+                border: '1px solid #ffe0b2'
+              }}>
+                <strong>Need help?</strong> Please contact our support team if you believe this is a mistake or need assistance.
+              </div>
+            </div>
+          );
+        } else {
+          setError(error.response.data.message || 'Login failed. Please try again.');
+        }
       } else if (error.request) {
         setError('Cannot connect to server. Please check if backend is running on port 4001.');
       } else {
@@ -287,8 +343,7 @@ const Login = () => {
       console.log("🔥 Google login successful:", user.email);
 
       // Send the token to your backend
-      const { data } = await axios.post(`${API_BASE_URL}/api/v1/users/firebase/auth/google`, { idToken })
-;
+      const { data } = await axios.post(`${API_BASE_URL}/api/v1/users/firebase/auth/google`, { idToken });
 
       console.log("✅ Backend authentication successful");
 
@@ -355,8 +410,7 @@ const Login = () => {
       console.log("🔥 Facebook login successful:", user.email);
 
       // Send the token to your backend
-      const { data } = await axios.post(`${API_BASE_URL}/api/v1/users/firebase/auth/facebook`, { idToken })
-;
+      const { data } = await axios.post(`${API_BASE_URL}/api/v1/users/firebase/auth/facebook`, { idToken });
 
       console.log("✅ Backend authentication successful");
 

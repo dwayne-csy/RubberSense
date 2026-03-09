@@ -19,13 +19,14 @@ const LeftNavigationBar = () => {
 
   const getCurrentMenuKey = () => {
     const path = location.pathname;
-    if (path.includes('/analysis-statistics')) return 'analysis-statistics';
+    if (path.includes('/market-price')) return 'market-price';
     if (path.includes('/analysis-logs')) return 'analysis-logs';
     if (path.includes('/report-inbox') || path.includes('/user-reports')) return 'report-inbox';
     if (path.includes('/contact-messages')) return 'contact-inquiry';
     if (path.includes('/announcements')) return 'announcement';
     if (path.includes('/users')) return 'users';
     if (path.includes('/dashboard')) return 'dashboard';
+    if (path.includes('/ml-detection')) return 'ml-detection';
     return '';
   };
 
@@ -41,7 +42,8 @@ const LeftNavigationBar = () => {
     { key: 'report-inbox',        label: 'Report Inbox',        path: '/admin/user-reports',        icon: <InboxOutlined /> },
     { key: 'users',               label: 'Users',               path: '/admin/users',               icon: <UserOutlined /> },
     { key: 'analysis-logs',       label: 'Analysis Logs',       path: '/admin/analysis-logs',       icon: <FileTextOutlined /> },
-    { key: 'analysis-statistics', label: 'Analysis Statistics', path: '/admin/analysis-stats', icon: <BarChartOutlined /> },
+    { key: 'ml-detection',         label: 'ML Detection',        path: '/admin/ml-detection',        icon: <DashboardOutlined /> }, // New ML Detection button
+    { key: 'market-price',        label: 'Market Price',        path: '/admin/market-price',        icon: <span style={{ fontSize: '16px', fontWeight: 'bold' }}>₱</span> }, // Changed to peso sign
     { key: 'announcement',        label: 'Announcement',        path: '/admin/announcements',       icon: <NotificationOutlined /> },
     { key: 'contact-inquiry',     label: 'Contact Inquiry',     path: '/admin/contact-messages',    icon: <MessageOutlined /> },
   ];

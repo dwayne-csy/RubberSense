@@ -1,1230 +1,522 @@
-// RubberSense/web/src/Components/User/AnalysisHistory.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import {
-  Box,
-  Container,
-  Typography,
-  Paper,
-  Tabs,
-  Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
-  Chip,
-  IconButton,
-  Button,
-  TextField,
-  MenuItem,
-  Grid,
-  Card,
-  CardContent,
-  CircularProgress,
-  Alert,
-  Snackbar,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  FormControl,
-  InputLabel,
-  Select,
-  Tooltip,
-  Badge,
-  Avatar,
-  LinearProgress,
-  Stack,
-  Divider,
-  useTheme,
-  alpha
+  Box, Container, Typography, Card, CardActionArea,
+  Grid, CircularProgress, Alert, Chip,
+  Button, TextField, InputAdornment, MenuItem, Select,
 } from '@mui/material';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Visibility as ViewIcon,
-  Delete as DeleteIcon,
-  Download as DownloadIcon,
-  Share as ShareIcon,
-  FilterList as FilterIcon,
-  Clear as ClearIcon,
-  Refresh as RefreshIcon,
-  Image as ImageIcon,
-  Science as ScienceIcon,
-  Park as ParkIcon,
-  Timeline as TimelineIcon,
   Assessment as AssessmentIcon,
-  Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-  Close as CloseIcon
+  ScienceOutlined as ScienceIcon,
+  GrassOutlined as LeafIcon,
+  ParkOutlined as TreeIcon,
+  ArrowForwardIos as ArrowForwardIcon,
+  Search as SearchIcon,
+  Sort as SortIcon,
+  CalendarToday as CalendarIcon,
+  BarChart as BarChartIcon,
+  Timeline as TimelineIcon,
 } from '@mui/icons-material';
-import { styled } from '@mui/material/styles';
-import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
-} from 'recharts';
 
-// API Base URL - using environment variable or fallback to localhost:4001
+// Lucide icons matching Notifications page
+import {
+  Bell, RefreshCw, CheckCheck, Leaf, X, Calendar, Clock,
+  Loader2, AlertTriangle, FileText, ChevronRight, BarChart3, Activity
+} from 'lucide-react';
+
+import UserHeader from '../layouts/UserHeader';
+import UserFooter from '../layouts/UserFooter';
+
+/* ─────────────────────────────────────────────── */
+/* API Setup                                        */
+/* ─────────────────────────────────────────────── */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
-// Styled components
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  marginBottom: theme.spacing(3),
-  borderRadius: theme.spacing(2),
-  boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-}));
+/* ─────────────────────────────────────────────── */
+/* Theme palette                                    */
+/* ─────────────────────────────────────────────── */
+const COLORS = {
+  Latex:  { primary: '#00c853', bg: 'rgba(0,200,83,0.12)',  bgSolid: '#00c853' },
+  Leaf:   { primary: '#29b6f6', bg: 'rgba(41,182,246,0.12)', bgSolid: '#29b6f6' },
+  Trunks: { primary: '#ffa726', bg: 'rgba(255,167,38,0.12)', bgSolid: '#ffa726' },
+};
 
-const MetricCard = styled(Card)(({ theme }) => ({
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  borderRadius: theme.spacing(2),
-  transition: 'transform 0.2s',
-  '&:hover': {
-    transform: 'translateY(-4px)',
-    boxShadow: theme.shadows[8]
-  }
-}));
+/* ─────────────────────────────────────────────── */
+/* Circular confidence ring                        */
+/* ─────────────────────────────────────────────── */
+const ConfidenceRing = ({ value, color }) => (
+  <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+    <CircularProgress variant="determinate" value={100} size={44} thickness={4} sx={{ color: 'rgba(255,255,255,0.12)' }} />
+    <CircularProgress variant="determinate" value={value || 0} size={44} thickness={4}
+      sx={{ color, position: 'absolute', left: 0, '& .MuiCircularProgress-circle': { strokeLinecap: 'round' } }}
+    />
+    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Typography sx={{ fontWeight: 900, fontSize: '0.6rem', color: '#fff' }}>
+        {value ? `${Math.round(value)}%` : 'N/A'}
+      </Typography>
+    </Box>
+  </Box>
+);
 
-const AnalysisImage = styled('img')({
-  width: '60px',
-  height: '60px',
-  objectFit: 'cover',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  transition: 'transform 0.2s',
-  '&:hover': {
-    transform: 'scale(1.1)'
-  }
-});
-
-const StatusChip = styled(Chip)(({ theme, status }) => {
-  const colors = {
-    high: { bg: alpha(theme.palette.success.main, 0.1), color: theme.palette.success.main },
-    medium: { bg: alpha(theme.palette.warning.main, 0.1), color: theme.palette.warning.main },
-    low: { bg: alpha(theme.palette.error.main, 0.1), color: theme.palette.error.main },
-    healthy: { bg: alpha(theme.palette.success.main, 0.1), color: theme.palette.success.main },
-    diseased: { bg: alpha(theme.palette.error.main, 0.1), color: theme.palette.error.main }
-  };
-  const colorSet = colors[status] || colors.medium;
-  
-  return {
-    backgroundColor: colorSet.bg,
-    color: colorSet.color,
-    fontWeight: 600,
-    '& .MuiChip-label': {
-      px: 2
-    }
-  };
-});
-
-// Tab Panel Component
-function TabPanel({ children, value, index, ...other }) {
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`analysis-tabpanel-${index}`}
-      aria-labelledby={`analysis-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
+/* ─────────────────────────────────────────────── */
+/* Main Component                                  */
+/* ─────────────────────────────────────────────── */
 const AnalysisHistory = () => {
-  const theme = useTheme();
+  const [history, setHistory]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [tabValue, setTabValue]   = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest');
   const navigate = useNavigate();
-  
-  // State
-  const [tabValue, setTabValue] = useState(2); // Default to Trunk tab (index 2)
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [latexData, setLatexData] = useState([]);
-  const [leafData, setLeafData] = useState([]);
-  const [trunkData, setTrunkData] = useState([]);
-  
-  // Pagination states
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [totalCount, setTotalCount] = useState(0);
-  
-  // Filter states
-  const [filters, setFilters] = useState({
-    latex: { qualityClass: '', startDate: '', endDate: '' },
-    leaf: { disease: '', severity: '', startDate: '', endDate: '' },
-    trunk: { disease: '', maturity: '', minHealthScore: '', startDate: '', endDate: '' }
-  });
-  
-  const [showFilters, setShowFilters] = useState(false);
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, type: null });
-  const [batchDeleteDialog, setBatchDeleteDialog] = useState({ open: false, ids: [] });
-  const [selectedAnalyses, setSelectedAnalyses] = useState([]);
-  const [stats, setStats] = useState({
-    latex: null,
-    leaf: null,
-    trunk: null
-  });
-  
-  const [imagePreview, setImagePreview] = useState({ open: false, url: '' });
-  const [sortConfig, setSortConfig] = useState({ field: 'createdAt', order: 'desc' });
 
-  // Load data based on active tab
-  useEffect(() => {
-    fetchData();
-    fetchStats();
-  }, [tabValue, page, rowsPerPage, sortConfig]);
+  useEffect(() => { fetchAllHistory(); }, []);
 
-  // Fetch data function
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    
+  const fetchAllHistory = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/login'); return; }
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('No authentication token found');
-        setLoading(false);
-        return;
-      }
-
-      const queryParams = new URLSearchParams({
-        page: page + 1,
-        limit: rowsPerPage,
-        sortBy: sortConfig.field,
-        order: sortConfig.order,
-        ...getFiltersForTab()
-      });
-
-      let endpoint;
-      switch (tabValue) {
-        case 0:
-          endpoint = `${API_BASE_URL}/api/v1/latex/history?${queryParams}`;
-          break;
-        case 1:
-          endpoint = `${API_BASE_URL}/api/v1/leaf/history?${queryParams}`;
-          break;
-        case 2:
-          endpoint = `${API_BASE_URL}/api/v1/trunks/history?${queryParams}`;
-          console.log('Fetching trunks history from:', endpoint);
-          break;
-        default:
-          return;
-      }
-
-      const response = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Failed to fetch data: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('API Response for tab', tabValue, ':', result);
-      
-      switch (tabValue) {
-        case 0:
-          setLatexData(result.data?.history || result.data || []);
-          setTotalCount(result.data?.pagination?.total || result.pagination?.total || 0);
-          break;
-        case 1:
-          setLeafData(result.data?.history || result.data || []);
-          setTotalCount(result.data?.pagination?.total || result.pagination?.total || 0);
-          break;
-        case 2:
-          setTrunkData(result.data?.history || result.data || []);
-          setTotalCount(result.data?.pagination?.total || result.pagination?.total || 0);
-          console.log('Trunk data received:', result.data?.history || result.data || []);
-          break;
-      }
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError(err.message);
+      setLoading(true);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      const [latexRes, leafRes, trunksRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/v1/latex/history`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/v1/leaf/history`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE_URL}/api/v1/trunks/history`).catch(() => ({ data: [] })),
+      ]);
+      const extract = (res) => {
+        if (!res?.data) return [];
+        if (Array.isArray(res.data)) return res.data;
+        return res.data.data || res.data.analyses || res.data.history || [];
+      };
+      const combined = [
+        ...extract(latexRes).map(i => ({ ...i, type: 'Latex',  analysisId: i._id || i.id })),
+        ...extract(leafRes).map(i  => ({ ...i, type: 'Leaf',   analysisId: i._id || i.id })),
+        ...extract(trunksRes).map(i=> ({ ...i, type: 'Trunks', analysisId: i._id || i.id })),
+      ];
+      setHistory(combined);
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to fetch analysis history');
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch statistics
-  const fetchStats = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      const [latexStats, leafStats, trunkStats] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/v1/latex/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()).catch(() => ({ data: null })),
-        fetch(`${API_BASE_URL}/api/v1/leaf/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()).catch(() => ({ data: null })),
-        fetch(`${API_BASE_URL}/api/v1/trunks/stats`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).then(res => res.json()).catch(() => ({ data: null }))
-      ]);
+  const handleViewDetails = (analysis) => {
+    navigate(`/analysis/${analysis.type.toLowerCase()}/${analysis.analysisId}`, { state: { analysis } });
+  };
 
-      setStats({
-        latex: latexStats.data,
-        leaf: leafStats.data,
-        trunk: trunkStats.data
-      });
-    } catch (err) {
-      console.error('Error fetching stats:', err);
+  const fmt = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const fmtFull = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  const filteredHistory = useMemo(() => {
+    let r = history;
+    if (tabValue === 1) r = r.filter(h => h.type === 'Latex');
+    else if (tabValue === 2) r = r.filter(h => h.type === 'Leaf');
+    else if (tabValue === 3) r = r.filter(h => h.type === 'Trunks');
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase();
+      r = r.filter(h =>
+        (h.analysisId && h.analysisId.toLowerCase().includes(t)) ||
+        (h.quality && h.quality.toLowerCase().includes(t)) ||
+        (h.status && h.status.toLowerCase().includes(t))
+      );
     }
-  };
-
-  // Get filters for current tab
-  const getFiltersForTab = () => {
-    switch (tabValue) {
-      case 0:
-        return {
-          ...(filters.latex.qualityClass && { qualityClass: filters.latex.qualityClass }),
-          ...(filters.latex.startDate && { startDate: filters.latex.startDate }),
-          ...(filters.latex.endDate && { endDate: filters.latex.endDate })
-        };
-      case 1:
-        return {
-          ...(filters.leaf.disease && { disease: filters.leaf.disease }),
-          ...(filters.leaf.severity && { severity: filters.leaf.severity }),
-          ...(filters.leaf.startDate && { startDate: filters.leaf.startDate }),
-          ...(filters.leaf.endDate && { endDate: filters.leaf.endDate })
-        };
-      case 2:
-        return {
-          ...(filters.trunk.disease && { disease: filters.trunk.disease }),
-          ...(filters.trunk.maturity && { maturity: filters.trunk.maturity }),
-          ...(filters.trunk.minHealthScore && { minHealthScore: filters.trunk.minHealthScore }),
-          ...(filters.trunk.startDate && { startDate: filters.trunk.startDate }),
-          ...(filters.trunk.endDate && { endDate: filters.trunk.endDate })
-        };
-      default:
-        return {};
-    }
-  };
-
-  // Handle delete
-  const handleDelete = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      let endpoint;
-      
-      switch (deleteDialog.type) {
-        case 0:
-          endpoint = `${API_BASE_URL}/api/v1/latex/history/${deleteDialog.id}`;
-          break;
-        case 1:
-          endpoint = `${API_BASE_URL}/api/v1/leaf/history/${deleteDialog.id}`;
-          break;
-        case 2:
-          endpoint = `${API_BASE_URL}/api/v1/trunks/analysis/${deleteDialog.id}`;
-          break;
-      }
-
-      const response = await fetch(endpoint, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to delete analysis');
-
-      setSuccess('Analysis deleted successfully');
-      fetchData();
-      fetchStats();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setDeleteDialog({ open: false, id: null, type: null });
-    }
-  };
-
-  // Handle batch delete
-  const handleBatchDelete = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      let endpoint;
-      
-      switch (tabValue) {
-        case 0:
-          endpoint = `${API_BASE_URL}/api/v1/latex/history/batch`;
-          break;
-        case 1:
-          endpoint = `${API_BASE_URL}/api/v1/leaf/history/batch`;
-          break;
-        case 2:
-          endpoint = `${API_BASE_URL}/api/v1/trunks/history/batch`;
-          break;
-      }
-
-      const response = await fetch(endpoint, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ analysisIds: batchDeleteDialog.ids })
-      });
-
-      if (!response.ok) throw new Error('Failed to delete analyses');
-
-      setSuccess(`Successfully deleted ${batchDeleteDialog.ids.length} analyses`);
-      setSelectedAnalyses([]);
-      fetchData();
-      fetchStats();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBatchDeleteDialog({ open: false, ids: [] });
-    }
-  };
-
-  // Export data
-  const handleExport = () => {
-    const data = getCurrentTabData();
-    const csv = convertToCSV(data);
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `analysis_${new Date().toISOString()}.csv`;
-    a.click();
-  };
-
-  const convertToCSV = (data) => {
-    if (!data.length) return '';
-    
-    const headers = Object.keys(data[0]).filter(key => 
-      !['fullAnalysis', '__v', 'userId'].includes(key)
-    ).join(',');
-    
-    const rows = data.map(item => 
-      headers.split(',').map(key => 
-        JSON.stringify(item[key] || '').replace(/,/g, ';')
-      ).join(',')
-    ).join('\n');
-    
-    return `${headers}\n${rows}`;
-  };
-
-  // Render statistics cards
-  const renderStats = () => {
-    const currentStats = tabValue === 0 ? stats.latex : tabValue === 1 ? stats.leaf : stats.trunk;
-    
-    if (!currentStats) return null;
-
-    const metrics = tabValue === 0 ? [
-      { label: 'Total Analyses', value: currentStats.summary?.totalAnalyses || 0, icon: <AssessmentIcon /> },
-      { label: 'Avg Quality Score', value: `${(currentStats.summary?.avgQualityScore || 0).toFixed(1)}%`, icon: <ScienceIcon /> },
-      { label: 'Avg DRC', value: `${(currentStats.summary?.avgDryRubberContent || 0).toFixed(1)}%`, icon: <TimelineIcon /> },
-      { label: 'Contamination', value: currentStats.summary?.totalContaminationDetected || 0, icon: <WarningIcon /> }
-    ] : tabValue === 1 ? [
-      { label: 'Total Analyses', value: currentStats.summary?.totalAnalyses || 0, icon: <AssessmentIcon /> },
-      { label: 'Avg Confidence', value: `${(currentStats.summary?.avgConfidence || 0).toFixed(1)}%`, icon: <ScienceIcon /> },
-      { label: 'Avg Severity', value: (currentStats.summary?.avgSeverity || 0).toFixed(1), icon: <WarningIcon /> },
-      { label: 'Avg Spots', value: Math.round(currentStats.summary?.avgSpotsCount || 0), icon: <ParkIcon /> }
-    ] : [
-      { label: 'Total Analyses', value: currentStats.summary?.totalAnalyses || 0, icon: <AssessmentIcon /> },
-      { label: 'Avg Health Score', value: `${(currentStats.summary?.avgHealthScore || 0).toFixed(1)}%`, icon: <ScienceIcon /> },
-      { label: 'Avg Confidence', value: `${(currentStats.summary?.avgConfidence || 0).toFixed(1)}%`, icon: <TimelineIcon /> },
-      { label: 'Avg Age', value: `${Math.round(currentStats.summary?.avgAgeEstimate || 0)} years`, icon: <ParkIcon /> }
-    ];
-
-    return (
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        {metrics.map((metric, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <MetricCard>
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    <Typography color="textSecondary" gutterBottom variant="body2">
-                      {metric.label}
-                    </Typography>
-                    <Typography variant="h5" component="div" fontWeight="bold">
-                      {metric.value}
-                    </Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), color: theme.palette.primary.main }}>
-                    {metric.icon}
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </MetricCard>
-          </Grid>
-        ))}
-      </Grid>
+    return [...r].sort((a, b) => sortOrder === 'newest'
+      ? new Date(b.createdAt) - new Date(a.createdAt)
+      : new Date(a.createdAt) - new Date(b.createdAt)
     );
-  };
+  }, [history, tabValue, searchTerm, sortOrder]);
 
-  // Get current tab data
-  const getCurrentTabData = () => {
-    switch (tabValue) {
-      case 0: return latexData;
-      case 1: return leafData;
-      case 2: return trunkData;
-      default: return [];
-    }
-  };
+  /* stats for hero */
+  const totalScans   = history.length;
+  const latestDate   = history.length ? fmt(history.reduce((a, b) => new Date(a.createdAt) > new Date(b.createdAt) ? a : b).createdAt) : '—';
+  const typeCounts   = { Latex: 0, Leaf: 0, Trunks: 0 };
+  history.forEach(h => { if (typeCounts[h.type] !== undefined) typeCounts[h.type]++; });
+  const topType      = Object.entries(typeCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || '—';
+  const tabCounts    = [history.length, typeCounts.Latex, typeCounts.Leaf, typeCounts.Trunks];
 
-  // Handle view details
-  const handleViewDetails = (id) => {
-    navigate(`/analysis/trunk/${id}`);
-  };
+  const TABS = [
+    { label: 'All',    val: 0, icon: null,                                       color: '#455a64' },
+    { label: 'Latex',  val: 1, icon: <ScienceIcon sx={{ fontSize: 17 }} />,      color: COLORS.Latex.primary },
+    { label: 'Leaf',   val: 2, icon: <LeafIcon sx={{ fontSize: 17 }} />,         color: COLORS.Leaf.primary  },
+    { label: 'Trunks', val: 3, icon: <TreeIcon sx={{ fontSize: 17 }} />,         color: COLORS.Trunks.primary},
+  ];
 
-  // Render latex table
-  const renderLatexTable = () => (
-    <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-      <Table>
-        <TableHead>
-          <TableRow sx={{ backgroundColor: theme.palette.grey[50] }}>
-            <TableCell padding="checkbox">
-              <input
-                type="checkbox"
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedAnalyses(latexData.map(d => d._id));
-                  } else {
-                    setSelectedAnalyses([]);
-                  }
-                }}
-                checked={selectedAnalyses.length === latexData.length && latexData.length > 0}
-              />
-            </TableCell>
-            <TableCell>Image</TableCell>
-            <TableCell>Date</TableCell>
-            <TableCell>Quality</TableCell>
-            <TableCell>Score</TableCell>
-            <TableCell>DRC (%)</TableCell>
-            <TableCell>Contamination</TableCell>
-            <TableCell>Color Score</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {latexData.map((row) => (
-            <TableRow key={row._id} hover>
-              <TableCell padding="checkbox">
-                <input
-                  type="checkbox"
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedAnalyses([...selectedAnalyses, row._id]);
-                    } else {
-                      setSelectedAnalyses(selectedAnalyses.filter(id => id !== row._id));
-                    }
-                  }}
-                  checked={selectedAnalyses.includes(row._id)}
-                />
-              </TableCell>
-              <TableCell>
-                <AnalysisImage 
-                  src={row.imageUrl} 
-                  alt="latex"
-                  onClick={() => setImagePreview({ open: true, url: row.imageUrl })}
-                />
-              </TableCell>
-              <TableCell>{format(new Date(row.createdAt), 'MMM dd, yyyy')}</TableCell>
-              <TableCell>
-                <StatusChip 
-                  label={row.qualityClass?.toUpperCase() || 'N/A'} 
-                  status={row.qualityClass?.toLowerCase()}
-                  size="small"
-                />
-              </TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={row.qualityScore || 0} 
-                    sx={{ 
-                      width: 60, 
-                      mr: 1,
-                      height: 8,
-                      borderRadius: 4,
-                      backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                      '& .MuiLinearProgress-bar': {
-                        borderRadius: 4,
-                        backgroundColor: 
-                          row.qualityScore >= 70 ? theme.palette.success.main :
-                          row.qualityScore >= 40 ? theme.palette.warning.main :
-                          theme.palette.error.main
-                      }
-                    }}
-                  />
-                  <Typography variant="body2">{row.qualityScore || 0}%</Typography>
-                </Box>
-              </TableCell>
-              <TableCell>{row.dryRubberContent?.toFixed(1) || 'N/A'}</TableCell>
-              <TableCell>
-                {row.contaminationDetected ? (
-                  <Chip 
-                    icon={<ErrorIcon />} 
-                    label="Detected" 
-                    size="small" 
-                    color="error"
-                    variant="outlined"
-                  />
-                ) : (
-                  <Chip 
-                    icon={<CheckCircleIcon />} 
-                    label="None" 
-                    size="small" 
-                    color="success"
-                    variant="outlined"
-                  />
-                )}
-              </TableCell>
-              <TableCell>{row.colorScore?.toFixed(1) || 'N/A'}</TableCell>
-              <TableCell>
-                <Tooltip title="View Details">
-                  <IconButton size="small" onClick={() => navigate(`/analysis/latex/${row._id}`)}>
-                    <ViewIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton 
-                    size="small" 
-                    color="error"
-                    onClick={() => setDeleteDialog({ open: true, id: row._id, type: 0 })}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Tooltip>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+  /* ───── Loading ───── */
+  if (loading) return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#f4f9f4' }}>
+      <UserHeader />
+      <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}>
+        <CircularProgress size={56} thickness={3} sx={{ color: '#2d6a4f' }} />
+      </motion.div>
+      <Typography sx={{ mt: 3, color: '#6b705c', fontWeight: 600, letterSpacing: 1 }}>Loading insights…</Typography>
+      <UserFooter />
+    </Box>
   );
 
-  // Render leaf table
-  const renderLeafTable = () => (
-    <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-      <Table>
-        <TableHead>
-          <TableRow sx={{ backgroundColor: theme.palette.grey[50] }}>
-            <TableCell padding="checkbox">
-              <input
-                type="checkbox"
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedAnalyses(leafData.map(d => d._id));
-                  } else {
-                    setSelectedAnalyses([]);
-                  }
-                }}
-                checked={selectedAnalyses.length === leafData.length && leafData.length > 0}
-              />
-            </TableCell>
-            <TableCell>Image</TableCell>
-            <TableCell>Date</TableCell>
-            <TableCell>Disease</TableCell>
-            <TableCell>Confidence</TableCell>
-            <TableCell>Severity</TableCell>
-            <TableCell>Spots</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {leafData.map((row) => (
-            <TableRow key={row._id} hover>
-              <TableCell padding="checkbox">
-                <input
-                  type="checkbox"
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedAnalyses([...selectedAnalyses, row._id]);
-                    } else {
-                      setSelectedAnalyses(selectedAnalyses.filter(id => id !== row._id));
-                    }
-                  }}
-                  checked={selectedAnalyses.includes(row._id)}
-                />
-              </TableCell>
-              <TableCell>
-                <AnalysisImage 
-                  src={row.imageUrl} 
-                  alt="leaf"
-                  onClick={() => setImagePreview({ open: true, url: row.imageUrl })}
-                />
-              </TableCell>
-              <TableCell>{format(new Date(row.createdAt), 'MMM dd, yyyy')}</TableCell>
-              <TableCell>
-                <Chip 
-                  label={row.diseaseDetected || 'Unknown'} 
-                  size="small"
-                  color={row.diseaseDetected?.toLowerCase().includes('healthy') ? 'success' : 'warning'}
-                />
-              </TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={row.confidence || 0} 
-                    sx={{ width: 60, mr: 1, height: 8, borderRadius: 4 }}
-                  />
-                  <Typography variant="body2">{row.confidence?.toFixed(1) || 0}%</Typography>
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Chip 
-                  label={row.severity?.toFixed(1) || 'N/A'} 
-                  size="small"
-                  color={
-                    row.severity >= 7 ? 'error' :
-                    row.severity >= 4 ? 'warning' : 'success'
-                  }
-                />
-              </TableCell>
-              <TableCell>{row.spotsCount || 0}</TableCell>
-              <TableCell>
-                <Tooltip title="View Details">
-                  <IconButton size="small" onClick={() => navigate(`/analysis/leaf/${row._id}`)}>
-                    <ViewIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton 
-                    size="small" 
-                    color="error"
-                    onClick={() => setDeleteDialog({ open: true, id: row._id, type: 1 })}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Tooltip>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-
-  // Render trunk table
-  const renderTrunkTable = () => (
-    <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-      <Table>
-        <TableHead>
-          <TableRow sx={{ backgroundColor: theme.palette.grey[50] }}>
-            <TableCell padding="checkbox">
-              <input
-                type="checkbox"
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedAnalyses(trunkData.map(d => d._id));
-                  } else {
-                    setSelectedAnalyses([]);
-                  }
-                }}
-                checked={selectedAnalyses.length === trunkData.length && trunkData.length > 0}
-              />
-            </TableCell>
-            <TableCell>Image</TableCell>
-            <TableCell>Date</TableCell>
-            <TableCell>Detection</TableCell>
-            <TableCell>Confidence</TableCell>
-            <TableCell>Health Score</TableCell>
-            <TableCell>Maturity</TableCell>
-            <TableCell>Age</TableCell>
-            <TableCell>Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {trunkData.map((row) => (
-            <TableRow key={row._id} hover>
-              <TableCell padding="checkbox">
-                <input
-                  type="checkbox"
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedAnalyses([...selectedAnalyses, row._id]);
-                    } else {
-                      setSelectedAnalyses(selectedAnalyses.filter(id => id !== row._id));
-                    }
-                  }}
-                  checked={selectedAnalyses.includes(row._id)}
-                />
-              </TableCell>
-              <TableCell>
-                <AnalysisImage 
-                  src={row.imageUrl} 
-                  alt="trunk"
-                  onClick={() => setImagePreview({ open: true, url: row.imageUrl })}
-                />
-              </TableCell>
-              <TableCell>{format(new Date(row.createdAt), 'MMM dd, yyyy')}</TableCell>
-              <TableCell>
-                <Chip 
-                  label={row.primaryDetection?.display_name || row.primaryDetection?.class || row.disease || 'Unknown'} 
-                  size="small"
-                  color={
-                    row.primaryDetection?.class === 'healthy' || row.disease === 'Healthy' ? 'success' :
-                    row.primaryDetection?.class?.includes('pest') ? 'error' : 'warning'
-                  }
-                />
-              </TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={row.primaryDetection?.confidence || row.confidence || 0} 
-                    sx={{ width: 60, mr: 1, height: 8, borderRadius: 4 }}
-                  />
-                  <Typography variant="body2">{(row.primaryDetection?.confidence || row.confidence || 0).toFixed(1)}%</Typography>
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={row.healthScore || 0} 
-                    sx={{ 
-                      width: 60, 
-                      mr: 1, 
-                      height: 8, 
-                      borderRadius: 4,
-                      backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                      '& .MuiLinearProgress-bar': {
-                        borderRadius: 4,
-                        backgroundColor: 
-                          row.healthScore >= 70 ? theme.palette.success.main :
-                          row.healthScore >= 40 ? theme.palette.warning.main :
-                          theme.palette.error.main
-                      }
-                    }}
-                  />
-                  <Typography variant="body2">{row.healthScore || 0}%</Typography>
-                </Box>
-              </TableCell>
-              <TableCell>
-                <Chip 
-                  label={row.maturity?.class || 'Unknown'} 
-                  size="small"
-                  color={row.maturity?.class?.toLowerCase() === 'mature' ? 'primary' : 'default'}
-                />
-              </TableCell>
-              <TableCell>{row.ageEstimate || row.age_estimate || 'N/A'}</TableCell>
-              <TableCell>
-                <Tooltip title="View Details">
-                  <IconButton size="small" onClick={() => handleViewDetails(row._id)}>
-                    <ViewIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Delete">
-                  <IconButton 
-                    size="small" 
-                    color="error"
-                    onClick={() => setDeleteDialog({ open: true, id: row._id, type: 2 })}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Tooltip>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-
+  /* ───── Page ───── */
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box>
-          <Typography variant="h4" gutterBottom fontWeight="bold">
-            Analysis History
-          </Typography>
-          <Typography variant="body1" color="textSecondary">
-            View and manage your rubber tree analysis history
-          </Typography>
-        </Box>
-        <Box>
-          <Tooltip title="Refresh">
-            <IconButton onClick={fetchData} sx={{ mr: 1 }}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Export">
-            <IconButton onClick={handleExport} sx={{ mr: 1 }}>
-              <DownloadIcon />
-            </IconButton>
-          </Tooltip>
-          {selectedAnalyses.length > 0 && (
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={<DeleteIcon />}
-              onClick={() => setBatchDeleteDialog({ open: true, ids: selectedAnalyses })}
-            >
-              Delete Selected ({selectedAnalyses.length})
-            </Button>
-          )}
-        </Box>
-      </Box>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+        @keyframes fadeIn    { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes slideUp   { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes spin      { to { transform: rotate(360deg) } }
+        @keyframes heroFloat { 0%,100% { transform: translateY(0px) rotate(-2deg) } 50% { transform: translateY(-8px) rotate(2deg) } }
+        *, *::before, *::after { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f4f9f4; }
+        ::-webkit-scrollbar-thumb { background: #b7e4c7; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #74c69d; }
+      `}</style>
 
-      {/* Tabs */}
-      <StyledPaper>
-        <Tabs 
-          value={tabValue} 
-          onChange={(e, v) => {
-            setTabValue(v);
-            setPage(0);
-            setSelectedAnalyses([]);
-          }}
-          variant="fullWidth"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab 
-            icon={<ScienceIcon />} 
-            label="LATEX ANALYSIS" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<ParkIcon />} 
-            label="LEAF ANALYSIS" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<TimelineIcon />} 
-            label="TRUNK ANALYSIS" 
-            iconPosition="start"
-          />
-        </Tabs>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f4f9f4', fontFamily: "'DM Sans', sans-serif" }}>
+        <UserHeader />
 
-        {/* Filter Toggle */}
-        <Box display="flex" justifyContent="flex-end" mt={2}>
-          <Button
-            startIcon={<FilterIcon />}
-            onClick={() => setShowFilters(!showFilters)}
-            variant="outlined"
-            size="small"
-          >
-            {showFilters ? 'Hide Filters' : 'Show Filters'}
-          </Button>
-        </Box>
+        {/* Hero Banner - EXACTLY like Notifications page */}
+        <div style={{
+          background: 'linear-gradient(135deg, #0d2818 0%, #1b4332 55%, #2d6a4f 100%)',
+          padding: '48px 24px 60px', position: 'relative', overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', right: '-40px', top: '-30px', width: '260px', height: '260px', borderRadius: '50%', background: 'rgba(82,183,136,0.08)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', right: '80px',  bottom: '-60px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(52,143,96,0.1)',   pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', left: '-20px',  bottom: '-40px', width: '140px', height: '140px', borderRadius: '50%', background: 'rgba(163,209,141,0.06)', pointerEvents: 'none' }} />
 
-        {/* Filters */}
-        {showFilters && (
-          <Box mt={2} p={2} bgcolor={alpha(theme.palette.primary.main, 0.02)} borderRadius={2}>
-            <Grid container spacing={2} alignItems="center">
-              {tabValue === 0 && (
-                <>
-                  <Grid item xs={12} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Quality Class</InputLabel>
-                      <Select
-                        value={filters.latex.qualityClass}
-                        onChange={(e) => setFilters({
-                          ...filters,
-                          latex: { ...filters.latex, qualityClass: e.target.value }
-                        })}
-                        label="Quality Class"
-                      >
-                        <MenuItem value="">All</MenuItem>
-                        <MenuItem value="High">High</MenuItem>
-                        <MenuItem value="Medium">Medium</MenuItem>
-                        <MenuItem value="Low">Low</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </>
-              )}
+          <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '18px' }}>
+              <div style={{
+                width: '58px', height: '58px', borderRadius: '16px',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: '1.5px solid rgba(255,255,255,0.15)',
+                animation: 'heroFloat 4s ease-in-out infinite',
+              }}>
+                <BarChart3 size={28} color="#74c69d" strokeWidth={1.75} />
+              </div>
+              <div>
+                <h1 style={{ fontSize: '28px', fontWeight: '700', color: 'white', margin: 0, fontFamily: "'Lora', serif" }}>
+                  Analysis History
+                </h1>
+                <p style={{ fontSize: '14px', color: '#74c69d', margin: '5px 0 0', letterSpacing: '0.2px' }}>
+                  Track quality, health, and maturity of your rubber tree plantations.
+                </p>
+              </div>
+            </div>
 
-              {tabValue === 1 && (
-                <>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Disease"
-                      value={filters.leaf.disease}
-                      onChange={(e) => setFilters({
-                        ...filters,
-                        leaf: { ...filters.leaf, disease: e.target.value }
-                      })}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Severity</InputLabel>
-                      <Select
-                        value={filters.leaf.severity}
-                        onChange={(e) => setFilters({
-                          ...filters,
-                          leaf: { ...filters.leaf, severity: e.target.value }
-                        })}
-                        label="Severity"
-                      >
-                        <MenuItem value="">All</MenuItem>
-                        <MenuItem value="Low">Low</MenuItem>
-                        <MenuItem value="Medium">Medium</MenuItem>
-                        <MenuItem value="High">High</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                </>
-              )}
+            {/* Stats + Actions */}
+            <div style={{ display: 'flex', gap: '12px', marginTop: '32px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                {[
+                  { icon: BarChartIcon,    value: totalScans,    label: 'Total Scans',   color: '#b7e4c7' },
+                  { icon: CalendarIcon,    value: latestDate,    label: 'Latest Scan',   color: '#ffd166' },
+                  { icon: Activity,        value: topType,       label: 'Top Category', color: '#74c69d' },
+                ].map(({ icon: Icon, value, label, color }) => (
+                  <div key={label} style={{
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '12px', padding: '14px 20px',
+                    display: 'flex', alignItems: 'center', gap: '12px', minWidth: '120px',
+                  }}>
+                    <Icon size={18} color={color} />
+                    <div>
+                      <div style={{ fontSize: '20px', fontWeight: '700', color: 'white', lineHeight: 1.1, fontFamily: "'Lora', serif" }}>{value}</div>
+                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginTop: '1px' }}>{label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-              {tabValue === 2 && (
-                <>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="Disease"
-                      value={filters.trunk.disease}
-                      onChange={(e) => setFilters({
-                        ...filters,
-                        trunk: { ...filters.trunk, disease: e.target.value }
-                      })}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Maturity</InputLabel>
-                      <Select
-                        value={filters.trunk.maturity}
-                        onChange={(e) => setFilters({
-                          ...filters,
-                          trunk: { ...filters.trunk, maturity: e.target.value }
-                        })}
-                        label="Maturity"
-                      >
-                        <MenuItem value="">All</MenuItem>
-                        <MenuItem value="Immature">Immature</MenuItem>
-                        <MenuItem value="Mature">Mature</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={12} sm={3}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      type="number"
-                      label="Min Health Score"
-                      value={filters.trunk.minHealthScore}
-                      onChange={(e) => setFilters({
-                        ...filters,
-                        trunk: { ...filters.trunk, minHealthScore: e.target.value }
-                      })}
-                      InputProps={{ inputProps: { min: 0, max: 100 } }}
-                    />
-                  </Grid>
-                </>
-              )}
-
-              <Grid item xs={12} sm={3}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  type="date"
-                  label="Start Date"
-                  value={filters[tabValue === 0 ? 'latex' : tabValue === 1 ? 'leaf' : 'trunk'].startDate}
-                  onChange={(e) => {
-                    const type = tabValue === 0 ? 'latex' : tabValue === 1 ? 'leaf' : 'trunk';
-                    setFilters({
-                      ...filters,
-                      [type]: { ...filters[type], startDate: e.target.value }
-                    });
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={3}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  type="date"
-                  label="End Date"
-                  value={filters[tabValue === 0 ? 'latex' : tabValue === 1 ? 'leaf' : 'trunk'].endDate}
-                  onChange={(e) => {
-                    const type = tabValue === 0 ? 'latex' : tabValue === 1 ? 'leaf' : 'trunk';
-                    setFilters({
-                      ...filters,
-                      [type]: { ...filters[type], endDate: e.target.value }
-                    });
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  variant="contained"
-                  onClick={fetchData}
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={fetchAllHistory}
                   disabled={loading}
-                >
-                  Apply Filters
-                </Button>
-                <Button
-                  startIcon={<ClearIcon />}
-                  onClick={() => {
-                    const type = tabValue === 0 ? 'latex' : tabValue === 1 ? 'leaf' : 'trunk';
-                    setFilters({
-                      ...filters,
-                      [type]: { qualityClass: '', disease: '', severity: '', maturity: '', minHealthScore: '', startDate: '', endDate: '' }
-                    });
+                  style={{
+                    padding: '10px 18px',
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    color: 'white', border: '1.5px solid rgba(255,255,255,0.2)',
+                    borderRadius: '10px', cursor: 'pointer',
+                    fontSize: '13px', fontWeight: '600',
+                    display: 'flex', alignItems: 'center', gap: '7px',
+                    fontFamily: "'DM Sans', sans-serif",
+                    opacity: loading ? 0.6 : 1,
+                    transition: 'all 0.2s',
                   }}
-                  sx={{ ml: 1 }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)'}
                 >
-                  Clear
-                </Button>
+                  <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+                  {loading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main content */}
+        <Box sx={{ flex: 1, pb: '120px', pt: '24px' }}>
+          <Container maxWidth="lg">
+
+            {/* Filter toolbar */}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <Box sx={{
+                display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 4,
+                bgcolor: 'white',
+                border: '1px solid #e0ede4',
+                borderRadius: '16px', p: 2,
+                boxShadow: '0 4px 24px rgba(27,67,50,0.08)',
+              }}>
+                <Box sx={{ display: 'flex', gap: 1, flex: 1, overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' } }}>
+                  {TABS.map(tab => {
+                    const active = tabValue === tab.val;
+                    return (
+                      <Box
+                        key={tab.val}
+                        onClick={() => setTabValue(tab.val)}
+                        sx={{
+                          display: 'flex', alignItems: 'center', gap: 0.8,
+                          px: 2, py: 1, borderRadius: '10px', cursor: 'pointer', whiteSpace: 'nowrap',
+                          bgcolor: active ? '#52b788' : 'transparent',
+                          color: active ? '#fff' : '#6b705c',
+                          border: active ? 'none' : '1px solid #e9f0eb',
+                          fontWeight: 700, fontSize: '0.88rem',
+                          transition: 'all 0.2s ease',
+                          boxShadow: active ? '0 4px 16px rgba(82,183,136,0.35)' : 'none',
+                          '&:hover': { color: '#fff', bgcolor: active ? '#52b788' : '#f0faf3' },
+                        }}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        <Box sx={{
+                          ml: 0.5, px: 0.9, py: 0.1, borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800,
+                          bgcolor: active ? 'rgba(255,255,255,0.25)' : 'rgba(82,183,136,0.15)',
+                          color: active ? '#fff' : '#2d6a4f',
+                        }}>
+                          {tabCounts[tab.val]}
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1.5, width: { xs: '100%', md: 'auto' } }}>
+                  <TextField
+                    size="small"
+                    placeholder="Search…"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><SearchIcon sx={{ color: '#a3b18a', fontSize: 18 }} /></InputAdornment>,
+                      sx: {
+                        borderRadius: '10px', bgcolor: '#f4f9f4',
+                        color: '#1b4332', fontSize: '0.9rem',
+                        '& fieldset': { borderColor: '#e9f0eb' },
+                        '&:hover fieldset': { borderColor: '#b7e4c7 !important' },
+                      }
+                    }}
+                    sx={{ minWidth: 180, input: { color: '#1b4332' } }}
+                  />
+                  <Select
+                    size="small"
+                    value={sortOrder}
+                    onChange={e => setSortOrder(e.target.value)}
+                    startAdornment={<InputAdornment position="start"><SortIcon sx={{ color: '#a3b18a', fontSize: 18 }} /></InputAdornment>}
+                    sx={{
+                      borderRadius: '10px', bgcolor: '#f4f9f4', color: '#1b4332', fontWeight: 600, minWidth: 155,
+                      '& fieldset': { borderColor: '#e9f0eb' },
+                      '& .MuiSvgIcon-root': { color: '#a3b18a' },
+                    }}
+                  >
+                    <MenuItem value="newest" sx={{ fontWeight: 600 }}>Newest First</MenuItem>
+                    <MenuItem value="oldest" sx={{ fontWeight: 600 }}>Oldest First</MenuItem>
+                  </Select>
+                </Box>
+              </Box>
+            </motion.div>
+
+            {/* Error */}
+            <AnimatePresence>
+              {error && (
+                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
+                  <Alert severity="error" sx={{ mb: 3, borderRadius: 2, bgcolor: 'rgba(244,67,54,0.1)', color: '#ef9a9a', border: '1px solid rgba(244,67,54,0.2)' }}>{error}</Alert>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Empty state */}
+            {filteredHistory.length === 0 ? (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <Box sx={{ py: 12, textAlign: 'center', bgcolor: 'white', borderRadius: '20px', border: '1px solid #e0ede4', boxShadow: '0 4px 24px rgba(27,67,50,0.08)' }}>
+                  <AssessmentIcon sx={{ fontSize: 72, color: 'rgba(45,106,79,0.15)', mb: 2 }} />
+                  <Typography variant="h5" sx={{ color: '#1b4332', fontWeight: 800, mb: 1, fontFamily: "'Lora', serif" }}>No Records Found</Typography>
+                  <Typography sx={{ color: '#6b705c', mb: 4, maxWidth: 380, overflow: 'hidden' }}>
+                    {searchTerm ? 'Try a different search term.' : "No analyses found for this category."}
+                  </Typography>
+                  {tabValue === 0 && !searchTerm && (
+                    <Link to="/home" style={{ textDecoration: 'none' }}>
+                      <Button variant="contained" sx={{
+                        bgcolor: '#2d6a4f', color: '#fff', fontWeight: 800, px: 4, py: 1.5, borderRadius: '12px',
+                        textTransform: 'none', fontSize: '0.95rem',
+                        boxShadow: '0 8px 24px rgba(45,106,79,0.35)',
+                        '&:hover': { bgcolor: '#1b4332', transform: 'translateY(-2px)', boxShadow: '0 12px 32px rgba(45,106,79,0.45)' },
+                        transition: 'all 0.2s'
+                      }}>Start New Analysis</Button>
+                    </Link>
+                  )}
+                </Box>
+              </motion.div>
+
+            ) : (
+              /* Card grid */
+              <Grid container spacing={3}>
+                <AnimatePresence>
+                  {filteredHistory.map((analysis, index) => {
+                    const c = COLORS[analysis.type] || { primary: '#9e9e9e', bg: 'rgba(158,158,158,0.1)' };
+                    const imgSrc = analysis.imageUrl || analysis.image
+                      ? (analysis.imageUrl || analysis.image).startsWith('http')
+                        ? (analysis.imageUrl || analysis.image)
+                        : `${API_BASE_URL}/${analysis.imageUrl || analysis.image}`
+                      : null;
+
+                    return (
+                      <Grid item xs={12} sm={6} md={4} key={`${analysis.type}-${analysis.analysisId}`} sx={{ display: 'flex' }}>
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.3, delay: index * 0.05 }}
+                          style={{ width: '100%' }}
+                        >
+                          <Card
+                            elevation={0}
+                            sx={{
+                              width: '100%',
+                              maxWidth: '100%',
+                              display: 'flex', flexDirection: 'column',
+                              borderRadius: '20px',
+                              bgcolor: 'white',
+                              border: '1px solid #e0ede4',
+                              boxShadow: '0 4px 24px rgba(27,67,50,0.08)',
+                              transition: 'all 0.3s cubic-bezier(0.25,0.8,0.25,1)',
+                              '&:hover': {
+                                transform: 'translateY(-6px)',
+                                border: `1px solid ${c.primary}55`,
+                                boxShadow: `0 20px 56px rgba(27,67,50,0.15), 0 0 0 1px ${c.primary}20`,
+                              }
+                            }}
+                          >
+                            <CardActionArea onClick={() => handleViewDetails(analysis)} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', height: '100%' }}>
+
+                              {/* Cover image */}
+                              <Box sx={{ position: 'relative', width: '100%', pt: '58%', overflow: 'hidden', flexShrink: 0, bgcolor: '#f4f9f4' }}>
+                                {imgSrc ? (
+                                  <img
+                                    src={imgSrc}
+                                    alt={`${analysis.type} analysis`}
+                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => { e.target.style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <Box sx={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f4f9f4' }}>
+                                    <AssessmentIcon sx={{ fontSize: 56, color: 'rgba(45,106,79,0.15)' }} />
+                                  </Box>
+                                )}
+
+                                <Box sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.5) 100%)' }} />
+
+                                {/* type badge top-left */}
+                                <Box sx={{
+                                  position: 'absolute', top: 14, left: 14,
+                                  display: 'flex', alignItems: 'center', gap: 0.8,
+                                  bgcolor: 'rgba(255,255,255,0.95)',
+                                  border: `1px solid ${c.primary}40`,
+                                  borderRadius: '8px', px: 1.2, py: 0.5,
+                                }}>
+                                  <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: c.primary, boxShadow: `0 0 6px ${c.primary}` }} />
+                                  <Typography sx={{ color: '#1b4332', fontWeight: 800, fontSize: '0.75rem', letterSpacing: 0.5 }}>
+                                    {analysis.type}
+                                  </Typography>
+                                </Box>
+
+                                {/* confidence ring top-right */}
+                                {analysis.confidence && (
+                                  <Box sx={{ position: 'absolute', top: 12, right: 14 }}>
+                                    <ConfidenceRing value={analysis.confidence} color={c.primary} />
+                                  </Box>
+                                )}
+
+                                {/* date bottom-left on image */}
+                                <Typography sx={{ position: 'absolute', bottom: 10, left: 14, color: 'rgba(255,255,255,0.85)', fontSize: '0.72rem', fontWeight: 600, letterSpacing: 0.5, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                                  {fmtFull(analysis.createdAt)}
+                                </Typography>
+                              </Box>
+
+                              {/* Card body */}
+                              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2.5, gap: 1.5 }}>
+
+                                {/* Title + status */}
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+                                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#1b4332', lineHeight: 1.2, fontFamily: "'Lora', serif" }}>
+                                    {analysis.type} Analysis
+                                  </Typography>
+                                  <Chip
+                                    label={analysis.status || 'Completed'}
+                                    size="small"
+                                    icon={<CheckCircleIcon sx={{ fontSize: '13px !important', color: `${c.primary} !important` }} />}
+                                    sx={{ bgcolor: c.bg, color: c.primary, fontWeight: 700, fontSize: '0.68rem', height: 22, flexShrink: 0, '& .MuiChip-label': { px: 1 } }}
+                                  />
+                                </Box>
+
+                                {/* quality chip */}
+                                {analysis.quality && (
+                                  <Box>
+                                    <Chip
+                                      label={analysis.quality}
+                                      size="small"
+                                      sx={{ bgcolor: '#f4f9f4', color: '#2d6a4f', border: '1px solid #b7e4c7', fontWeight: 700, fontSize: '0.7rem', height: 22 }}
+                                    />
+                                  </Box>
+                                )}
+
+                                {/* insight quote */}
+                                  <Box sx={{ flex: 1, pl: 1.5, borderLeft: `2px solid ${c.primary}40` }}>
+                                  <Typography sx={{ color: '#6b705c', fontSize: '0.82rem', fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.5 }}>
+                                    {analysis.result?.recommendation || analysis.result?.primaryDiagnose || analysis.result?.qualityClass || 'Standard analysis recorded.'}
+                                  </Typography>
+                                </Box>
+
+                                {/* footer */}
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pt: 1.5, borderTop: '1px solid #e9f0eb', mt: 'auto' }}>
+                                  <Typography sx={{ color: '#a3b18a', fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 600 }}>
+                                    {(analysis._id || analysis.analysisId || '').substring(0, 10)}
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: c.primary, fontWeight: 800, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                    View Report <ArrowForwardIcon sx={{ fontSize: 11 }} />
+                                  </Box>
+                                </Box>
+                              </Box>
+                            </CardActionArea>
+                          </Card>
+                        </motion.div>
+                      </Grid>
+                    );
+                  })}
+                </AnimatePresence>
               </Grid>
-            </Grid>
-          </Box>
-        )}
-      </StyledPaper>
-
-      {/* Statistics */}
-      {renderStats()}
-
-      {/* Loading State */}
-      {loading && (
-        <Box display="flex" justifyContent="center" my={4}>
-          <CircularProgress />
+            )}
+          </Container>
         </Box>
-      )}
 
-      {/* Error State */}
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Success State */}
-      {success && (
-        <Snackbar
-          open={!!success}
-          autoHideDuration={6000}
-          onClose={() => setSuccess(null)}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert severity="success" onClose={() => setSuccess(null)}>
-            {success}
-          </Alert>
-        </Snackbar>
-      )}
-
-      {/* Tab Panels */}
-      <TabPanel value={tabValue} index={0}>
-        {renderLatexTable()}
-      </TabPanel>
-      <TabPanel value={tabValue} index={1}>
-        {renderLeafTable()}
-      </TabPanel>
-      <TabPanel value={tabValue} index={2}>
-        {renderTrunkTable()}
-      </TabPanel>
-
-      {/* Pagination */}
-      <Box display="flex" justifyContent="flex-end" mt={2}>
-        <TablePagination
-          component="div"
-          count={totalCount}
-          page={page}
-          onPageChange={(e, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[5, 10, 25, 50]}
-        />
-      </Box>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, id: null, type: null })}
-      >
-        <DialogTitle>Delete Analysis</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete this analysis? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, id: null, type: null })}>
-            Cancel
-          </Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Batch Delete Confirmation Dialog */}
-      <Dialog
-        open={batchDeleteDialog.open}
-        onClose={() => setBatchDeleteDialog({ open: false, ids: [] })}
-      >
-        <DialogTitle>Delete Multiple Analyses</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete {batchDeleteDialog.ids.length} selected analyses? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setBatchDeleteDialog({ open: false, ids: [] })}>
-            Cancel
-          </Button>
-          <Button onClick={handleBatchDelete} color="error" variant="contained">
-            Delete All
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Image Preview Dialog */}
-      <Dialog
-        open={imagePreview.open}
-        onClose={() => setImagePreview({ open: false, url: '' })}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogContent>
-          <Box sx={{ position: 'relative' }}>
-            <IconButton
-              onClick={() => setImagePreview({ open: false, url: '' })}
-              sx={{ position: 'absolute', top: 0, right: 0, bgcolor: 'rgba(0,0,0,0.5)', color: 'white' }}
-            >
-              <CloseIcon />
-            </IconButton>
-            <img 
-              src={imagePreview.url} 
-              alt="Preview" 
-              style={{ width: '100%', height: 'auto', borderRadius: '8px' }} 
-            />
-          </Box>
-        </DialogContent>
-      </Dialog>
-    </Container>
+        <UserFooter />
+      </div>
+    </>
   );
 };
 
 export default AnalysisHistory;
+
+

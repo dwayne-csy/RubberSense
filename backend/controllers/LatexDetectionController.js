@@ -610,11 +610,29 @@ exports.getAnalysisHistory = async (req, res) => {
       .sort({ [sortBy]: order === 'desc' ? -1 : 1 })
       .skip(skip)
       .limit(limitNum)
-      .select('-fullAnalysis'); // Exclude full analysis data to keep response size manageable
+      .lean(); // Use lean() for better performance
+    
+    // Format analyses for frontend
+    const formattedAnalyses = analyses.map(analysis => ({
+      _id: analysis._id,
+      id: analysis._id,
+      imageUrl: analysis.imageUrl,
+      image: analysis.imageUrl,
+      createdAt: analysis.createdAt,
+      status: 'Completed',
+      confidence: analysis.qualityScore || 0,
+      quality: analysis.qualityClass || 'Standard',
+      purity: analysis.dryRubberContent || 0,
+      moisture: analysis.dryRubberContent ? (100 - analysis.dryRubberContent) : 0,
+      drc: analysis.dryRubberContent || 0,
+      contaminationLevel: analysis.contaminationDetected ? 'Medium' : 'Low',
+      detectedParticles: analysis.impuritiesDetected?.length || 0
+    }));
     
     res.status(200).json({
       success: true,
-      data: analyses,
+      data: formattedAnalyses,
+      analyses: formattedAnalyses, // Include both formats for compatibility
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -630,6 +648,161 @@ exports.getAnalysisHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching history',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get single latex analysis by ID
+// @route   GET /api/v1/latex/analysis/:analysisId
+// @access  Private
+exports.getAnalysisById = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { analysisId } = req.params;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+    
+    // Find the analysis and ensure it belongs to the user
+    const analysis = await LatexAnalysis.findOne({
+      _id: analysisId,
+      userId: userId
+    }).lean();
+    
+    if (!analysis) {
+      return res.status(404).json({
+        success: false,
+        message: 'Analysis not found'
+      });
+    }
+    
+    // Extract data from fullAnalysis if available
+    const fullAnalysis = analysis.fullAnalysis || {};
+    const latexAnalysis = fullAnalysis.latex_analysis || {};
+    const contamination = latexAnalysis.contamination || {};
+    const colorAnalysis = latexAnalysis.color_analysis || {};
+    const quantityEstimation = latexAnalysis.quantity_estimation || {};
+    const yieldEstimation = latexAnalysis.estimated_yield || {};
+    const marketAnalysis = fullAnalysis.market_analysis || analysis.marketPrice || {};
+    const recommendations = fullAnalysis.product_recommendations || {};
+    
+    // Determine quality class
+    const qualityClass = analysis.qualityClass || 
+                         latexAnalysis.quality_class || 
+                         (analysis.qualityScore >= 80 ? 'High' : 
+                          analysis.qualityScore >= 50 ? 'Medium' : 'Low');
+    
+    // Determine contamination level
+    let contaminationLevel = 'Low';
+    if (analysis.contaminationDetected || contamination.detected) {
+      const contaminantCount = analysis.impuritiesDetected?.length || 
+                               contamination.type ? 1 : 0;
+      if (contaminantCount > 3) contaminationLevel = 'High';
+      else if (contaminantCount > 1) contaminationLevel = 'Medium';
+      else contaminationLevel = 'Low';
+    }
+    
+    // Format for frontend (matches AnalysisDetails.jsx expectations)
+    const formattedAnalysis = {
+      _id: analysis._id,
+      id: analysis._id,
+      type: 'Latex',
+      imageUrl: analysis.imageUrl,
+      image: analysis.imageUrl,
+      createdAt: analysis.createdAt,
+      status: 'Completed',
+      confidence: analysis.qualityScore || latexAnalysis.quality_score || 0,
+      
+      // Quality metrics
+      quality: qualityClass,
+      purity: analysis.dryRubberContent || latexAnalysis.dry_rubber_content || 0,
+      moisture: analysis.dryRubberContent ? (100 - analysis.dryRubberContent) : 
+                (latexAnalysis.dry_rubber_content ? 100 - latexAnalysis.dry_rubber_content : 0),
+      drc: analysis.dryRubberContent || latexAnalysis.dry_rubber_content || 0,
+      drcCategory: latexAnalysis.drc_category || 
+                   (analysis.dryRubberContent >= 40 ? 'Excellent' : 
+                    analysis.dryRubberContent >= 30 ? 'Good' : 
+                    analysis.dryRubberContent >= 20 ? 'Average' : 'Poor'),
+      
+      // Contamination info
+      contaminationDetected: analysis.contaminationDetected || contamination.detected || false,
+      contaminationLevel: contaminationLevel,
+      contaminationType: contamination.type || (analysis.impuritiesDetected?.[0] || 'none'),
+      contaminationProbability: contamination.probability || 0,
+      detectedParticles: analysis.impuritiesDetected?.length || 
+                         (contamination.detected ? 1 : 0),
+      impuritiesDetected: analysis.impuritiesDetected || 
+                          (contamination.type ? [contamination.type] : []),
+      
+      // Color analysis
+      colorName: colorAnalysis.name || 'Unknown',
+      colorHex: colorAnalysis.hex || '#ffffff',
+      colorHSV: colorAnalysis.hsv || {},
+      
+      // Consistency
+      consistency: latexAnalysis.consistency || 
+                   (analysis.qualityScore >= 70 ? 'Smooth' : 'Moderate'),
+      
+      // Quantity estimation
+      estimatedVolume: quantityEstimation.estimated_volume_ml || 0,
+      quantityConfidence: quantityEstimation.confidence || 0,
+      latexAreaPercentage: quantityEstimation.latex_area_percentage || 0,
+      
+      // Yield estimation
+      wetWeight: yieldEstimation.wet_weight_kg || 0,
+      dryWeight: yieldEstimation.dry_weight_kg || 0,
+      dryYieldPercentage: yieldEstimation.dry_yield_percentage || 0,
+      
+      // Market analysis
+      marketPrice: marketAnalysis.price_per_kg || analysis.marketPrice?.amount || 0,
+      marketCurrency: marketAnalysis.currency || analysis.marketPrice?.currency || 'PHP',
+      marketRegion: marketAnalysis.region || analysis.region || 'global_avg',
+      marketTrend: marketAnalysis.market_trend || 'neutral',
+      estimatedTotalValue: marketAnalysis.estimated_total_value || 
+                          (analysis.marketPrice?.amount * (analysis.quantityEstimate || 0)) || 0,
+      
+      // Recommendations
+      recommendedProducts: recommendations.recommended_products || [],
+      suggestedApplications: recommendations.suggested_applications || [],
+      processingRequired: recommendations.processing_required || false,
+      
+      // AI Insights
+      aiInsights: fullAnalysis.aiInsights || {},
+      
+      // Batch info
+      batchID: analysis.batchID || fullAnalysis.batchID || null,
+      notes: analysis.notes || fullAnalysis.notes || '',
+      
+      // Detailed results for renderLatexResults()
+      result: {
+        quality: qualityClass,
+        purity: analysis.dryRubberContent || latexAnalysis.dry_rubber_content || 0,
+        moisture: analysis.dryRubberContent ? (100 - analysis.dryRubberContent) : 
+                  (latexAnalysis.dry_rubber_content ? 100 - latexAnalysis.dry_rubber_content : 0),
+        drc: analysis.dryRubberContent || latexAnalysis.dry_rubber_content || 0,
+        contaminationLevel: contaminationLevel,
+        detectedParticles: analysis.impuritiesDetected?.length || 
+                          (contamination.detected ? 1 : 0)
+      }
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: formattedAnalysis,
+      analysis: formattedAnalysis, // Include both formats for compatibility
+      message: 'Analysis retrieved successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Get latex analysis error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching analysis',
       error: error.message
     });
   }
@@ -780,39 +953,6 @@ exports.deleteAnalysis = async (req, res) => {
   }
 };
 
-// @desc    Get single analysis by ID
-// @route   GET /api/v1/latex/analysis/:analysisId
-// @access  Private
-exports.getAnalysisById = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { analysisId } = req.params;
-    
-    const analysis = await LatexAnalysis.findOne({
-      _id: analysisId,
-      userId: userId
-    });
-    
-    if (!analysis) {
-      return res.status(404).json({
-        success: false,
-        message: 'Analysis not found'
-      });
-    }
-    
-    res.status(200).json({
-      success: true,
-      data: analysis
-    });
-  } catch (error) {
-    console.error('Get analysis error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching analysis',
-      error: error.message
-    });
-  }
-};
 
 // @desc    Get latex detection info and system status
 // @route   GET /api/v1/latex/info

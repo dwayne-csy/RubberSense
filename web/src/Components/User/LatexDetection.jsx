@@ -1,41 +1,15 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import UserHeader from '../layouts/UserHeader';
 import UserFooter from '../layouts/UserFooter';
 import {
-  Box,
-  Container,
-  Typography,
-  Button,
-  Paper,
-  CircularProgress,
-  Alert,
-  Grid,
-  Card,
-  CardContent,
-  LinearProgress,
-  Chip,
-  Divider,
-  IconButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Fab,
-  Tooltip,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  TextField
+  Box, Container, Typography, Button, Paper, CircularProgress,
+  Alert, Grid, Card, CardContent, LinearProgress, Chip, Divider,
+  IconButton, List, ListItem, ListItemIcon, ListItemText,
+  Dialog, DialogTitle, DialogContent, DialogActions, Fab,
 } from '@mui/material';
 import {
-  CloudUpload as CloudUploadIcon,
   Analytics as AnalyticsIcon,
   RestartAlt as RestartAltIcon,
   CheckCircle as CheckCircleIcon,
@@ -43,27 +17,32 @@ import {
   Warning as WarningIcon,
   ColorLens as ColorLensIcon,
   Texture as TextureIcon,
-  Spa as SpaIcon,
   Science as ScienceIcon,
-  Healing as HealingIcon,
   Download as DownloadIcon,
   Info as InfoIcon,
   Opacity as OpacityIcon,
-  History as HistoryIcon,
   Assessment as AssessmentIcon,
   PhotoCamera as PhotoCameraIcon,
   Close as CloseIcon,
   FlipCameraAndroid as FlipCameraIcon,
-  AddPhotoAlternate as AddPhotoAlternateIcon,
-  WaterDrop as WaterDropIcon,
   MonetizationOn as MonetizationOnIcon,
   Factory as FactoryIcon,
-  PriceCheck as PriceCheckIcon,
   Timeline as TimelineIcon,
   BubbleChart as BubbleChartIcon,
-  Biotech as BiotechIcon
+  Biotech as BiotechIcon,
+  FileUpload as FileUploadIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const SectionLabel = ({ icon, label }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
+    <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: '#2e7d32', flexShrink: 0 }} />
+    {icon}
+    <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#1b5e20', letterSpacing: 0.3 }}>
+      {label}
+    </Typography>
+  </Box>
+);
 
 const LatexDetection = () => {
   const [user, setUser] = useState(null);
@@ -75,17 +54,8 @@ const LatexDetection = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [systemInfo, setSystemInfo] = useState(null);
-  const [selectedRegion, setSelectedRegion] = useState('global_avg');
-  const [batchID, setBatchID] = useState('');
-  const [volume, setVolume] = useState('');
-  const [dryWeight, setDryWeight] = useState('');
-  const [notes, setNotes] = useState('');
+  const [selectedRegion] = useState('global_avg');
   const [liveMarketData, setLiveMarketData] = useState(null);
-
-  // Source chooser
-  const [chooserOpen, setChooserOpen] = useState(false);
-
-  // Camera
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
@@ -99,46 +69,22 @@ const LatexDetection = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
-  // Regions for market pricing
-  const regions = [
-    { value: 'global_avg', label: 'Global Average' },
-    { value: 'thailand', label: 'Thailand' },
-    { value: 'indonesia', label: 'Indonesia' },
-    { value: 'malaysia', label: 'Malaysia' },
-    { value: 'vietnam', label: 'Vietnam' },
-    { value: 'india', label: 'India' }
-  ];
-
   const fetchLiveMarketData = async (forceRefresh = false) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return null;
-
       const endpoints = ['/api/v1/market/latest', '/api/market/latest'];
       for (const endpoint of endpoints) {
         try {
           const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
             params: { force: forceRefresh },
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` },
           });
-
-          if (res.data?.success) {
-            setLiveMarketData(res.data.data || null);
-            return res.data.data || null;
-          }
-        } catch (requestError) {
-          if (requestError?.response?.status === 404) {
-            continue;
-          }
-          throw requestError;
-        }
+          if (res.data?.success) { setLiveMarketData(res.data.data || null); return res.data.data || null; }
+        } catch (e) { if (e?.response?.status === 404) continue; throw e; }
       }
-
       return null;
-    } catch (err) {
-      console.log('Market data fetch error:', err);
-      return null;
-    }
+    } catch { return null; }
   };
 
   useEffect(() => {
@@ -149,1260 +95,576 @@ const LatexDetection = () => {
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         const res = await axios.get(`${API_BASE_URL}/api/v1/users/me`);
         if (res.data.success) setUser(res.data.user);
-        else {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          navigate('/login');
-        }
-      } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-      } finally {
-        setLoading(false);
-      }
+        else { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }
+      } catch { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }
+      finally { setLoading(false); }
     };
-    
     const fetchSystemInfo = async () => {
-      try {
-        const res = await axios.get(`${API_BASE_URL}/api/v1/latex/info`);
-        if (res.data.success) setSystemInfo(res.data.data);
-      } catch (err) {
-        console.log('System info fetch error:', err);
-      }
+      try { const res = await axios.get(`${API_BASE_URL}/api/v1/latex/info`); if (res.data.success) setSystemInfo(res.data.data); } catch {}
     };
-    
-    checkAuth();
-    fetchSystemInfo();
-    fetchLiveMarketData(false);
+    checkAuth(); fetchSystemInfo(); fetchLiveMarketData(false);
   }, [navigate, API_BASE_URL]);
 
-  useEffect(() => {
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-      }
-    };
-  }, [stream]);
+  useEffect(() => { return () => { if (stream) stream.getTracks().forEach(t => t.stop()); }; }, [stream]);
 
   useEffect(() => {
-    if (cameraOpen) {
-      startCamera();
-    } else if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      setStream(null);
-    }
+    if (cameraOpen) startCamera();
+    else if (stream) { stream.getTracks().forEach(t => t.stop()); setStream(null); }
   }, [cameraOpen, facingMode]);
 
   const startCamera = async () => {
     setCameraError(null);
     try {
-      if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-      }
-      
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: facingMode,
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const ms = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
       });
-      
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-    } catch (err) {
-      setCameraError('Unable to access camera. Please ensure camera permissions are granted.');
-    }
+      setStream(ms);
+      if (videoRef.current) videoRef.current.srcObject = ms;
+    } catch { setCameraError('Unable to access camera. Please ensure camera permissions are granted.'); }
   };
 
-  const handleFlipCamera = () => {
-    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
-  };
+  const handleFlipCamera = () => setFacingMode(p => p === 'user' ? 'environment' : 'user');
 
   const captureImage = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
     setCapturing(true);
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    
-    canvas.toBlob(blob => {
+    const v = videoRef.current, c = canvasRef.current;
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    c.toBlob(blob => {
       const file = new File([blob], `latex-capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
       setSelectedImage(file);
-      
       const reader = new FileReader();
       reader.onload = e => setImagePreview(e.target.result);
       reader.readAsDataURL(file);
-      
-      setCameraOpen(false);
-      setCapturing(false);
-      setAnalysisResult(null);
-      setSuccessMessage(null);
-      setError(null);
+      setCameraOpen(false); setCapturing(false); setAnalysisResult(null); setSuccessMessage(null); setError(null);
     }, 'image/jpeg', 0.95);
   };
 
-  const handleImageSelect = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      processSelectedFile(e.target.files[0]);
-    }
-  };
+  const handleImageSelect = e => { if (e.target.files?.[0]) processSelectedFile(e.target.files[0]); };
 
-  const processSelectedFile = (file) => {
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      setError('Invalid file type. Please select a JPEG, PNG, or WebP image.');
-      return;
+  const processSelectedFile = file => {
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Invalid file type. Please select a JPEG, PNG, or WebP image.'); return;
     }
-    
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File too large. Maximum size is 10MB.');
-      return;
-    }
-    
-    setError(null);
-    setSelectedImage(file);
-    setAnalysisResult(null);
-    setSuccessMessage(null);
-    if (!batchID) {
-      setBatchID(`WEB-${Date.now().toString(36).toUpperCase()}`);
-    }
-    
+    if (file.size > 10 * 1024 * 1024) { setError('File too large. Maximum size is 10MB.'); return; }
+    setError(null); setSelectedImage(file); setAnalysisResult(null); setSuccessMessage(null);
     const reader = new FileReader();
     reader.onload = e => setImagePreview(e.target.result);
     reader.readAsDataURL(file);
   };
 
   const handleAnalyze = async () => {
-    if (!selectedImage) {
-      setError('Please select an image first.');
-      return;
-    }
-    
-    setAnalyzing(true);
-    setError(null);
-    setSuccessMessage(null);
-    
+    if (!selectedImage) { setError('Please select an image first.'); return; }
+    setAnalyzing(true); setError(null); setSuccessMessage(null);
     try {
-      const formData = new FormData();
-      formData.append('image', selectedImage);
-      formData.append('region', selectedRegion);
-      formData.append('batchID', batchID || '');
-      formData.append('volume', volume || '0');
-      formData.append('dryWeight', dryWeight || '0');
-      formData.append('notes', notes || '');
-      
-      const res = await axios.post(`${API_BASE_URL}/api/v1/latex/analyze`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        timeout: 30000 // 30 second timeout
+      const fd = new FormData();
+      fd.append('image', selectedImage); fd.append('region', selectedRegion);
+      fd.append('batchID', ''); fd.append('volume', '0'); fd.append('dryWeight', '0'); fd.append('notes', '');
+      const res = await axios.post(`${API_BASE_URL}/api/v1/latex/analyze`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        timeout: 30000,
       });
-      
       if (res.data.success) {
-        setAnalysisResult(res.data.data);
-        setSuccessMessage('Latex analysis completed successfully!');
-        fetchLiveMarketData(false);
-      } else {
-        throw new Error(res.data.message || 'Analysis failed');
-      }
+        setAnalysisResult(res.data.data); setSuccessMessage('Analysis completed successfully!'); fetchLiveMarketData(false);
+      } else throw new Error(res.data.message || 'Analysis failed');
     } catch (err) {
-      if (err.code === 'ECONNABORTED') {
-        setError('Request timeout. The server is taking too long to respond.');
-      } else if (err.response?.status === 500) {
-        setError('Server error: ' + (err.response?.data?.error || 'Internal server error.'));
-      } else if (err.response?.status === 401) {
-        setError('Authentication failed. Please login again.');
-        localStorage.removeItem('token');
-        navigate('/login');
-      } else {
-        setError(err.response?.data?.message || err.message || 'Error analyzing image. Please try again.');
-      }
-    } finally {
-      setAnalyzing(false);
-    }
+      if (err.code === 'ECONNABORTED') setError('Request timeout. The server is taking too long to respond.');
+      else if (err.response?.status === 500) setError('Server error: ' + (err.response?.data?.error || 'Internal server error.'));
+      else if (err.response?.status === 401) { setError('Authentication failed. Please login again.'); localStorage.removeItem('token'); navigate('/login'); }
+      else setError(err.response?.data?.message || err.message || 'Error analyzing image. Please try again.');
+    } finally { setAnalyzing(false); }
   };
 
   const handleReset = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    setAnalysisResult(null);
-    setError(null);
-    setSuccessMessage(null);
-    setBatchID('');
-    setVolume('');
-    setDryWeight('');
-    setNotes('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    setSelectedImage(null); setImagePreview(null); setAnalysisResult(null); setError(null); setSuccessMessage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const getQualityGradient = q => {
+    switch (q?.toLowerCase()) {
+      case 'high': return 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 60%, #388e3c 100%)';
+      case 'medium': return 'linear-gradient(135deg, #e65100 0%, #ef6c00 60%, #f57c00 100%)';
+      case 'low': return 'linear-gradient(135deg, #b71c1c 0%, #c62828 60%, #d32f2f 100%)';
+      default: return 'linear-gradient(135deg, #37474f 0%, #546e7a 100%)';
     }
   };
 
-  const getQualityColor = (qualityClass) => {
-    switch (qualityClass?.toLowerCase()) {
-      case 'high':
-        return '#4caf50';
-      case 'medium':
-        return '#ff9800';
-      case 'low':
-        return '#f44336';
-      default:
-        return '#9e9e9e';
-    }
+  const getContaminationColor = (detected, p) => {
+    if (!detected) return '#2e7d32';
+    if (p < 30) return '#f57c00'; if (p < 60) return '#d32f2f'; return '#b71c1c';
   };
 
-  const getQualityGradient = (qualityClass) => {
-    switch (qualityClass?.toLowerCase()) {
-      case 'high':
-        return 'linear-gradient(135deg, #2e7d32 0%, #4caf50 100%)';
-      case 'medium':
-        return 'linear-gradient(135deg, #ed6c02 0%, #ff9800 100%)';
-      case 'low':
-        return 'linear-gradient(135deg, #b71c1c 0%, #f44336 100%)';
-      default:
-        return 'linear-gradient(135deg, #616161 0%, #9e9e9e 100%)';
-    }
-  };
+  const getColorSwatch = hex => hex || '#808080';
 
-  const getContaminationColor = (hasContamination, probability) => {
-    if (!hasContamination) return '#4caf50';
-    if (probability < 30) return '#ff9800';
-    if (probability < 60) return '#f44336';
-    return '#b71c1c';
-  };
-
-  const getColorSwatch = (colorHex) => {
-    return colorHex || '#808080';
-  };
-
-  const getDrcCategoryColor = (category) => {
-    switch (category?.toLowerCase()) {
-      case 'excellent':
-        return '#4caf50';
-      case 'good':
-        return '#2196f3';
-      case 'average':
-        return '#ff9800';
-      case 'below average':
-      case 'poor':
-        return '#f44336';
-      default:
-        return '#9e9e9e';
+  const getDrcColor = cat => {
+    switch (cat?.toLowerCase()) {
+      case 'excellent': return '#2e7d32'; case 'good': return '#1565c0';
+      case 'average': return '#e65100'; default: return '#c62828';
     }
   };
 
   const downloadReport = () => {
     if (!analysisResult) return;
-    
-    const reportData = {
-      ...analysisResult,
-      generatedAt: new Date().toISOString(),
-      generatedBy: user?.email,
-      region: selectedRegion,
-      analysisId: analysisResult.analysisId
-    };
-    
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ ...analysisResult, generatedAt: new Date().toISOString(), generatedBy: user?.email, region: selectedRegion }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `latex-report-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `latex-report-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#f5f5f5' }}>
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-        >
-          <CircularProgress size={60} thickness={4} sx={{ color: '#2e7d32' }} />
-        </motion.div>
-        <Typography variant="h6" sx={{ mt: 3, color: '#2e7d32', fontWeight: 500 }}>
-          Loading Latex Quality Analysis System...
-        </Typography>
-      </Box>
-    );
-  }
+  // Confidence threshold
+  const NOT_DETECTED_THRESHOLD = 35;
 
-  // Extract analysis data with proper null checks
+  if (loading) return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#070f1a' }}>
+      <UserHeader />
+      <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}>
+        <CircularProgress size={52} thickness={3} sx={{ color: '#00c853' }} />
+      </motion.div>
+      <Typography variant="body1" sx={{ mt: 3, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>Loading Analysis System...</Typography>
+    </Box>
+  );
+
+  // Data extraction
   const analysis = analysisResult?.latex_analysis || {};
-  const primaryClass = analysis.primary_classification || {};
   const contamination = analysis.contamination || {};
   const colorAnalysis = analysis.color_analysis || {};
   const quantity = analysis.quantity_estimation || {};
   const yield_est = analysis.estimated_yield || {};
   const market = analysisResult?.market_analysis || {};
   const recommendations = analysisResult?.product_recommendations || {};
-  const modelInfo = analysisResult?.model_info || analysisResult?.modelInfo || {};
   const imageMetadata = analysisResult?.image_metadata || {};
-  const image = analysisResult?.image || {};
-  const activeModelLabel =
-    analysisResult?.modelInfo?.modelUsed ||
-    modelInfo?.model_file ||
-    modelInfo?.modelUsed ||
-    'Unknown model';
-  const latexDetections = Array.isArray(analysisResult?.detections)
-    ? analysisResult.detections
-    : (Array.isArray(analysis?.detections) ? analysis.detections : []);
-  const visualizationSrc = analysisResult?.visualization
-    ? `data:image/jpeg;base64,${analysisResult.visualization}`
-    : analysisResult?.processedImageURL || null;
+  const latexDetections = Array.isArray(analysisResult?.detections) ? analysisResult.detections : (Array.isArray(analysis?.detections) ? analysis.detections : []);
+  const visualizationSrc = analysisResult?.visualization ? `data:image/jpeg;base64,${analysisResult.visualization}` : analysisResult?.processedImageURL || null;
   const analyzedAtValue = imageMetadata?.analyzedAt || imageMetadata?.analyzed_at;
   const fileNameValue = imageMetadata?.filename || imageMetadata?.fileName || '';
   const fileSizeValue = imageMetadata?.fileSizeKB || imageMetadata?.file_size_kb;
-  const effectivePricePerKg = (() => {
-    const livePrice = Number(liveMarketData?.price);
-    if (Number.isFinite(livePrice) && livePrice > 0) return livePrice;
-    const scanPrice = Number(market.price_per_kg);
-    return Number.isFinite(scanPrice) ? scanPrice : 0;
-  })();
-  const effectiveDryYieldKg = (() => {
-    const fromProfile = Number(analysisResult?.productYieldEstimation?.estimatedYield);
-    if (Number.isFinite(fromProfile) && fromProfile > 0) return fromProfile;
-    const fromLatex = Number(yield_est?.dry_weight_kg);
-    if (Number.isFinite(fromLatex) && fromLatex > 0) return fromLatex;
-    return 0;
-  })();
-  const effectiveTotalValue = (() => {
-    if (effectivePricePerKg > 0 && effectiveDryYieldKg > 0) {
-      return effectivePricePerKg * effectiveDryYieldKg;
-    }
-    const scanTotal = Number(market.estimated_total_value);
-    return Number.isFinite(scanTotal) ? scanTotal : 0;
-  })();
+  const latexMainConfidence = analysisResult ? Number(analysis?.quality_score ?? analysisResult?.confidence ?? 0) : null;
+  const isLatexNotDetected = latexMainConfidence !== null && latexMainConfidence < NOT_DETECTED_THRESHOLD;
+
+  const effectivePricePerKg = (() => { const lp = Number(liveMarketData?.price); if (Number.isFinite(lp) && lp > 0) return lp; const sp = Number(market.price_per_kg); return Number.isFinite(sp) ? sp : 0; })();
+  const effectiveDryYieldKg = (() => { const fp = Number(analysisResult?.productYieldEstimation?.estimatedYield); if (Number.isFinite(fp) && fp > 0) return fp; const fl = Number(yield_est?.dry_weight_kg); if (Number.isFinite(fl) && fl > 0) return fl; return 0; })();
+  const effectiveTotalValue = (() => { if (effectivePricePerKg > 0 && effectiveDryYieldKg > 0) return effectivePricePerKg * effectiveDryYieldKg; const st = Number(market.estimated_total_value); return Number.isFinite(st) ? st : 0; })();
   const effectiveCurrency = liveMarketData?.currency || market.currency || 'PHP';
   const effectiveTrend = String(liveMarketData?.trend || market.market_trend || 'neutral');
-  const effectiveTrendStrengthPct = (() => {
-    const liveChange = Number(liveMarketData?.priceChange);
-    if (Number.isFinite(liveChange)) return Math.abs(liveChange);
-    const scanStrength = Number(market.trend_strength);
-    return Number.isFinite(scanStrength) ? Math.abs(scanStrength * 100) : 0;
-  })();
-  const liveSourceLabel = liveMarketData
-    ? `${String(liveMarketData.source || 'stooq').toUpperCase()}${liveMarketData.sourceSymbol ? ` (${liveMarketData.sourceSymbol})` : ''}`
-    : null;
+  const effectiveTrendStrengthPct = (() => { const lc = Number(liveMarketData?.priceChange); if (Number.isFinite(lc)) return Math.abs(lc); const ss = Number(market.trend_strength); return Number.isFinite(ss) ? Math.abs(ss * 100) : 0; })();
+  const liveSourceLabel = liveMarketData ? `${String(liveMarketData.source || 'stooq').toUpperCase()}${liveMarketData.sourceSymbol ? ` (${liveMarketData.sourceSymbol})` : ''}` : null;
 
   return (
     <>
       <UserHeader />
-
-      <Box sx={{ minHeight: '100vh', bgcolor: '#f5f5f5', pt: '80px', pb: '90px' }}>
+      <Box sx={{ minHeight: '100vh', bgcolor: '#f5f9f5', pt: '80px', pb: '90px' }}>
         <Container maxWidth="lg">
 
-          {/* HERO SECTION */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Paper elevation={3} sx={{
-              p: { xs: 3, md: 5 },
-              mb: 4,
-              background: 'linear-gradient(135deg, #00695c 0%, #2e7d32 55%, #4caf50 100%)',
-              color: 'white',
-              borderRadius: 4,
-              position: 'relative',
-              overflow: 'hidden'
+          {/* HERO */}
+          <motion.div initial={{ opacity: 0, y: -14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+            <Box sx={{
+              p: { xs: 3, md: '44px 48px' }, mb: 3,
+              background: 'linear-gradient(135deg, #f7fdf9 0%, #e8f5ee 50%, #d8f3dc 100%)',
+              color: '#1b4332', borderRadius: '20px', position: 'relative', overflow: 'hidden',
+              border: '1px solid #95d5b2',
+              boxShadow: '0 8px 32px rgba(13,40,24,0.12)'
             }}>
-              <Box sx={{ position: 'absolute', top: -20, right: -20, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
-              <Box sx={{ position: 'absolute', bottom: -40, left: -40, width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
-
-              {/* History / Stats buttons */}
-              <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 2, display: 'flex', gap: 1.5 }}>
-                <Button
-                  component={Link}
-                  to="/latex-history"
-                  variant="contained"
-                  size="small"
-                  startIcon={<HistoryIcon />}
-                  sx={{
-                    bgcolor: 'rgba(255,255,255,0.18)',
-                    color: 'white',
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' }
-                  }}
-                >
-                  History
-                </Button>
-                <Button
-                  component={Link}
-                  to="/latex-stats"
-                  variant="contained"
-                  size="small"
-                  startIcon={<AssessmentIcon />}
-                  sx={{
-                    bgcolor: 'rgba(255,255,255,0.18)',
-                    color: 'white',
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    '&:hover': { bgcolor: 'rgba(255,255,255,0.28)' }
-                  }}
-                >
-                  Statistics
-                </Button>
-              </Box>
-
-              <Box sx={{ position: 'relative', zIndex: 2 }}>
-                <Typography variant="h3" sx={{ fontWeight: 800, mb: 1 }}>
-                  🧪 Rubber Tree Latex Analysis
+              <Box sx={{ position: 'absolute', right: '-40px', top: '-30px', width: '260px', height: '260px', borderRadius: '50%', background: 'rgba(82,183,136,0.08)', pointerEvents: 'none' }} />
+              <Box sx={{ position: 'absolute', right: '80px', bottom: '-60px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(52,143,96,0.08)', pointerEvents: 'none' }} />
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, bgcolor: '#d8f3dc', border: '1px solid #95d5b2', borderRadius: '8px', px: 1.5, py: 0.5, mb: 2 }}>
+                  <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#2d6a4f', boxShadow: '0 0 8px #2d6a4f' }} />
+                  <Typography sx={{ color: '#1b4332', fontWeight: 800, fontSize: '0.72rem', letterSpacing: 1.2, textTransform: 'uppercase' }}>Latex Analysis</Typography>
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 900, letterSpacing: -1, lineHeight: 1, mb: 1, color: '#1b4332' }}>
+                  Rubber Tree <Box component="span" sx={{ color: '#2d6a4f' }}>Latex</Box> Detection
                 </Typography>
-                <Typography variant="h6" sx={{ opacity: 0.85, mb: 2.5 }}>
-                  AI-Powered Quality Classification & Market Analysis System
+                <Typography sx={{ opacity: 0.85, maxWidth: 460, lineHeight: 1.7, fontSize: '1rem', color: '#40916c' }}>
+                  AI-powered quality classification and market analysis system.
                 </Typography>
-                {systemInfo && (
-                  <Chip
-                    icon={systemInfo.systemStatus?.mlReady ? <CheckCircleIcon /> : <WarningIcon />}
-                    label={systemInfo.systemStatus?.mlReady ? 'ML Model Active' : 'Using Fallback Analysis'}
-                    sx={{
-                      bgcolor: systemInfo.systemStatus?.mlReady ? 'rgba(76,175,80,0.22)' : 'rgba(255,152,0,0.22)',
-                      color: 'white',
-                      border: '1px solid rgba(255,255,255,0.3)',
-                      '& .MuiChip-icon': { color: 'white' }
-                    }}
-                  />
-                )}
               </Box>
-            </Paper>
+            </Box>
           </motion.div>
 
           {/* ALERTS */}
           <AnimatePresence>
             {error && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <Alert
-                  severity="error"
-                  onClose={() => setError(null)}
-                  icon={<ErrorIcon />}
-                  sx={{ mb: 3, borderRadius: 2 }}
-                >
-                  {error}
-                </Alert>
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2.5, borderRadius: 2 }}>{error}</Alert>
               </motion.div>
             )}
             {successMessage && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <Alert
-                  severity="success"
-                  onClose={() => setSuccessMessage(null)}
-                  icon={<CheckCircleIcon />}
-                  sx={{ mb: 3, borderRadius: 2 }}
-                >
-                  {successMessage}
-                </Alert>
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <Alert severity="success" onClose={() => setSuccessMessage(null)} sx={{ mb: 2.5, borderRadius: 2 }}>{successMessage}</Alert>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* REGION SELECTOR */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Paper elevation={2} sx={{ p: 2, mb: 3, borderRadius: 3, bgcolor: 'white', border: '1px solid #c8e6c9' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                <Typography variant="body2" sx={{ color: '#2e7d32', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <PriceCheckIcon fontSize="small" /> Market Region:
-                </Typography>
-                <FormControl size="small" sx={{ minWidth: 200 }}>
-                  <Select
-                    value={selectedRegion}
-                    onChange={(e) => setSelectedRegion(e.target.value)}
-                    sx={{
-                      bgcolor: '#f5f5f5',
-                      borderRadius: 2,
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#c8e6c9' }
-                    }}
-                  >
-                    {regions.map(region => (
-                      <MenuItem key={region.value} value={region.value}>{region.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Typography variant="caption" color="text.secondary">
-                  Affects market price calculations
-                </Typography>
-              </Box>
-            </Paper>
-          </motion.div>
-
-          {/* PRE-SCAN INPUTS */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-          >
-            <Paper elevation={2} sx={{ p: 2.5, mb: 3, borderRadius: 3, bgcolor: 'white', border: '1px solid #c8e6c9' }}>
-              <Typography variant="body2" sx={{ color: '#2e7d32', fontWeight: 700, mb: 2 }}>
-                Pre-Scan Latex Inputs
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    label="Batch Reference ID"
-                    value={batchID}
-                    onChange={(e) => setBatchID(e.target.value)}
-                    placeholder="Auto or manual batch ID"
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    label="Volume (L)"
-                    value={volume}
-                    onChange={(e) => setVolume(e.target.value)}
-                    placeholder="0.0"
-                    inputMode="decimal"
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    label="Dry Weight (%)"
-                    value={dryWeight}
-                    onChange={(e) => setDryWeight(e.target.value)}
-                    placeholder="Optional"
-                    inputMode="decimal"
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    label="Notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Optional note for this scan"
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-          </motion.div>
-
           {/* UPLOAD PANEL */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Paper elevation={3} sx={{
-              p: { xs: 3, md: 4 },
-              mb: 4,
-              borderRadius: 4,
-              border: '2px solid #2e7d32',
-              bgcolor: 'white'
-            }}>
-              <Typography variant="h5" sx={{ color: '#2e7d32', mb: 3, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CloudUploadIcon /> Upload or Capture Latex Sample Image
-              </Typography>
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Box sx={{ p: { xs: 3, md: 4 }, mb: 3, borderRadius: '16px', border: '1px solid #95d5b2', bgcolor: 'white', boxShadow: '0 4px 16px rgba(13,40,24,0.08)' }}>
 
-              {imagePreview ? (
-                <Box sx={{ position: 'relative' }}>
-                  <motion.img
-                    src={imagePreview}
-                    alt="Latex preview"
-                    style={{
-                      width: '100%',
-                      maxHeight: 400,
-                      objectFit: 'contain',
-                      borderRadius: 16,
-                      border: '3px solid #2e7d32',
-                      display: 'block'
-                    }}
-                    initial={{ opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                  />
-                  <IconButton
-                    onClick={handleReset}
-                    sx={{
-                      position: 'absolute',
-                      top: 10,
-                      right: 10,
-                      bgcolor: 'rgba(244,67,54,0.9)',
-                      color: 'white',
-                      '&:hover': { bgcolor: '#d32f2f' }
-                    }}
-                  >
-                    <RestartAltIcon />
-                  </IconButton>
-                </Box>
-              ) : (
-                <motion.div
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                >
-                  <Box
-                    onClick={() => setChooserOpen(true)}
-                    sx={{
-                      border: '3px dashed #2e7d32',
-                      borderRadius: 4,
-                      p: { xs: 5, md: 8 },
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      bgcolor: '#f1f8e9',
-                      transition: 'all 0.25s',
-                      '&:hover': {
-                        bgcolor: '#e8f5e9',
-                        borderColor: '#1b5e20'
-                      }
-                    }}
-                  >
-                    <motion.div
-                      animate={{ y: [0, -10, 0] }}
-                      transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-                    >
-                      <AddPhotoAlternateIcon sx={{ fontSize: 90, color: '#2e7d32', mb: 2 }} />
-                    </motion.div>
-                    <Typography variant="h6" sx={{ color: '#2e7d32', fontWeight: 700, mb: 0.5 }}>
-                      Add Latex Sample Image
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      Click to <strong>take a photo</strong> or <strong>upload from device</strong>
-                    </Typography>
-                    <Typography variant="caption" color="text.disabled">
-                      JPEG · PNG · WebP — max 10 MB
-                    </Typography>
-                  </Box>
-                </motion.div>
+              {!imagePreview && (
+                <Grid container spacing={2}>
+                  {[
+                    { icon: <FileUploadIcon sx={{ color: '#00c853', fontSize: 28 }} />, title: 'Upload Image', sub: 'Select from your device', hint: 'JPEG · PNG · WebP · max 10 MB', onClick: () => fileInputRef.current?.click() },
+                    { icon: <PhotoCameraIcon sx={{ color: '#00c853', fontSize: 28 }} />, title: 'Take a Photo', sub: 'Use your device camera', hint: 'Capture latex sample live', onClick: () => setCameraOpen(true) },
+                  ].map(({ icon, title, sub, hint, onClick }) => (
+                    <Grid item xs={12} sm={6} key={title}>
+                      <motion.div whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.985 }}>
+                        <Box onClick={onClick} sx={{
+                          border: '1px solid #95d5b2', borderRadius: '12px', p: 3.5,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.2,
+                          cursor: 'pointer', bgcolor: '#f7fdf9', transition: 'all 0.18s',
+                          '&:hover': { bgcolor: '#d8f3dc', borderColor: '#52b788', boxShadow: '0 4px 20px rgba(45,106,79,0.15)' },
+                        }}>
+                          <Box sx={{ width: 58, height: 58, borderRadius: '50%', bgcolor: '#d8f3dc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</Box>
+                          <Typography variant="body1" sx={{ fontWeight: 700, color: '#1b4332' }}>{title}</Typography>
+                          <Typography variant="body2" sx={{ color: '#6b705c', textAlign: 'center' }}>{sub}</Typography>
+                          <Typography variant="caption" sx={{ color: '#a3b18a', textAlign: 'center' }}>{hint}</Typography>
+                        </Box>
+                      </motion.div>
+                    </Grid>
+                  ))}
+                </Grid>
               )}
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleImageSelect}
-                style={{ display: 'none' }}
-              />
+              {imagePreview && (
+                <Box sx={{ position: 'relative', mb: 3 }}>
+                  <motion.img
+                    src={imagePreview} alt="Latex preview"
+                    style={{ width: '100%', maxHeight: 380, objectFit: 'contain', borderRadius: 12, border: '2px solid #c8e6c9', display: 'block' }}
+                    initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                  />
+                  <IconButton onClick={handleReset} size="small" sx={{ position: 'absolute', top: 10, right: 10, bgcolor: 'rgba(198,40,40,0.9)', color: 'white', '&:hover': { bgcolor: '#b71c1c' } }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                  <Chip
+                    icon={<CheckCircleIcon sx={{ fontSize: '14px !important' }} />}
+                    label={selectedImage?.name || 'Image ready'} size="small"
+                    sx={{ position: 'absolute', bottom: 12, left: 12, bgcolor: 'rgba(27,94,32,0.85)', color: 'white', fontSize: '0.7rem', backdropFilter: 'blur(4px)' }}
+                  />
+                </Box>
+              )}
 
-              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 3, flexWrap: 'wrap' }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  onClick={handleAnalyze}
-                  disabled={!selectedImage || analyzing}
-                  startIcon={analyzing ? <CircularProgress size={20} color="inherit" /> : <AnalyticsIcon />}
-                  sx={{
-                    bgcolor: '#2e7d32',
-                    px: 6,
-                    py: 1.5,
-                    borderRadius: 3,
-                    fontSize: '1.1rem',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                    boxShadow: '0 4px 14px rgba(46,125,50,0.3)',
-                    '&:hover': { bgcolor: '#1b5e20' },
-                    '&:disabled': { bgcolor: '#c8e6c9', color: '#81c784' }
-                  }}
-                >
-                  {analyzing ? 'Analyzing...' : 'Analyze Latex'}
-                </Button>
-                {selectedImage && !analyzing && (
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleImageSelect} style={{ display: 'none' }} />
+
+              {imagePreview && (
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Button
-                    variant="outlined"
-                    size="large"
-                    onClick={handleReset}
-                    startIcon={<RestartAltIcon />}
-                    sx={{
-                      borderColor: '#2e7d32',
-                      color: '#2e7d32',
-                      px: 4,
-                      py: 1.5,
-                      borderRadius: 3,
-                      fontSize: '1.1rem',
-                      textTransform: 'none',
-                      '&:hover': {
-                        borderColor: '#1b5e20',
-                        bgcolor: '#f1f8e9'
-                      }
-                    }}
+                    variant="contained" size="large" onClick={handleAnalyze}
+                    disabled={!selectedImage || analyzing}
+                    startIcon={analyzing ? <CircularProgress size={18} color="inherit" /> : <AnalyticsIcon />}
+                    sx={{ bgcolor: '#00c853', color: '#000', px: 5, py: 1.4, borderRadius: '12px', fontSize: '0.95rem', fontWeight: 800, textTransform: 'none', boxShadow: '0 4px 20px rgba(0,200,83,0.35)', '&:hover': { bgcolor: '#00e676', boxShadow: '0 6px 24px rgba(0,200,83,0.45)' }, '&:disabled': { bgcolor: '#dcefe4', color: '#7a8a81', boxShadow: 'none' } }}
                   >
-                    Reset
+                    {analyzing ? 'Analyzing...' : 'Analyze Latex'}
                   </Button>
-                )}
-              </Box>
-            </Paper>
+                  {!analyzing && (
+                    <Button
+                      variant="outlined" size="large" onClick={handleReset} startIcon={<RestartAltIcon />}
+                      sx={{ borderColor: '#95d5b2', color: '#2d6a4f', px: 3, py: 1.4, borderRadius: '12px', fontSize: '0.95rem', textTransform: 'none', '&:hover': { borderColor: '#52b788', bgcolor: '#f1f8f3' } }}
+                    >
+                      Reset
+                    </Button>
+                  )}
+                </Box>
+              )}
+            </Box>
           </motion.div>
 
-          {/* RESULTS SECTION */}
+          {/* RESULTS */}
           <AnimatePresence>
             {analysisResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.55 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
 
-                {/* Cloudinary Image Info */}
-                {image && image.url && (
-                  <Alert 
-                    severity="info" 
-                    icon={<InfoIcon />} 
-                    sx={{ mb: 3, borderRadius: 2 }}
-                  >
-                    <Typography variant="body2">
-                      ✅ Image stored securely in cloud. Analysis ID: {analysisResult.analysisId}
+                {/* NOT DETECTED GATE */}
+                {isLatexNotDetected ? (
+                  <Box sx={{ py: 10, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '20px', border: '1px dashed #c8e6c9', mb: 3 }}>
+                    <Box sx={{ fontSize: 72, mb: 2, opacity: 0.15 }}>🧪</Box>
+                    <Typography variant="h4" sx={{ color: '#1b5e20', fontWeight: 900, mb: 1 }}>Latex Not Detected</Typography>
+                    <Typography sx={{ color: '#4e6b5f', maxWidth: 400, mx: 'auto', mb: 1.5, lineHeight: 1.6 }}>
+                      The model's confidence is too low ({latexMainConfidence?.toFixed(1)}%) to confirm rubber tree latex.
+                      Please upload a clearer, well-lit photo of the latex sample.
                     </Typography>
-                  </Alert>
-                )}
+                    <Chip label={`Confidence: ${latexMainConfidence?.toFixed(1)}%`} sx={{ bgcolor: '#ffebee', color: '#b71c1c', border: '1px solid #ef9a9a', fontWeight: 700 }} />
+                  </Box>
+                ) : (<>
 
-                {/* ML Banner */}
-                {modelInfo && (
-                  <Alert
-                    severity={modelInfo.fallback ? 'warning' : 'success'}
-                    icon={modelInfo.fallback ? <WarningIcon /> : <ScienceIcon />}
-                    sx={{ mb: 3, borderRadius: 2 }}
-                  >
-                    <Typography variant="body2">
-                      {modelInfo.fallback
-                        ? `⚠️ Fallback analysis: ${modelInfo.reason || 'ML model unavailable'}`
-                        : `✅ Analyzed using trained ML model: ${activeModelLabel}`}
-                    </Typography>
-                  </Alert>
-                )}
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                  <Typography variant="h5" sx={{ color: '#2e7d32', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AnalyticsIcon /> Latex Quality Analysis Results
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={downloadReport}
-                    startIcon={<DownloadIcon />}
-                    sx={{
-                      borderColor: '#2e7d32',
-                      color: '#2e7d32',
-                      borderRadius: 3,
-                      textTransform: 'none',
-                      '&:hover': {
-                        borderColor: '#1b5e20',
-                        bgcolor: '#f1f8e9'
-                      }
-                    }}
-                  >
-                    Download Report
-                  </Button>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AnalyticsIcon sx={{ color: '#2e7d32' }} />
+                    <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 800 }}>Analysis Results</Typography>
+                  </Box>
                 </Box>
 
-                {/* ROW 1: Quality Hero Card */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                >
-                  <Card elevation={3} sx={{
-                    borderRadius: 3,
-                    mb: 3,
-                    background: getQualityGradient(analysis.quality_class),
-                    color: 'white'
-                  }}>
-                    <CardContent sx={{ p: 3 }}>
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} md={4}>
-                          <Typography variant="body2" sx={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1, mb: 0.5, fontSize: '0.75rem', fontWeight: 700 }}>
-                            Latex Quality
-                          </Typography>
-                          <Typography variant="h2" sx={{ fontWeight: 900, lineHeight: 1.1 }}>
-                            {analysis.quality_class || 'Unknown'}
-                          </Typography>
+                {/* 1 — Quality Hero */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
+                  <Card elevation={0} sx={{ borderRadius: 3, mb: 3, background: getQualityGradient(analysis.quality_class), color: 'white', overflow: 'hidden', position: 'relative' }}>
+                    <Box sx={{ position: 'absolute', top: -24, right: -24, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+                    <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                      <Grid container spacing={3} alignItems="center">
+                        <Grid item xs={12} md={5}>
+                          <Typography variant="caption" sx={{ opacity: 0.65, textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700 }}>Quality Grade</Typography>
+                          <Typography variant="h2" sx={{ fontWeight: 900, lineHeight: 1, mt: 0.5, letterSpacing: -1 }}>{analysis.quality_class || 'Unknown'}</Typography>
+                          {analysisResult.all_predictions?.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.7, mt: 1.5 }}>
+                              {analysisResult.all_predictions.map((p, i) => (
+                                <Chip key={i} label={`${p.class} ${Number(p.confidence || 0).toFixed(0)}%`} size="small"
+                                  sx={i === 0
+                                    ? { bgcolor: 'rgba(255,255,255,0.28)', color: 'white', fontWeight: 700, fontSize: '0.7rem' }
+                                    : { bgcolor: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.8)', fontSize: '0.7rem' }
+                                  }
+                                />
+                              ))}
+                            </Box>
+                          )}
                         </Grid>
-                        <Grid item xs={12} md={8}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
-                            <Typography variant="body2" sx={{ opacity: 0.8 }}>Classification Confidence</Typography>
-                            <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                              {analysis.quality_score?.toFixed(1)}%
-                            </Typography>
+                        <Grid item xs={12} md={7}>
+                          <Box sx={{ mb: 2.5 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.8 }}>
+                              <Typography variant="body2" sx={{ opacity: 0.8 }}>Classification Confidence</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 800 }}>{analysis.quality_score?.toFixed(1)}%</Typography>
+                            </Box>
+                            <LinearProgress variant="determinate" value={analysis.quality_score || 0}
+                              sx={{ height: 10, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.22)', '& .MuiLinearProgress-bar': { bgcolor: 'white', borderRadius: 99 } }}
+                            />
                           </Box>
-                          <LinearProgress
-                            variant="determinate"
-                            value={analysis.quality_score || 0}
-                            sx={{
-                              height: 16,
-                              borderRadius: 99,
-                              bgcolor: 'rgba(255,255,255,0.25)',
-                              '& .MuiLinearProgress-bar': {
-                                bgcolor: 'white',
-                                borderRadius: 99
-                              }
-                            }}
-                          />
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>0%</Typography>
-                            <Typography variant="caption" sx={{ opacity: 0.7 }}>100%</Typography>
-                          </Box>
+                          <Grid container spacing={1.5}>
+                            <Grid item xs={6}>
+                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.13)', borderRadius: 2 }}>
+                                <Typography variant="caption" sx={{ opacity: 0.65 }}>Dry Rubber Content</Typography>
+                                <Typography variant="h5" sx={{ fontWeight: 900, mt: 0.3 }}>{analysis.dry_rubber_content?.toFixed(1)}%</Typography>
+                                <Chip label={analysis.drc_category || 'N/A'} size="small"
+                                  sx={{ mt: 0.5, bgcolor: 'rgba(255,255,255,0.22)', color: 'white', fontSize: '0.65rem', fontWeight: 700 }}
+                                />
+                              </Box>
+                            </Grid>
+                            <Grid item xs={6}>
+                              <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.13)', borderRadius: 2 }}>
+                                <Typography variant="caption" sx={{ opacity: 0.65 }}>Consistency</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, mt: 0.5 }}>
+                                  <TextureIcon sx={{ fontSize: 18 }} />
+                                  <Typography variant="body1" sx={{ fontWeight: 700 }}>{analysis.consistency || '—'}</Typography>
+                                </Box>
+                              </Box>
+                            </Grid>
+                          </Grid>
                         </Grid>
                       </Grid>
                     </CardContent>
                   </Card>
                 </motion.div>
 
-                {/* ROW 2: Key Metrics Cards */}
-                <Grid container spacing={3} sx={{ mb: 3 }}>
+                {/* 2 — Contamination + Color + DRC */}
+                <Grid container spacing={2.5} sx={{ mb: 3 }}>
                   <Grid item xs={12} md={4}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                    >
-                      <Card elevation={2} sx={{
-                        borderRadius: 3,
-                        border: '2px solid #2e7d32',
-                        height: '100%',
-                        bgcolor: contamination.detected ? '#ffebee' : '#f1f8e9'
-                      }}>
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            <WarningIcon sx={{ color: contamination.detected ? '#f44336' : '#4caf50' }} />
-                            <Typography variant="body2" sx={{
-                              color: contamination.detected ? '#b71c1c' : '#2e7d32',
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: 1,
-                              fontSize: '0.75rem'
-                            }}>
-                              Contamination Status
-                            </Typography>
-                          </Box>
-                          <Typography variant="h6" sx={{
-                            color: contamination.detected ? '#b71c1c' : '#2e7d32',
-                            fontWeight: 800,
-                            mb: 1
-                          }}>
-                            {contamination.detected ? 'Contamination Detected' : 'Clean Sample'}
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.09 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: `1px solid ${contamination.detected ? '#ef9a9a' : '#c8e6c9'}`, bgcolor: contamination.detected ? '#fff5f5' : 'white' }}>
+                        <SectionLabel icon={<WarningIcon sx={{ color: contamination.detected ? '#ef5350' : '#4caf50', fontSize: 17 }} />} label="Contamination" />
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderRadius: 2, bgcolor: contamination.detected ? 'rgba(244,67,54,0.1)' : 'rgba(76,175,80,0.1)', mb: 1.5 }}>
+                          {contamination.detected
+                            ? <ErrorIcon sx={{ color: '#ef5350', fontSize: 17 }} />
+                            : <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 17 }} />
+                          }
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: contamination.detected ? '#c62828' : '#2e7d32' }}>
+                            {contamination.detected ? 'Detected' : 'Clean Sample'}
                           </Typography>
-                          {contamination.detected && (
-                            <Chip
-                              label={`Probability: ${contamination.probability?.toFixed(1)}%`}
-                              size="small"
-                              sx={{
-                                bgcolor: getContaminationColor(true, contamination.probability),
-                                color: 'white',
-                                fontWeight: 600
-                              }}
+                        </Box>
+                        {contamination.detected && (
+                          <Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                              <Typography variant="caption" sx={{ color: '#607d8b' }}>Probability</Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#ef9a9a' }}>{contamination.probability?.toFixed(1)}%</Typography>
+                            </Box>
+                            <LinearProgress variant="determinate" value={contamination.probability || 0}
+                              sx={{ height: 6, borderRadius: 99, bgcolor: 'rgba(244,67,54,0.2)', mb: 1.5, '& .MuiLinearProgress-bar': { bgcolor: '#ef5350' } }}
                             />
-                          )}
-                          {contamination.type && contamination.type !== 'none' && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                              Type: {contamination.type.replace('_', ' ')}
-                            </Typography>
-                          )}
-                        </CardContent>
-                      </Card>
+                            {contamination.type && contamination.type !== 'none' && (
+                              <Chip label={contamination.type.replace('_', ' ')} size="small"
+                                sx={{ bgcolor: '#ffebee', color: '#c62828', border: '1px solid #ef9a9a', fontSize: '0.7rem' }}
+                              />
+                            )}
+                          </Box>
+                        )}
+                      </Paper>
                     </motion.div>
                   </Grid>
 
                   <Grid item xs={12} md={4}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.15 }}
-                    >
-                      <Card elevation={2} sx={{ borderRadius: 3, border: '2px solid #2e7d32', height: '100%' }}>
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            <OpacityIcon sx={{ color: '#2e7d32' }} />
-                            <Typography variant="body2" sx={{
-                              color: '#388e3c',
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: 1,
-                              fontSize: '0.75rem'
-                            }}>
-                              Dry Rubber Content
-                            </Typography>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1px solid #c8e6c9', bgcolor: 'white' }}>
+                        <SectionLabel icon={<ColorLensIcon sx={{ color: '#4caf50', fontSize: 17 }} />} label="Color Analysis" />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                          <Box sx={{ width: 52, height: 52, borderRadius: 2, bgcolor: getColorSwatch(colorAnalysis.hex), border: '3px solid rgba(255,255,255,0.1)', boxShadow: `0 2px 10px ${getColorSwatch(colorAnalysis.hex)}55`, flexShrink: 0 }} />
+                          <Box>
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: '#1b5e20', textTransform: 'capitalize', lineHeight: 1.2 }}>{colorAnalysis.name || 'Unknown'}</Typography>
+                            <Typography variant="caption" sx={{ color: '#607d8b' }}>{colorAnalysis.hex || '—'}</Typography>
                           </Box>
-                          <Typography variant="h2" sx={{ color: '#1b5e20', fontWeight: 900, lineHeight: 1 }}>
-                            {analysis.dry_rubber_content?.toFixed(1)}%
-                          </Typography>
-                          <Chip
-                            label={`Category: ${analysis.drc_category || 'N/A'}`}
-                            size="small"
-                            sx={{
-                              mt: 1,
-                              bgcolor: getDrcCategoryColor(analysis.drc_category),
-                              color: 'white',
-                              fontWeight: 600
-                            }}
+                        </Box>
+                        {colorAnalysis.hsv && (
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            {[{ l: 'H', v: `${colorAnalysis.hsv.h?.toFixed(0)}°` }, { l: 'S', v: `${colorAnalysis.hsv.s?.toFixed(0)}%` }, { l: 'V', v: `${colorAnalysis.hsv.v?.toFixed(0)}%` }].map(({ l, v }) => (
+                              <Box key={l} sx={{ flex: 1, p: 1, bgcolor: '#f7fdf9', borderRadius: 1.5, textAlign: 'center', border: '1px solid #dcefdc' }}>
+                                <Typography variant="caption" sx={{ color: '#607d8b', fontWeight: 600, display: 'block' }}>{l}</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: '#1b4332' }}>{v}</Typography>
+                              </Box>
+                            ))}
+                          </Box>
+                        )}
+                      </Paper>
+                    </motion.div>
+                  </Grid>
+
+                  <Grid item xs={12} md={4}>
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', border: '1px solid #c8e6c9', bgcolor: 'white' }}>
+                        <SectionLabel icon={<OpacityIcon sx={{ color: '#4caf50', fontSize: 17 }} />} label="Dry Rubber Content" />
+                        <Typography variant="h2" sx={{ fontWeight: 900, color: '#1b5e20', lineHeight: 1, letterSpacing: -1 }}>
+                          {analysis.dry_rubber_content?.toFixed(1)}
+                          <Typography component="span" variant="h5" sx={{ fontWeight: 400, ml: 0.4, color: '#2e7d32' }}>%</Typography>
+                        </Typography>
+                        <Box sx={{ mt: 2 }}>
+                          <LinearProgress variant="determinate" value={Math.min(analysis.dry_rubber_content || 0, 100)}
+                            sx={{ height: 8, borderRadius: 99, bgcolor: '#e8f5e9', mb: 1.5, '& .MuiLinearProgress-bar': { bgcolor: getDrcColor(analysis.drc_category), borderRadius: 99 } }}
                           />
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Grid>
-
-                  <Grid item xs={12} md={4}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      <Card elevation={2} sx={{ borderRadius: 3, border: '2px solid #2e7d32', height: '100%' }}>
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                            <ColorLensIcon sx={{ color: '#2e7d32' }} />
-                            <Typography variant="body2" sx={{
-                              color: '#388e3c',
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: 1,
-                              fontSize: '0.75rem'
-                            }}>
-                              Color Analysis
-                            </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Box sx={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: '50%',
-                              bgcolor: getColorSwatch(colorAnalysis.hex),
-                              border: '2px solid #e0e0e0',
-                              flexShrink: 0
-                            }} />
-                            <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700 }}>
-                              {colorAnalysis.name || 'Unknown'}
-                            </Typography>
-                          </Box>
-                        </CardContent>
-                      </Card>
+                          <Chip label={`Category: ${analysis.drc_category || 'N/A'}`} size="small"
+                            sx={{ bgcolor: getDrcColor(analysis.drc_category), color: 'white', fontWeight: 700, fontSize: '0.72rem', border: 'none' }}
+                          />
+                        </Box>
+                      </Paper>
                     </motion.div>
                   </Grid>
                 </Grid>
 
-                {/* ROW 3: Visual & Physical Analysis */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.24 }}
-                >
-                  <Paper elevation={2} sx={{
-                    borderRadius: 3,
-                    border: '1px solid #c8e6c9',
-                    p: 3,
-                    mb: 3,
-                    bgcolor: 'white'
-                  }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                      <BubbleChartIcon sx={{ color: '#2e7d32' }} />
-                      <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700 }}>
-                        Physical Properties Analysis
-                      </Typography>
-                    </Box>
-
-                    <Grid container spacing={3}>
-                      {/* Left column - Color swatch */}
-                      <Grid item xs={12} sm={4} sx={{ textAlign: 'center' }}>
-                        <Box sx={{
-                          width: 140,
-                          height: 140,
-                          borderRadius: '50%',
-                          mx: 'auto',
-                          mb: 2,
-                          background: `linear-gradient(135deg, ${getColorSwatch(colorAnalysis.hex)}, #2e7d32)`,
-                          border: '4px solid #e8f5e9',
-                          boxShadow: `0 4px 24px ${getColorSwatch(colorAnalysis.hex)}66`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}>
-                          <OpacityIcon sx={{ fontSize: 60, color: 'rgba(255,255,255,0.85)' }} />
+                {/* 3 — Physical Properties */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1px solid #c8e6c9', bgcolor: 'white' }}>
+                    <SectionLabel icon={<BubbleChartIcon sx={{ color: '#4caf50', fontSize: 17 }} />} label="Physical Properties" />
+                    <Grid container spacing={2.5}>
+                      <Grid item xs={12} sm={6}>
+                        <Box sx={{ p: 2.5, bgcolor: '#f7fdf9', borderRadius: 2, border: '1px solid #dcefdc', height: '100%' }}>
+                          <Typography variant="caption" sx={{ color: '#607d8b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, display: 'block', mb: 1 }}>Consistency</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TextureIcon sx={{ color: '#a5d6a7' }} />
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: '#1b4332' }}>{analysis.consistency || '—'}</Typography>
+                          </Box>
                         </Box>
-                        <Typography variant="subtitle1" sx={{ color: '#2e7d32', fontWeight: 700, textTransform: 'capitalize' }}>
-                          {colorAnalysis.name || 'â€”'}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">Color</Typography>
-                        
-                        {colorAnalysis.hsv && (
-                          <Box sx={{ mt: 1 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              H: {colorAnalysis.hsv.h?.toFixed(0)}° S: {colorAnalysis.hsv.s?.toFixed(0)}% V: {colorAnalysis.hsv.v?.toFixed(0)}%
-                            </Typography>
-                          </Box>
-                        )}
                       </Grid>
-
-                      {/* Right column - Metrics */}
-                      <Grid item xs={12} sm={8}>
-                        <Grid container spacing={2} sx={{ mb: 3 }}>
-                          <Grid item xs={6}>
-                            <Box sx={{
-                              p: 2,
-                              bgcolor: '#f1f8e9',
-                              borderRadius: 2,
-                              border: '1px solid #dcedc8'
-                            }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                Consistency
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <TextureIcon sx={{ color: '#2e7d32' }} />
-                                <Typography variant="body1" sx={{ fontWeight: 700, color: '#1b5e20' }}>
-                                  {analysis.consistency || 'â€”'}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Box sx={{
-                              p: 2,
-                              bgcolor: '#f1f8e9',
-                              borderRadius: 2,
-                              border: '1px solid #dcedc8'
-                            }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                Impurity Particles
-                              </Typography>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <WarningIcon sx={{ color: analysis.impurities?.detected ? '#f44336' : '#4caf50' }} />
-                                <Typography variant="body1" sx={{ fontWeight: 700, color: '#1b5e20' }}>
-                                  {analysis.impurities?.count || 0}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </Grid>
-                        </Grid>
-
-                        {/* Impurity details */}
-                        {analysis.impurities && (
-                          <Box sx={{ mt: 2 }}>
-                            <Typography variant="subtitle2" sx={{ color: '#388e3c', fontWeight: 700, mb: 1 }}>
-                              Impurity Analysis
-                            </Typography>
-                            <Box sx={{
-                              p: 2,
-                              bgcolor: analysis.impurities.detected ? '#fff3e0' : '#e8f5e9',
-                              borderRadius: 2,
-                              border: `1px solid ${analysis.impurities.detected ? '#ffb74d' : '#a5d6a7'}`
-                            }}>
-                              <Typography variant="body2">
-                                {analysis.impurities.description || 'No impurities detected'}
-                              </Typography>
-                              {analysis.impurities.detected && (
-                                <Box sx={{ mt: 1 }}>
-                                  <Chip
-                                    size="small"
-                                    label={`Severity: ${analysis.impurities.severity}`}
-                                    sx={{
-                                      bgcolor: analysis.impurities.severity === 'minimal' ? '#4caf50' :
-                                              analysis.impurities.severity === 'low' ? '#2196f3' :
-                                              analysis.impurities.severity === 'moderate' ? '#ff9800' : '#f44336',
-                                      color: 'white',
-                                      fontSize: '0.7rem'
-                                    }}
-                                  />
-                                </Box>
-                              )}
-                            </Box>
+                      <Grid item xs={12} sm={6}>
+                        <Box sx={{ p: 2.5, bgcolor: analysis.impurities?.detected ? '#fff8f1' : '#f7fdf9', borderRadius: 2, border: `1px solid ${analysis.impurities?.detected ? '#ffd699' : '#dcefdc'}`, height: '100%' }}>
+                          <Typography variant="caption" sx={{ color: '#607d8b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8, display: 'block', mb: 1 }}>Impurity Particles</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: analysis.impurities?.detected ? 1.5 : 0 }}>
+                            <WarningIcon sx={{ color: analysis.impurities?.detected ? '#ffb74d' : '#a5d6a7' }} />
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: '#1b4332' }}>{analysis.impurities?.count || 0} detected</Typography>
                           </Box>
-                        )}
+                          {analysis.impurities?.detected && (
+                            <>
+                              {analysis.impurities.description && <Typography variant="body2" sx={{ color: '#546e7a', mb: 1 }}>{analysis.impurities.description}</Typography>}
+                              <Chip label={`Severity: ${analysis.impurities.severity}`} size="small" sx={{
+                                bgcolor: analysis.impurities.severity === 'minimal' ? 'rgba(76,175,80,0.1)' : analysis.impurities.severity === 'low' ? 'rgba(33,150,243,0.1)' : analysis.impurities.severity === 'moderate' ? 'rgba(255,152,0,0.1)' : 'rgba(244,67,54,0.1)',
+                                color: analysis.impurities.severity === 'minimal' ? '#2e7d32' : analysis.impurities.severity === 'low' ? '#1565c0' : analysis.impurities.severity === 'moderate' ? '#e65100' : '#c62828',
+                                border: '1px solid', borderColor: analysis.impurities.severity === 'minimal' ? 'rgba(76,175,80,0.3)' : analysis.impurities.severity === 'low' ? 'rgba(33,150,243,0.3)' : analysis.impurities.severity === 'moderate' ? 'rgba(255,152,0,0.3)' : 'rgba(244,67,54,0.3)',
+                                fontWeight: 600, fontSize: '0.7rem',
+                              }} />
+                            </>
+                          )}
+                        </Box>
                       </Grid>
                     </Grid>
                   </Paper>
                 </motion.div>
 
-                {/* ROW 4: Quantity & Yield Estimation */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.28 }}
-                >
-                  <Paper elevation={2} sx={{
-                    borderRadius: 3,
-                    border: '1px solid #c8e6c9',
-                    p: 3,
-                    mb: 3,
-                    bgcolor: 'white'
-                  }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                      <AssessmentIcon sx={{ color: '#2e7d32' }} />
-                      <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700 }}>
-                        Quantity & Yield Estimation
-                      </Typography>
-                    </Box>
-
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={6}>
-                        <Box sx={{
-                          p: 2.5,
-                          bgcolor: '#e3f2fd',
-                          borderRadius: 2,
-                          border: '1px solid #90caf9'
-                        }}>
-                          <Typography variant="subtitle2" sx={{ color: '#1565c0', fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                            <OpacityIcon fontSize="small" /> Volume Estimation
-                          </Typography>
-                          <Typography variant="h3" sx={{ color: '#0d47a1', fontWeight: 900 }}>
-                            {quantity.estimated_volume_ml?.toFixed(0)} <span style={{ fontSize: '1rem', fontWeight: 400 }}>mL</span>
+                {/* 4 — Quantity & Yield */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }}>
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #c8e6c9', bgcolor: 'white' }}>
+                    <SectionLabel icon={<AssessmentIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Quantity & Yield Estimation" />
+                    <Grid container spacing={2.5}>
+                      <Grid item xs={12} sm={6}>
+                        <Box sx={{ p: 2.5, bgcolor: '#f0f7ff', borderRadius: 2, border: '1px solid #bbdefb', height: '100%' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                            <OpacityIcon sx={{ color: '#1565c0', fontSize: 16 }} />
+                            <Typography variant="caption" sx={{ color: '#1565c0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Volume Estimation</Typography>
+                          </Box>
+                          <Typography variant="h3" sx={{ color: '#0d47a1', fontWeight: 900, lineHeight: 1 }}>
+                            {quantity.estimated_volume_ml?.toFixed(0)}
+                            <Typography component="span" variant="body1" sx={{ color: '#1976d2', ml: 0.8, fontWeight: 400 }}>mL</Typography>
                           </Typography>
                           <Box sx={{ mt: 2 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Confidence: {quantity.confidence?.toFixed(1)}%
-                            </Typography>
-                            <LinearProgress
-                              variant="determinate"
-                              value={quantity.confidence || 0}
-                              sx={{
-                                height: 8,
-                                borderRadius: 99,
-                                mt: 0.5,
-                                bgcolor: '#bbdefb',
-                                '& .MuiLinearProgress-bar': { bgcolor: '#1976d2' }
-                              }}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary">Confidence</Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: '#1565c0' }}>{quantity.confidence?.toFixed(1)}%</Typography>
+                            </Box>
+                            <LinearProgress variant="determinate" value={quantity.confidence || 0}
+                              sx={{ height: 6, borderRadius: 99, bgcolor: '#bbdefb', '& .MuiLinearProgress-bar': { bgcolor: '#1976d2' } }}
                             />
                           </Box>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                            Latex Area: {quantity.latex_area_percentage?.toFixed(1)}% of sample
+                            Latex area: {quantity.latex_area_percentage?.toFixed(1)}% of sample
                           </Typography>
                         </Box>
                       </Grid>
-
-                      <Grid item xs={12} md={6}>
-                        <Box sx={{
-                          p: 2.5,
-                          bgcolor: '#e8f5e9',
-                          borderRadius: 2,
-                          border: '1px solid #a5d6a7'
-                        }}>
-                          <Typography variant="subtitle2" sx={{ color: '#2e7d32', fontWeight: 700, mb: 2, display: 'flex', alignItems: 'center', gap: 0.8 }}>
-                            <BiotechIcon fontSize="small" /> Dry Yield
-                          </Typography>
-                          <Grid container spacing={2}>
-                            <Grid item xs={6}>
-                              <Typography variant="caption" color="text.secondary">Wet Weight</Typography>
-                              <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700 }}>
-                                {yield_est.wet_weight_kg?.toFixed(2)} kg
-                              </Typography>
-                            </Grid>
-                            <Grid item xs={6}>
-                              <Typography variant="caption" color="text.secondary">Dry Weight</Typography>
-                              <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700 }}>
-                                {yield_est.dry_weight_kg?.toFixed(2)} kg
-                              </Typography>
-                            </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Box sx={{ p: 2.5, bgcolor: '#fafef9', borderRadius: 2, border: '1px solid #c8e6c9', height: '100%' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                            <BiotechIcon sx={{ color: '#2e7d32', fontSize: 16 }} />
+                            <Typography variant="caption" sx={{ color: '#2e7d32', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>Dry Yield</Typography>
+                          </Box>
+                          <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                            {[{ l: 'Wet Weight', v: `${yield_est.wet_weight_kg?.toFixed(2)} kg` }, { l: 'Dry Weight', v: `${yield_est.dry_weight_kg?.toFixed(2)} kg` }].map(({ l, v }) => (
+                              <Grid item xs={6} key={l}>
+                                <Box sx={{ p: 1.5, bgcolor: '#e8f5e9', borderRadius: 1.5, textAlign: 'center' }}>
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{l}</Typography>
+                                  <Typography variant="body1" sx={{ fontWeight: 800, color: '#1b5e20' }}>{v}</Typography>
+                                </Box>
+                              </Grid>
+                            ))}
                           </Grid>
-                          <Divider sx={{ my: 1.5 }} />
-                          <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <CheckCircleIcon sx={{ color: '#4caf50', fontSize: 16 }} />
-                            Yield Efficiency: {yield_est.dry_yield_percentage?.toFixed(1)}%
-                          </Typography>
+                          <Divider sx={{ my: 1 }} />
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8 }}>
+                            <CheckCircleIcon sx={{ color: '#2e7d32', fontSize: 16 }} />
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: '#1b5e20' }}>
+                              Yield Efficiency: {yield_est.dry_yield_percentage?.toFixed(1)}%
+                            </Typography>
+                          </Box>
                         </Box>
                       </Grid>
                     </Grid>
                   </Paper>
                 </motion.div>
 
-                {/* ROW 5: Market Analysis */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.32 }}
-                >
-                  <Paper elevation={3} sx={{
-                    borderRadius: 3,
-                    p: 3,
-                    mb: 3,
-                    background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)',
-                    color: 'white',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}>
-                    <Box sx={{ position: 'absolute', right: -20, bottom: -20, width: 150, height: 150, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-                    
+                {/* 5 — Market */}
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}>
+                  <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)', color: 'white', position: 'relative', overflow: 'hidden' }}>
+                    <Box sx={{ position: 'absolute', right: -30, bottom: -30, width: 200, height: 200, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
-                      <MonetizationOnIcon />
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>Market Price Analysis</Typography>
+                      <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.55)' }} />
+                      <MonetizationOnIcon sx={{ fontSize: 18 }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Market Price Analysis</Typography>
+                      {liveMarketData && <Chip label="Live" size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontSize: '0.65rem', fontWeight: 700 }} />}
                     </Box>
-
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={4}>
-                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                          <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>
-                            Price per kg {liveMarketData ? '(Live RSS3)' : '(Scan Estimate)'}
-                          </Typography>
-                          <Typography variant="h3" sx={{ fontWeight: 900 }}>
-                            PHP {effectivePricePerKg.toFixed(2)}
-                          </Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                            {effectiveCurrency}{liveSourceLabel ? ` | ${liveSourceLabel}` : ''}
-                          </Typography>
-                        </Box>
-                      </Grid>
-
-                      <Grid item xs={12} md={4}>
-                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                          <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>Total Value</Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                            PHP {effectiveTotalValue.toFixed(2)}
-                          </Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                            {effectiveDryYieldKg > 0 ? `Based on ${effectiveDryYieldKg.toFixed(2)} kg dry yield` : 'Estimated'}
-                          </Typography>
-                        </Box>
-                      </Grid>
-
-                      <Grid item xs={12} md={4}>
-                        <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                          <Typography variant="body2" sx={{ opacity: 0.8, mb: 1 }}>Market Trend</Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                            <TimelineIcon />
-                            <Typography variant="h6" sx={{ fontWeight: 700, textTransform: 'capitalize' }}>
-                              {effectiveTrend.toLowerCase()}
-                            </Typography>
+                    <Grid container spacing={2} sx={{ mb: market.regional_comparison ? 2.5 : 0 }}>
+                      {[
+                        { label: `Price / kg${liveMarketData ? ' (Live RSS3)' : ''}`, main: `PHP ${effectivePricePerKg.toFixed(2)}`, sub: `${effectiveCurrency}${liveSourceLabel ? ` · ${liveSourceLabel}` : ''}` },
+                        { label: 'Total Value', main: `PHP ${effectiveTotalValue.toFixed(2)}`, sub: effectiveDryYieldKg > 0 ? `${effectiveDryYieldKg.toFixed(2)} kg dry yield` : 'Estimated' },
+                        { label: 'Market Trend', main: effectiveTrend.charAt(0).toUpperCase() + effectiveTrend.slice(1).toLowerCase(), sub: `Strength: ${effectiveTrendStrengthPct.toFixed(2)}%`, icon: <TimelineIcon sx={{ fontSize: 18, mr: 0.5 }} /> },
+                      ].map(({ label, main, sub, icon }) => (
+                        <Grid item xs={12} sm={4} key={label}>
+                          <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 2.5, textAlign: 'center', height: '100%' }}>
+                            <Typography variant="caption" sx={{ opacity: 0.72, display: 'block', mb: 0.5 }}>{label}</Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {icon}
+                              <Typography variant="h5" sx={{ fontWeight: 900, lineHeight: 1.1 }}>{main}</Typography>
+                            </Box>
+                            <Typography variant="caption" sx={{ opacity: 0.6 }}>{sub}</Typography>
                           </Box>
-                          <Typography variant="caption" sx={{ opacity: 0.7 }}>
-                            Strength: {effectiveTrendStrengthPct.toFixed(2)}%
-                          </Typography>
-                        </Box>
-                      </Grid>
+                        </Grid>
+                      ))}
                     </Grid>
-
-                    {/* Regional Comparison */}
                     {market.regional_comparison && (
-                      <Box sx={{ mt: 3 }}>
-                        <Typography variant="subtitle2" sx={{ opacity: 0.9, mb: 1 }}>Regional Comparison (PHP/kg)</Typography>
-                        <Grid container spacing={1}>
+                      <Box>
+                        <Typography variant="caption" sx={{ opacity: 0.75, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>Regional Comparison (PHP/kg)</Typography>
+                        <Grid container spacing={1} sx={{ mt: 0.5 }}>
                           {Object.entries(market.regional_comparison).map(([region, price]) => (
                             <Grid item xs={6} sm={3} key={region}>
-                              <Box sx={{
-                                p: 1,
-                                bgcolor: region === selectedRegion ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
-                                borderRadius: 2,
-                                textAlign: 'center'
-                              }}>
-                                <Typography variant="caption" sx={{ textTransform: 'capitalize', opacity: 0.8 }}>
-                                  {region}
-                                </Typography>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                  PHP {price}
-                                </Typography>
+                              <Box sx={{ p: 1.2, bgcolor: region === selectedRegion ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)', borderRadius: 1.5, textAlign: 'center' }}>
+                                <Typography variant="caption" sx={{ opacity: 0.72, textTransform: 'capitalize', display: 'block' }}>{region}</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>PHP {price}</Typography>
                               </Box>
                             </Grid>
                           ))}
@@ -1412,137 +674,80 @@ const LatexDetection = () => {
                   </Paper>
                 </motion.div>
 
-                {/* ROW 6: Product Recommendations */}
-                <Grid container spacing={3} sx={{ mb: 3 }}>
+                {/* 6 — Recommendations */}
+                <Grid container spacing={2.5} sx={{ mb: 3 }}>
                   <Grid item xs={12} md={6}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.36 }}
-                    >
-                      <Paper elevation={3} sx={{
-                        borderRadius: 3,
-                        p: 3,
-                        height: '100%',
-                        background: 'linear-gradient(135deg, #004d40 0%, #00695c 100%)',
-                        color: 'white',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}>
-                        <Box sx={{ position: 'absolute', right: -20, bottom: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-                        
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.27 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', background: 'linear-gradient(160deg, #004d40 0%, #00695c 100%)', color: 'white', position: 'relative', overflow: 'hidden' }}>
+                        <Box sx={{ position: 'absolute', right: -20, bottom: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
-                          <FactoryIcon />
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>Recommended Products</Typography>
+                          <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.5)' }} />
+                          <FactoryIcon sx={{ fontSize: 17 }} />
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Recommended Products</Typography>
                         </Box>
-
                         {recommendations.recommended_products?.length > 0 ? (
                           <List dense disablePadding>
                             {recommendations.recommended_products.map((product, i) => (
-                              <motion.div
-                                key={i}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.36 + i * 0.06 }}
-                              >
+                              <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.27 + i * 0.05 }}>
                                 <ListItem disableGutters sx={{ py: 0.8, alignItems: 'flex-start' }}>
-                                  <ListItemIcon sx={{ minWidth: 32, mt: 0.3 }}>
-                                    <Box sx={{
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: '50%',
-                                      bgcolor: 'rgba(255,255,255,0.2)',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      flexShrink: 0
-                                    }}>
-                                      <Typography sx={{ fontSize: '0.65rem', fontWeight: 800 }}>{i + 1}</Typography>
+                                  <ListItemIcon sx={{ minWidth: 30, mt: 0.3 }}>
+                                    <Box sx={{ width: 20, height: 20, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Typography sx={{ fontSize: '0.6rem', fontWeight: 800 }}>{i + 1}</Typography>
                                     </Box>
                                   </ListItemIcon>
                                   <ListItemText
                                     primary={product.name || product}
                                     secondary={product.description || `DRC: ${product.drc_requirement || 'N/A'}`}
                                     primaryTypographyProps={{ variant: 'body2', sx: { color: 'white', fontWeight: 600 } }}
-                                    secondaryTypographyProps={{ variant: 'caption', sx: { color: 'rgba(255,255,255,0.7)' } }}
+                                    secondaryTypographyProps={{ variant: 'caption', sx: { color: 'rgba(255,255,255,0.65)' } }}
                                   />
                                 </ListItem>
                               </motion.div>
                             ))}
                           </List>
                         ) : (
-                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                            No product recommendations available.
-                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)' }}>No product recommendations available.</Typography>
                         )}
-
                         {recommendations.processing_required && (
-                          <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
-                            <Typography variant="caption">
-                              ⚠️ Pre-purification recommended before use
-                            </Typography>
-                          </Alert>
+                          <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,193,7,0.16)', borderRadius: 2, display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                            <WarningIcon sx={{ fontSize: 16, color: '#ffc107', mt: 0.1 }} />
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)' }}>Pre-purification recommended before use</Typography>
+                          </Box>
                         )}
                       </Paper>
                     </motion.div>
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <Paper elevation={3} sx={{
-                        borderRadius: 3,
-                        p: 3,
-                        height: '100%',
-                        background: 'linear-gradient(135deg, #3e2723 0%, #4e342e 100%)',
-                        color: 'white',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}>
-                        <Box sx={{ position: 'absolute', right: -20, bottom: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-                        
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                      <Paper elevation={0} sx={{ p: 3, borderRadius: 3, height: '100%', background: 'linear-gradient(160deg, #37474f 0%, #455a64 100%)', color: 'white', position: 'relative', overflow: 'hidden' }}>
+                        <Box sx={{ position: 'absolute', right: -20, bottom: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2.5 }}>
-                          <BiotechIcon />
-                          <Typography variant="h6" sx={{ fontWeight: 700 }}>Processing Recommendations</Typography>
+                          <Box sx={{ width: 3, height: 20, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.5)' }} />
+                          <BiotechIcon sx={{ fontSize: 17 }} />
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Processing Recommendations</Typography>
                         </Box>
-
                         {recommendations.suggested_applications?.length > 0 ? (
                           <List dense disablePadding>
                             {recommendations.suggested_applications.map((app, i) => (
-                              <motion.div
-                                key={i}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.4 + i * 0.06 }}
-                              >
+                              <motion.div key={i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 + i * 0.05 }}>
                                 <ListItem disableGutters sx={{ py: 0.8 }}>
-                                  <ListItemIcon sx={{ minWidth: 28 }}>
-                                    <CheckCircleIcon sx={{ color: 'rgba(255,255,255,0.7)', fontSize: 18 }} />
+                                  <ListItemIcon sx={{ minWidth: 26 }}>
+                                    <CheckCircleIcon sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 16 }} />
                                   </ListItemIcon>
-                                  <ListItemText primary={app} primaryTypographyProps={{ variant: 'body2', sx: { color: 'rgba(255,255,255,0.9)' } }} />
+                                  <ListItemText primary={app} primaryTypographyProps={{ variant: 'body2', sx: { color: 'rgba(255,255,255,0.88)' } }} />
                                 </ListItem>
                               </motion.div>
                             ))}
                           </List>
                         ) : (
-                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                            No specific applications available.
-                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)' }}>No specific applications available.</Typography>
                         )}
-
                         {analysis.drc_category && (
                           <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
-                            <Typography variant="caption" sx={{ display: 'block', mb: 0.5, opacity: 0.8 }}>
-                              Best suited for:
-                            </Typography>
+                            <Typography variant="caption" sx={{ opacity: 0.65, display: 'block', mb: 0.3 }}>Best suited for:</Typography>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {analysis.drc_category === 'Excellent' ? 'Premium medical products' :
-                               analysis.drc_category === 'Good' ? 'Industrial applications' :
-                               analysis.drc_category === 'Average' ? 'General rubber goods' :
-                               'Recycled products & fillers'}
+                              {analysis.drc_category === 'Excellent' ? 'Premium medical products' : analysis.drc_category === 'Good' ? 'Industrial applications' : analysis.drc_category === 'Average' ? 'General rubber goods' : 'Recycled products & fillers'}
                             </Typography>
                           </Box>
                         )}
@@ -1551,58 +756,21 @@ const LatexDetection = () => {
                   </Grid>
                 </Grid>
 
-                {/* All Predictions */}
-                {analysisResult.all_predictions?.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.44 }}
-                  >
-                    <Paper elevation={2} sx={{ borderRadius: 3, border: '1px solid #c8e6c9', p: 3, mb: 3, bgcolor: 'white' }}>
-                      <Typography variant="subtitle2" sx={{ color: '#388e3c', fontWeight: 700, mb: 1.5 }}>
-                        Top Classifications
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {analysisResult.all_predictions.map((pred, i) => (
-                          <Chip
-                            key={i}
-                            label={`${pred.class} (${pred.confidence.toFixed(0)}%)`}
-                            size="small"
-                            sx={i === 0
-                              ? { bgcolor: '#2e7d32', color: 'white', fontWeight: 600 }
-                              : { bgcolor: '#e8f5e9', color: '#1b5e20', border: '1px solid #a5d6a7', fontWeight: 500 }}
-                          />
-                        ))}
-                      </Box>
-                    </Paper>
-                  </motion.div>
-                )}
-
-                {/* Detection Boxes Summary */}
+                {/* 7 — Detections */}
                 {latexDetections.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.46 }}
-                  >
-                    <Paper elevation={2} sx={{ borderRadius: 3, border: '1px solid #c8e6c9', p: 3, mb: 3, bgcolor: 'white' }}>
-                      <Typography variant="subtitle2" sx={{ color: '#388e3c', fontWeight: 700, mb: 1.5 }}>
-                        Detected Latex Boxes ({latexDetections.length})
-                      </Typography>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.33 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #c8e6c9', bgcolor: 'white' }}>
+                      <SectionLabel icon={<AnalyticsIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label={`Detected Regions (${latexDetections.length})`} />
                       <Grid container spacing={1.5}>
                         {latexDetections.slice(0, 6).map((det, i) => (
-                          <Grid item xs={12} md={6} key={`det-${i}`}>
-                            <Box sx={{ p: 1.5, borderRadius: 2, border: '1px solid #dcedc8', bgcolor: '#f9fff5' }}>
-                              <Typography variant="body2" sx={{ fontWeight: 700, color: '#1b5e20' }}>
-                                {det.class || 'Unknown'}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                Confidence: {Number(det.confidence || 0).toFixed(1)}%
-                              </Typography>
+                          <Grid item xs={12} sm={6} md={4} key={`det-${i}`}>
+                            <Box sx={{ p: 2, borderRadius: 2, border: '1px solid #dcedc8', bgcolor: '#fafef9' }}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 700, color: '#1b5e20' }}>{det.class || 'Unknown'}</Typography>
+                                <Chip label={`${Number(det.confidence || 0).toFixed(0)}%`} size="small" sx={{ bgcolor: '#e8f5e9', color: '#2e7d32', fontWeight: 700, fontSize: '0.7rem' }} />
+                              </Box>
                               {Array.isArray(det.bbox) && det.bbox.length === 4 && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                  Box: [{det.bbox.join(', ')}]
-                                </Typography>
+                                <Typography variant="caption" color="text.secondary">Box: [{det.bbox.join(', ')}]</Typography>
                               )}
                             </Box>
                           </Grid>
@@ -1612,24 +780,16 @@ const LatexDetection = () => {
                   </motion.div>
                 )}
 
-                {/* Visualization */}
+                {/* 8 — Visualization */}
                 {visualizationSrc && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.48 }}
-                  >
-                    <Paper elevation={2} sx={{ borderRadius: 3, border: '1px solid #c8e6c9', p: 3, mb: 3, bgcolor: 'white' }}>
-                      <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 700, mb: 2 }}>
-                        Analysis Visualization
-                      </Typography>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36 }}>
+                    <Paper elevation={0} sx={{ p: 3, borderRadius: 3, mb: 3, border: '1.5px solid #c8e6c9', bgcolor: 'white' }}>
+                      <SectionLabel icon={<ScienceIcon sx={{ color: '#2e7d32', fontSize: 17 }} />} label="Analysis Visualization" />
                       <Box sx={{ textAlign: 'center' }}>
                         <motion.img
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          src={visualizationSrc}
-                          alt="Analysis visualization"
-                          style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 12, boxShadow: '0 4px 16px rgba(0,0,0,0.12)', border: '2px solid #c8e6c9' }}
+                          initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                          src={visualizationSrc} alt="Analysis visualization"
+                          style={{ maxWidth: '100%', maxHeight: 420, borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.09)', border: '2px solid #c8e6c9' }}
                         />
                       </Box>
                     </Paper>
@@ -1638,186 +798,64 @@ const LatexDetection = () => {
 
                 {/* Metadata */}
                 {imageMetadata && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 1 }}>
-                    <InfoIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, px: 0.5, pb: 1 }}>
+                    <InfoIcon sx={{ fontSize: 13, color: '#bdbdbd' }} />
                     <Typography variant="caption" color="text.disabled">
-                      Analyzed: {analyzedAtValue ? new Date(analyzedAtValue).toLocaleString() : 'N/A'} ·
-                      File: {fileNameValue || 'N/A'} ·
-                      Size: {fileSizeValue ?? 'N/A'} KB
+                      Analyzed: {analyzedAtValue ? new Date(analyzedAtValue).toLocaleString() : 'N/A'}
+                      {fileNameValue ? ` · ${fileNameValue}` : ''}
+                      {fileSizeValue != null ? ` · ${fileSizeValue} KB` : ''}
                     </Typography>
                   </Box>
                 )}
+              </>
+              )}
               </motion.div>
             )}
           </AnimatePresence>
         </Container>
       </Box>
 
-      {/* SOURCE CHOOSER DIALOG */}
-      <Dialog
-        open={chooserOpen}
-        onClose={() => setChooserOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
-      >
-        <DialogTitle sx={{ bgcolor: '#2e7d32', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>Add Latex Image</Typography>
-          <IconButton onClick={() => setChooserOpen(false)} sx={{ color: 'white' }}>
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 3 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, textAlign: 'center' }}>
-            How would you like to add your latex sample image?
-          </Typography>
-          <Grid container spacing={2} alignItems="stretch">
-            {[
-              { 
-                icon: <CloudUploadIcon sx={{ fontSize: 52, color: '#2e7d32' }} />, 
-                label: 'Upload Image', 
-                sub: 'From your device', 
-                onClick: () => { 
-                  setChooserOpen(false); 
-                  fileInputRef.current?.click(); 
-                } 
-              },
-              { 
-                icon: <PhotoCameraIcon sx={{ fontSize: 52, color: '#2e7d32' }} />, 
-                label: 'Take a Photo', 
-                sub: 'Use your camera', 
-                onClick: () => { 
-                  setChooserOpen(false); 
-                  setCameraOpen(true); 
-                } 
-              }
-            ].map(({ icon, label, sub, onClick }) => (
-              <Grid item xs={6} key={label} sx={{ display: 'flex' }}>
-                <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }} style={{ width: '100%' }}>
-                  <Box
-                    onClick={onClick}
-                    sx={{
-                      border: '2px dashed #2e7d32',
-                      borderRadius: 3,
-                      p: 3,
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      bgcolor: '#f1f8e9',
-                      transition: 'all 0.2s',
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1,
-                      '&:hover': {
-                        bgcolor: '#e8f5e9',
-                        borderColor: '#1b5e20'
-                      }
-                    }}
-                  >
-                    {icon}
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#1b5e20' }}>{label}</Typography>
-                    <Typography variant="caption" color="text.secondary">{sub}</Typography>
-                  </Box>
-                </motion.div>
-              </Grid>
-            ))}
-          </Grid>
-        </DialogContent>
-      </Dialog>
-
       {/* CAMERA DIALOG */}
-      <Dialog
-        open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 4, overflow: 'hidden' } }}
-      >
-        <DialogTitle sx={{ bgcolor: '#2e7d32', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Dialog open={cameraOpen} onClose={() => setCameraOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}>
+        <DialogTitle sx={{ bgcolor: '#1b5e20', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <PhotoCameraIcon />
             <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>Capture Latex Sample</Typography>
           </Box>
-          <IconButton onClick={() => setCameraOpen(false)} sx={{ color: 'white' }}>
-            <CloseIcon />
-          </IconButton>
+          <IconButton onClick={() => setCameraOpen(false)} sx={{ color: 'white' }} size="small"><CloseIcon /></IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 0, bgcolor: '#000', position: 'relative' }}>
+        <DialogContent sx={{ p: 0, bgcolor: '#000', position: 'relative', minHeight: 260 }}>
           {cameraError ? (
-            <Box sx={{ height: 400, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#f5f5f5', p: 3 }}>
-              <ErrorIcon sx={{ fontSize: 60, color: '#f44336', mb: 2 }} />
-              <Typography variant="h6" color="error">Camera Error</Typography>
+            <Box sx={{ height: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#fafafa', p: 3 }}>
+              <ErrorIcon sx={{ fontSize: 50, color: '#c62828', mb: 2 }} />
+              <Typography variant="h6" sx={{ color: '#c62828', fontWeight: 700 }}>Camera Unavailable</Typography>
               <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>{cameraError}</Typography>
             </Box>
           ) : (
             <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                style={{ width: '100%', height: 'auto', maxHeight: 500, objectFit: 'cover', display: 'block' }}
-              />
-              <Box sx={{ position: 'absolute', inset: 0, border: '4px solid #2e7d32', pointerEvents: 'none' }} />
-              <Box sx={{
-                position: 'absolute',
-                bottom: 16,
-                left: 0,
-                right: 0,
-                textAlign: 'center',
-                color: 'white',
-                textShadow: '1px 1px 4px rgba(0,0,0,0.8)',
-                pointerEvents: 'none'
-              }}>
-                <Typography variant="body2">Position latex sample in frame and tap capture</Typography>
+              <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: 'auto', maxHeight: 480, objectFit: 'cover', display: 'block' }} />
+              <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Box sx={{ width: '68%', maxWidth: 320, aspectRatio: '4/3', border: '2px solid rgba(255,255,255,0.65)', borderRadius: 2, boxShadow: '0 0 0 9999px rgba(0,0,0,0.38)' }} />
+              </Box>
+              <Box sx={{ position: 'absolute', bottom: 14, left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}>
+                  Position latex sample within the frame
+                </Typography>
               </Box>
             </>
           )}
         </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', gap: 2, p: 2.5, bgcolor: '#f5f5f5' }}>
-          <Button
-            variant="contained"
-            onClick={handleFlipCamera}
-            disabled={!!cameraError}
-            startIcon={<FlipCameraIcon />}
-            sx={{
-              bgcolor: '#2e7d32',
-              borderRadius: 99,
-              textTransform: 'none',
-              '&:hover': { bgcolor: '#1b5e20' },
-              '&:disabled': { bgcolor: '#ccc' }
-            }}
-          >
-            Flip Camera
+        <DialogActions sx={{ justifyContent: 'center', gap: 2.5, p: 2.5, bgcolor: '#fafafa' }}>
+          <Button variant="outlined" onClick={handleFlipCamera} disabled={!!cameraError} startIcon={<FlipCameraIcon />}
+            sx={{ borderColor: '#a5d6a7', color: '#2e7d32', borderRadius: 2, textTransform: 'none', '&:hover': { borderColor: '#2e7d32', bgcolor: '#f1f8e9' }, '&:disabled': { borderColor: '#e0e0e0', color: '#bdbdbd' } }}>
+            Flip
           </Button>
-          <Fab
-            onClick={captureImage}
-            disabled={!stream || capturing || !!cameraError}
-            sx={{
-              bgcolor: '#f44336',
-              '&:hover': { bgcolor: '#c62828' },
-              width: 70,
-              height: 70,
-              boxShadow: '0 4px 18px rgba(244,67,54,0.45)'
-            }}
-          >
-            {capturing ? <CircularProgress size={28} color="inherit" /> : <PhotoCameraIcon sx={{ fontSize: 30 }} />}
+          <Fab onClick={captureImage} disabled={!stream || capturing || !!cameraError}
+            sx={{ bgcolor: '#c62828', '&:hover': { bgcolor: '#b71c1c' }, width: 62, height: 62, boxShadow: '0 3px 14px rgba(198,40,40,0.38)' }}>
+            {capturing ? <CircularProgress size={22} color="inherit" /> : <PhotoCameraIcon sx={{ fontSize: 26 }} />}
           </Fab>
-          <Button
-            variant="outlined"
-            onClick={() => setCameraOpen(false)}
-            disabled={capturing}
-            startIcon={<CloseIcon />}
-            sx={{
-              borderColor: '#bdbdbd',
-              color: '#616161',
-              borderRadius: 99,
-              textTransform: 'none',
-              '&:hover': { borderColor: '#9e9e9e' }
-            }}
-          >
+          <Button variant="outlined" onClick={() => setCameraOpen(false)} disabled={capturing} startIcon={<CloseIcon />}
+            sx={{ borderColor: '#e0e0e0', color: '#757575', borderRadius: 2, textTransform: 'none', '&:hover': { borderColor: '#bdbdbd' } }}>
             Cancel
           </Button>
         </DialogActions>
@@ -1830,6 +868,3 @@ const LatexDetection = () => {
 };
 
 export default LatexDetection;
-
-
-
