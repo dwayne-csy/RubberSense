@@ -288,10 +288,10 @@ const Market = () => {
       : 'SIDEWAYS';
 
   const trendColor = marketData.trend === 'RISE'
-    ? '#00c853'
+    ? '#1a7a3c'
     : marketData.trend === 'FALL'
-      ? '#d32f2f'
-      : '#f57c00';
+      ? '#c0392b'
+      : '#b45309';
 
   const trendIcon = marketData.trend === 'RISE'
     ? TrendingUpIcon
@@ -327,10 +327,10 @@ const Market = () => {
     return (
       <>
         <UserHeader />
-        <Box sx={{ minHeight: 'calc(100vh - 140px)', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#0f172a' }}>
+        <Box sx={{ minHeight: 'calc(100vh - 140px)', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#edf5e5' }}>
           <Box sx={{ textAlign: 'center' }}>
-            <CircularProgress sx={{ color: '#22c55e' }} />
-            <Typography sx={{ mt: 2, color: '#e2e8f0' }}>Analyzing market trends...</Typography>
+            <CircularProgress sx={{ color: '#2d6a4f' }} />
+            <Typography sx={{ mt: 2, color: '#2d6a4f' }}>Analyzing market trends...</Typography>
           </Box>
         </Box>
         <UserFooter />
@@ -341,7 +341,7 @@ const Market = () => {
   return (
     <>
       <UserHeader />
-      <Box sx={{ minHeight: '100vh', bgcolor: '#0f172a', pt: '84px', pb: '100px' }}>
+      <Box sx={{ minHeight: '100vh', bgcolor: '#edf5e5', pt: '84px', pb: '100px' }}>
         <Container maxWidth="lg">
           <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }}>
             <Paper sx={{
@@ -349,8 +349,9 @@ const Market = () => {
               mb: 3,
               borderRadius: 4,
               color: '#fff',
-              background: 'linear-gradient(135deg, #111827 0%, #0f766e 55%, #14532d 100%)',
-              border: '1px solid rgba(255,255,255,0.08)'
+              background: 'linear-gradient(135deg, #1a472a 0%, #2d6a4f 55%, #40916c 100%)',
+              border: '1px solid rgba(45,106,79,0.2)',
+              boxShadow: '0 4px 20px rgba(45,106,79,0.15)'
             }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
                 <Box>
@@ -363,7 +364,7 @@ const Market = () => {
                     startIcon={<RefreshIcon />}
                     onClick={() => handleRefresh(false)}
                     disabled={refreshing}
-                    sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.35)' }}
+                    sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.5)', '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.1)' } }}
                   >
                     Refresh
                   </Button>
@@ -372,7 +373,7 @@ const Market = () => {
                     startIcon={<BoltIcon />}
                     onClick={() => handleRefresh(true)}
                     disabled={refreshing}
-                    sx={{ bgcolor: '#22c55e', color: '#052e16', fontWeight: 700, '&:hover': { bgcolor: '#16a34a' } }}
+                    sx={{ bgcolor: '#fff', color: '#2d6a4f', fontWeight: 700, '&:hover': { bgcolor: '#d8f0e5' } }}
                   >
                     Force Update
                   </Button>
@@ -385,18 +386,19 @@ const Market = () => {
             <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>{error}</Alert>
           )}
 
+          {/* Price Card */}
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#111827', border: '1px solid #1f2937', color: '#f8fafc' }}>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#fff', border: '1px solid #c8e6c9', boxShadow: '0 2px 12px rgba(45,106,79,0.08)', color: '#1a2e20' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Box>
-                  <Typography variant="overline" sx={{ letterSpacing: 1.2, color: '#94a3b8' }}>RSS3 Rubber Price</Typography>
-                  <Typography variant="h3" sx={{ fontWeight: 900 }}>
+                  <Typography variant="overline" sx={{ letterSpacing: 1.2, color: '#52845e' }}>RSS3 Rubber Price</Typography>
+                  <Typography variant="h3" sx={{ fontWeight: 900, color: '#1a2e20' }}>
                     PHP {toNumber(marketData.currentPrice, 0).toFixed(2)}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mt: 0.5 }}>{sourceLabel}</Typography>
-                  <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>{updatedLabel}</Typography>
+                  <Typography variant="caption" sx={{ color: '#6a9070', display: 'block', mt: 0.5 }}>{sourceLabel}</Typography>
+                  <Typography variant="caption" sx={{ color: '#6a9070', display: 'block' }}>{updatedLabel}</Typography>
                   {marketData.stale && (
-                    <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: '#b45309', display: 'block', mt: 0.5 }}>
                       Live feed unavailable, showing latest stored value.
                     </Typography>
                   )}
@@ -410,7 +412,7 @@ const Market = () => {
                     fontWeight: 700,
                     fontSize: '1rem',
                     color: trendColor,
-                    bgcolor: 'rgba(148,163,184,0.08)',
+                    bgcolor: trendColor === '#1a7a3c' ? '#d4f0df' : trendColor === '#c0392b' ? '#fde8e8' : '#fef3c7',
                     border: `1px solid ${trendColor}`
                   }}
                 />
@@ -418,11 +420,12 @@ const Market = () => {
             </Paper>
           </motion.div>
 
+          {/* Chart Card */}
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#111827', border: '1px solid #1f2937' }}>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#fff', border: '1px solid #c8e6c9', boxShadow: '0 2px 12px rgba(45,106,79,0.08)' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-                <Typography variant="h6" sx={{ color: '#f8fafc', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AutoGraphIcon /> Price Trend
+                <Typography variant="h6" sx={{ color: '#1a2e20', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AutoGraphIcon sx={{ color: '#2d6a4f' }} /> Price Trend
                 </Typography>
                 <ToggleButtonGroup
                   exclusive
@@ -430,8 +433,8 @@ const Market = () => {
                   size="small"
                   onChange={(_, value) => value && setChartPeriod(value)}
                   sx={{
-                    '& .MuiToggleButton-root': { color: '#94a3b8', borderColor: '#334155' },
-                    '& .Mui-selected': { color: '#0b1220 !important', bgcolor: '#22c55e !important' }
+                    '& .MuiToggleButton-root': { color: '#52845e', borderColor: '#b2d8b8' },
+                    '& .Mui-selected': { color: '#fff !important', bgcolor: '#2d6a4f !important' }
                   }}
                 >
                   <ToggleButton value="1D">1D</ToggleButton>
@@ -443,24 +446,24 @@ const Market = () => {
               <Box sx={{ width: '100%', height: 280 }}>
                 <ResponsiveContainer>
                   <LineChart data={chartRows} margin={{ top: 8, right: 10, left: 8, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="displayLabel" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={{ stroke: '#334155' }} tickLine={{ stroke: '#334155' }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0ede4" />
+                    <XAxis dataKey="displayLabel" tick={{ fill: '#6a9070', fontSize: 11 }} axisLine={{ stroke: '#b2d8b8' }} tickLine={{ stroke: '#b2d8b8' }} />
                     <YAxis
-                      tick={{ fill: '#94a3b8', fontSize: 11 }}
-                      axisLine={{ stroke: '#334155' }}
-                      tickLine={{ stroke: '#334155' }}
+                      tick={{ fill: '#6a9070', fontSize: 11 }}
+                      axisLine={{ stroke: '#b2d8b8' }}
+                      tickLine={{ stroke: '#b2d8b8' }}
                       tickFormatter={(val) => `PHP ${Number(val).toFixed(0)}`}
                     />
                     <Tooltip
                       formatter={(value) => [`PHP ${toNumber(value, 0).toFixed(2)}`, 'Price']}
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.label || '-'}
-                      contentStyle={{ backgroundColor: '#0b1220', border: '1px solid #334155', borderRadius: 8, color: '#f8fafc' }}
-                      labelStyle={{ color: '#cbd5e1' }}
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #c8e6c9', borderRadius: 8, color: '#1a2e20' }}
+                      labelStyle={{ color: '#52845e' }}
                     />
                     <Line
                       type="monotone"
                       dataKey="value"
-                      stroke="#22c55e"
+                      stroke="#2d6a4f"
                       strokeWidth={2.5}
                       dot={{ r: 2 }}
                       activeDot={{ r: 4 }}
@@ -471,60 +474,64 @@ const Market = () => {
             </Paper>
           </motion.div>
 
+          {/* AI Forecast Card */}
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, color: '#f8fafc', background: 'linear-gradient(135deg, #111827 0%, #172554 100%)', border: '1px solid #1d4ed8' }}>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, color: '#1a2e20', background: 'linear-gradient(135deg, #d8f0e5 0%, #e8f5e9 100%)', border: '1px solid #a5d6b0', boxShadow: '0 2px 12px rgba(45,106,79,0.08)' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <PsychologyIcon sx={{ color: '#60a5fa' }} />
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>AI Forecast Engine</Typography>
-                <Chip label={`${toNumber(marketData.confidence, 0)}% Confidence`} size="small" sx={{ ml: 'auto', bgcolor: '#dbeafe', color: '#1e3a8a', fontWeight: 700 }} />
+                <PsychologyIcon sx={{ color: '#2d6a4f' }} />
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#1a2e20' }}>AI Forecast Engine</Typography>
+                <Chip label={`${toNumber(marketData.confidence, 0)}% Confidence`} size="small" sx={{ ml: 'auto', bgcolor: '#2d6a4f', color: '#fff', fontWeight: 700 }} />
               </Box>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-                <Paper sx={{ p: 2, bgcolor: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#f8fafc' }}>
-                  <Typography variant="caption" sx={{ color: '#93c5fd' }}>Next Week Projection</Typography>
-                  <Typography variant="h5" sx={{ fontWeight: 800 }}>PHP {toNumber(marketData.nextWeekPrice, 0).toFixed(2)}</Typography>
+                <Paper sx={{ p: 2, bgcolor: '#fff', border: '1px solid #c8e6c9', color: '#1a2e20', borderRadius: 2, boxShadow: 'none' }}>
+                  <Typography variant="caption" sx={{ color: '#52845e' }}>Next Week Projection</Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 800, color: '#1a2e20' }}>PHP {toNumber(marketData.nextWeekPrice, 0).toFixed(2)}</Typography>
                 </Paper>
-                <Paper sx={{ p: 2, bgcolor: 'rgba(15,23,42,0.65)', border: '1px solid #334155', color: '#f8fafc' }}>
-                  <Typography variant="caption" sx={{ color: '#93c5fd' }}>Market Sentiment</Typography>
+                <Paper sx={{ p: 2, bgcolor: '#fff', border: '1px solid #c8e6c9', color: '#1a2e20', borderRadius: 2, boxShadow: 'none' }}>
+                  <Typography variant="caption" sx={{ color: '#52845e' }}>Market Sentiment</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 800, color: trendColor }}>{trendText}</Typography>
                 </Paper>
               </Box>
             </Paper>
           </motion.div>
 
+          {/* AI Analysis */}
           {marketData.analysis && (
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#111827', border: '1px solid #1f2937' }}>
-              <Typography variant="h6" sx={{ color: '#f8fafc', mb: 1.2, fontWeight: 700 }}>AI Market Analysis</Typography>
-              <Typography sx={{ color: '#cbd5e1', lineHeight: 1.8 }}>{marketData.analysis}</Typography>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#fff', border: '1px solid #c8e6c9', boxShadow: '0 2px 12px rgba(45,106,79,0.08)' }}>
+              <Typography variant="h6" sx={{ color: '#1a2e20', mb: 1.2, fontWeight: 700 }}>AI Market Analysis</Typography>
+              <Typography sx={{ color: '#3d5244', lineHeight: 1.8 }}>{marketData.analysis}</Typography>
             </Paper>
           )}
 
+          {/* Recommendations */}
           {marketData.recommendations?.length > 0 && (
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#111827', border: '1px solid #1f2937' }}>
-              <Typography variant="h6" sx={{ color: '#f8fafc', mb: 1.2, fontWeight: 700 }}>Strategic Recommendations</Typography>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#fff', border: '1px solid #c8e6c9', boxShadow: '0 2px 12px rgba(45,106,79,0.08)' }}>
+              <Typography variant="h6" sx={{ color: '#1a2e20', mb: 1.2, fontWeight: 700 }}>Strategic Recommendations</Typography>
               {marketData.recommendations.map((rec, idx) => (
-                <Typography key={`rec-${idx}`} sx={{ color: '#cbd5e1', mb: 1.1, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                  <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#22c55e', mt: '10px', flexShrink: 0 }} />
+                <Typography key={`rec-${idx}`} sx={{ color: '#3d5244', mb: 1.1, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                  <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#2d6a4f', mt: '10px', flexShrink: 0 }} />
                   <Box component="span">{rec}</Box>
                 </Typography>
               ))}
             </Paper>
           )}
 
+          {/* Market Drivers */}
           {marketData.features?.length > 0 && (
-            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#111827', border: '1px solid #1f2937' }}>
-              <Typography variant="h6" sx={{ color: '#f8fafc', mb: 1.6, fontWeight: 700 }}>Market Drivers</Typography>
+            <Paper sx={{ p: 3, mb: 3, borderRadius: 3, bgcolor: '#fff', border: '1px solid #c8e6c9', boxShadow: '0 2px 12px rgba(45,106,79,0.08)' }}>
+              <Typography variant="h6" sx={{ color: '#1a2e20', mb: 1.6, fontWeight: 700 }}>Market Drivers</Typography>
               {marketData.features.map((feature, idx) => {
                 const sentiment = String(feature.sentiment || 'Neutral');
-                const sentimentColor = sentiment === 'Positive' ? '#22c55e' : sentiment === 'Negative' ? '#ef4444' : '#f59e0b';
+                const sentimentColor = sentiment === 'Positive' ? '#1a7a3c' : sentiment === 'Negative' ? '#c0392b' : '#b45309';
 
                 return (
-                  <Box key={`feature-${idx}`} sx={{ p: 1.5, mb: 1.2, borderRadius: 2, bgcolor: '#0b1220', border: '1px solid #1e293b' }}>
-                    <Typography sx={{ color: '#e2e8f0', fontWeight: 700 }}>{feature.name || 'Market driver'}</Typography>
-                    <Divider sx={{ my: 0.8, borderColor: '#1e293b' }} />
-                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-                      Impact: <Box component="span" sx={{ color: '#f8fafc', fontWeight: 600 }}>{feature.impact || 'Medium'}</Box>
+                  <Box key={`feature-${idx}`} sx={{ p: 1.5, mb: 1.2, borderRadius: 2, bgcolor: '#f0f9f3', border: '1px solid #c8e6c9' }}>
+                    <Typography sx={{ color: '#1a2e20', fontWeight: 700 }}>{feature.name || 'Market driver'}</Typography>
+                    <Divider sx={{ my: 0.8, borderColor: '#c8e6c9' }} />
+                    <Typography variant="body2" sx={{ color: '#52845e' }}>
+                      Impact: <Box component="span" sx={{ color: '#1a2e20', fontWeight: 600 }}>{feature.impact || 'Medium'}</Box>
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                    <Typography variant="body2" sx={{ color: '#52845e' }}>
                       Sentiment: <Box component="span" sx={{ color: sentimentColor, fontWeight: 700 }}>{sentiment}</Box>
                     </Typography>
                   </Box>

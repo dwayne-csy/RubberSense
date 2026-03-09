@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import LogoImage from '../logo/LOGO.png';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import MailIcon from '@mui/icons-material/Mail';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -23,6 +22,7 @@ const UserHeader = () => {
     notifications: 0
   });
   const navigate = useNavigate();
+  const location = useLocation();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4001';
 
@@ -306,13 +306,7 @@ const UserHeader = () => {
       badgeCount: 0,
       showBadgeDot: false
     },
-    { 
-      label: 'Settings', 
-      icon: SettingsIcon, 
-      action: () => navigate('/settings'),
-      badgeCount: 0,
-      showBadgeDot: false
-    },
+
     { 
       label: 'Log out', 
       icon: LogoutIcon, 
@@ -346,6 +340,12 @@ const UserHeader = () => {
 
   // Calculate if there are any unread items
   const hasAnyUnread = unreadCounts.mail > 0 || unreadCounts.messages > 0 || unreadCounts.notifications > 0;
+
+  // Check if a nav item is active based on current path
+  const isNavActive = (path) => location.pathname === path;
+
+  // Check if any features sub-route is active
+  const isFeaturesActive = featuresMenuItems.some(item => location.pathname === item.path);
 
   if (loading) {
     return <header className="user-header"><div className="header-container">Loading...</div></header>;
@@ -466,8 +466,10 @@ const UserHeader = () => {
 
         .nav-link.active {
           color: white;
-          background: rgba(255, 255, 255, 0.15);
-          font-weight: 600;
+          background: rgba(255, 255, 255, 0.22);
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.8);
         }
 
         .nav-link-with-arrow {
@@ -494,6 +496,14 @@ const UserHeader = () => {
 
         .features-trigger {
           gap: 6px;
+        }
+
+        .features-trigger.active {
+          background: rgba(255, 255, 255, 0.22);
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3);
+          border-color: rgba(255, 255, 255, 0.5);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.8);
         }
 
         .profile-trigger:hover, .features-trigger:hover { 
@@ -627,6 +637,12 @@ const UserHeader = () => {
         .dropdown-item.logout:hover { 
           background: #fee2e2;
           color: #b91c1c;
+        }
+
+        .dropdown-item.features-active {
+          background: #f0faf4;
+          color: #2d6a4f;
+          font-weight: 600;
         }
 
         .dropdown-item-content {
@@ -773,7 +789,10 @@ const UserHeader = () => {
             {navigationItems.map((item, i) => (
               item.isDropdown ? (
                 <div key={i} className="features-dropdown">
-                  <button className="nav-link nav-link-with-arrow features-trigger" onClick={toggleFeaturesMenu}>
+                  <button
+                    className={`nav-link nav-link-with-arrow features-trigger ${isFeaturesActive ? 'active' : ''}`}
+                    onClick={toggleFeaturesMenu}
+                  >
                     <span>{item.label}</span>
                     <ExpandMoreIcon className={`dropdown-arrow ${featuresMenuOpen ? 'open' : ''}`} />
                   </button>
@@ -781,7 +800,7 @@ const UserHeader = () => {
                     {featuresMenuItems.map((feature, idx) => (
                       <button 
                         key={idx} 
-                        className="dropdown-item" 
+                        className={`dropdown-item ${location.pathname === feature.path ? 'features-active' : ''}`}
                         onClick={() => {
                           setFeaturesMenuOpen(false);
                           navigate(feature.path);
@@ -793,7 +812,11 @@ const UserHeader = () => {
                   </div>
                 </div>
               ) : (
-                <div key={i} className="nav-link" onClick={() => navigate(item.path)}>
+                <div
+                  key={i}
+                  className={`nav-link ${isNavActive(item.path) ? 'active' : ''}`}
+                  onClick={() => navigate(item.path)}
+                >
                   {item.label}
                 </div>
               )
